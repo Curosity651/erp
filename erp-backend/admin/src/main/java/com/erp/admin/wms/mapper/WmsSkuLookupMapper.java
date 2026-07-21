@@ -27,19 +27,19 @@ public interface WmsSkuLookupMapper {
 	/**
 	 * 跨全部货主按 SKU 编码查（平台超管作业用）。
 	 */
-	@Select("SELECT " + COLS + " FROM sku WHERE deleted = 0 AND sku_code = #{skuCode}")
+	@Select("SELECT " + COLS + " FROM sku WHERE sku_code = #{skuCode}")
 	List<SkuLookupVO> findBySkuCodeAllTenants(@Param("skuCode") String skuCode);
 
 	/**
 	 * 限定货主集合按 SKU 编码查（服务商=名下货主 / 货主=自己）。
 	 */
-	@Select("<script>SELECT " + COLS + " FROM sku WHERE deleted = 0 AND sku_code = #{skuCode} "
+	@Select("<script>SELECT " + COLS + " FROM sku WHERE sku_code = #{skuCode} "
 			+ "AND tenant_id IN <foreach collection='tenantIds' item='t' open='(' separator=',' close=')'>#{t}</foreach>"
 			+ "</script>")
 	List<SkuLookupVO> findBySkuCodeInTenants(@Param("skuCode") String skuCode,
 			@Param("tenantIds") Collection<Long> tenantIds);
 
-	@Select("SELECT " + COLS + " FROM sku WHERE deleted = 0 AND tenant_id = #{erpTenantId} "
+	@Select("SELECT " + COLS + " FROM sku WHERE tenant_id = #{erpTenantId} "
 			+ "AND sku_code = #{skuCode} LIMIT 1")
 	SkuLookupVO findByTenantAndSku(@Param("erpTenantId") Long erpTenantId, @Param("skuCode") String skuCode);
 
