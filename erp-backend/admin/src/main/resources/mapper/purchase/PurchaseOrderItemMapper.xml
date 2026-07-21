@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.PurchaseOrderItemMapper">
+
+    <!-- 批量统计采购单明细数据 -->
+    <select id="selectStatByOrderIds" resultType="com.erp.admin.wms.model.vo.PurchaseOrderStatVO">
+        SELECT
+            purchase_order_id,
+            COUNT(DISTINCT sku_code) AS sku_count,
+            COALESCE(SUM(quantity), 0) AS total_quantity,
+            COALESCE(SUM(shipped_quantity), 0) AS total_shipped_quantity,
+            COALESCE(SUM(received_quantity), 0) AS total_received_quantity
+        FROM wms_purchase_order_item
+        WHERE purchase_order_id IN
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+        GROUP BY purchase_order_id
+    </select>
+
+    <!-- 批量增加已入库数量（入库单确认时） -->
+    <update id="batchIncreaseReceivedQuantity">
+        <foreach collection="items" item="item" separator=";">
+            UPDATE wms_purchase_order_item
+            SET received_quantity = IFNULL(received_quantity, 0) + #{item.quantity}
+            WHERE id = #{item.purchaseOrderItemId}
+        </foreach>
+    </update>
+
+    <!-- 增加已发货数量（确认发货时） -->
+    <update id="increaseShippedQuantity">
+        UPDATE wms_purchase_order_item
+        SET shipped_quantity = IFNULL(shipped_quantity, 0) + #{quantity}
+        WHERE id = #{itemId}
+          AND (quantity - IFNULL(shipped_quantity, 0)) >= #{quantity}
+    </update>
+
+    <!-- 增加已入库数量（单条） -->
+    <update id="increaseReceivedQuantity">
+        UPDATE wms_purchase_order_item
+        SET received_quantity = IFNULL(received_quantity, 0) + #{quantity}
+        WHERE id = #{itemId}
+          AND (IFNULL(shipped_quantity, 0) - IFNULL(received_quantity, 0)) >= #{quantity}
+    </update>
+
+</mapper>

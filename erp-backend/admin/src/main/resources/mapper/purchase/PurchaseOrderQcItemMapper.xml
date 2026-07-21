@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.PurchaseOrderQcItemMapper">
+
+    <!-- 查询采购单质检数据列表（关联文件信息） -->
+    <select id="selectVoListByPurchaseOrderId" resultType="com.erp.admin.wms.model.vo.PurchaseOrderQcItemVO">
+        SELECT
+            qc.id,
+            qc.purchase_order_id,
+            qc.sku_code,
+            qc.length_cm,
+            qc.width_cm,
+            qc.height_cm,
+            (qc.length_cm * qc.width_cm * qc.height_cm) AS volume_cm3,
+            qc.gross_weight_kg,
+            qc.net_weight_kg,
+            qc.qc_file_id,
+            sf.file_name AS qc_file_name,
+            qc.remark,
+            qc.create_by,
+            qc.create_time,
+            qc.update_by,
+            qc.update_time
+        FROM wms_purchase_order_qc_item qc
+        LEFT JOIN sys_file sf ON qc.qc_file_id = sf.id
+        WHERE qc.purchase_order_id = #{purchaseOrderId}
+        ORDER BY qc.create_time DESC
+    </select>
+
+</mapper>

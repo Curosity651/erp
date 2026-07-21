@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.ShipProdCalcMapper">
+
+    <!-- FBS 逐日销量：全平台汇总，按 SKU × 日期聚合（tenant_id 由拦截器自动注入到 erp_order/erp_order_item） -->
+    <select id="selectFbsDailySales" resultType="com.erp.admin.wms.model.dto.SkuDailySalesDTO">
+        SELECT
+            sm.sku_code AS skuCode,
+            DATE(o.platform_created_at) AS saleDate,
+            SUM(oi.quantity) AS quantity
+        FROM erp_order o
+        INNER JOIN erp_order_item oi ON o.id = oi.order_id
+        INNER JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+        WHERE o.fulfillment_type = 'FBS'
+          AND o.erp_status NOT IN ('CANCELED', 'RETURNED')
+          AND o.platform_created_at &gt;= #{startTime}
+          AND o.platform_created_at &lt; #{endTime}
+          <if test="skuCodes != null and skuCodes.size() > 0">
+              AND sm.sku_code IN
+              <foreach item="sku" collection="skuCodes" open="(" separator="," close=")">
+                  #{sku}
+              </foreach>
+          </if>
+        GROUP BY sm.sku_code, DATE(o.platform_created_at)
+    </select>
+
+    <!-- 采购单未发货批次：状态 ∈ 已确认/生产中，未发货量>0（erp_tenant_id 由拦截器自动注入到 wms_purchase_order） -->
+    <select id="selectPurchaseUnshippedBatches"
+            resultType="com.erp.admin.wms.model.dto.PurchaseUnshippedBatchDTO">
+        SELECT
+            poi.sku_code AS skuCode,
+            (poi.quantity - IFNULL(poi.shipped_quantity, 0)) AS quantity,
+            po.expected_delivery_date AS expectedDeliveryDate,
+            po.order_no AS orderNo
+        FROM wms_purchase_order po
+        INNER JOIN wms_purchase_order_item poi ON poi.purchase_order_id = po.id
+        WHERE po.deleted = 0
+          AND po.order_status IN ('CONFIRMED', 'IN_PRODUCTION')
+          AND (poi.quantity - IFNULL(poi.shipped_quantity, 0)) &gt; 0
+          <if test="skuCodes != null and skuCodes.size() > 0">
+              AND poi.sku_code IN
+              <foreach item="sku" collection="skuCodes" open="(" separator="," close=")">
+                  #{sku}
+              </foreach>
+          </if>
+    </select>
+
+</mapper>

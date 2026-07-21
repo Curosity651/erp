@@ -1,0 +1,116 @@
+[
+  {
+    "code": "RU",
+    "name": "俄罗斯",
+    "englishName": "Russia",
+    "flag": "🇷🇺"
+  },
+  {
+    "code": "US",
+    "name": "美国",
+    "englishName": "United States",
+    "flag": "🇺🇸"
+  },
+  {
+    "code": "DE",
+    "name": "德国",
+    "englishName": "Germany",
+    "flag": "🇩🇪"
+  },
+  {
+    "code": "FR",
+    "name": "法国",
+    "englishName": "France",
+    "flag": "🇫🇷"
+  },
+  {
+    "code": "GB",
+    "name": "英国",
+    "englishName": "United Kingdom",
+    "flag": "🇬🇧"
+  },
+  {
+    "code": "JP",
+    "name": "日本",
+    "englishName": "Japan",
+    "flag": "🇯🇵"
+  },
+  {
+    "code": "KR",
+    "name": "韩国",
+    "englishName": "South Korea",
+    "flag": "🇰🇷"
+  },
+  {
+    "code": "AU",
+    "name": "澳大利亚",
+    "englishName": "Australia",
+    "flag": "🇦🇺"
+  },
+  {
+    "code": "CA",
+    "name": "加拿大",
+    "englishName": "Canada",
+    "flag": "🇨🇦"
+  },
+  {
+    "code": "IT",
+    "name": "意大利",
+    "englishName": "Italy",
+    "flag": "🇮🇹"
+  },
+  {
+    "code": "ES",
+    "name": "西班牙",
+    "englishName": "Spain",
+    "flag": "🇪🇸"
+  },
+  {
+    "code": "NL",
+    "name": "荷兰",
+    "englishName": "Netherlands",
+    "flag": "🇳🇱"
+  },
+  {
+    "code": "BE",
+    "name": "比利时",
+    "englishName": "Belgium",
+    "flag": "🇧🇪"
+  },
+  {
+    "code": "SE",
+    "name": "瑞典",
+    "englishName": "Sweden",
+    "flag": "🇸🇪"
+  },
+  {
+    "code": "NO",
+    "name": "挪威",
+    "englishName": "Norway",
+    "flag": "🇳🇴"
+  },
+  {
+    "code": "DK",
+    "name": "丹麦",
+    "englishName": "Denmark",
+    "flag": "🇩🇰"
+  },
+  {
+    "code": "FI",
+    "name": "芬兰",
+    "englishName": "Finland",
+    "flag": "🇫🇮"
+  },
+  {
+    "code": "PL",
+    "name": "波兰",
+    "englishName": "Poland",
+    "flag": "🇵🇱"
+  },
+  {
+    "code": "CZ",
+    "name": "捷克",
+    "englishName": "Czech Republic",
+    "flag": "🇨🇿"
+  }
+]

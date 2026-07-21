@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.financial.mapper.OrderReconciliationMapper">
+
+    <!-- 通用订单筛选条件 -->
+    <sql id="orderFilterCondition">
+        <if test="qo.shopIds != null and qo.shopIds.size() > 0">
+            AND o.shop_id IN
+            <foreach collection="qo.shopIds" item="shopId" open="(" separator="," close=")">
+                #{shopId}
+            </foreach>
+        </if>
+        <if test="qo.startDate != null">
+            AND o.platform_created_at_moscow &gt;= #{qo.startDate}
+        </if>
+        <if test="qo.endDate != null">
+            AND o.platform_created_at_moscow &lt; DATE_ADD(#{qo.endDate}, INTERVAL 1 DAY)
+        </if>
+        <if test="qo.keyword != null and qo.keyword != ''">
+            AND (
+                o.platform_order_id LIKE CONCAT('%', #{qo.keyword}, '%')
+                OR EXISTS (SELECT 1 FROM erp_order_item oi
+                    LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+                    WHERE oi.order_id = o.id
+                    AND (oi.platform_item_id LIKE CONCAT('%', #{qo.keyword}, '%')
+                         OR sm.sku_code LIKE CONCAT('%', #{qo.keyword}, '%')))
+                OR o.raw_json ->> '$.rid' LIKE CONCAT('%', #{qo.keyword}, '%')
+            )
+        </if>
+    </sql>
+
+    <!-- ==================== 订单财务对账统计 ==================== -->
+    <select id="selectOrderStats" resultType="com.erp.admin.financial.model.vo.OrderReconciliationStatsVO">
+        SELECT
+            COUNT(*) AS totalOrders,
+            COALESCE(SUM(CASE WHEN reconciliation_status = 'PENDING' THEN 1 ELSE 0 END), 0) AS pendingCount,
+            COALESCE(SUM(CASE WHEN reconciliation_status = 'IN_TRANSIT' THEN 1 ELSE 0 END), 0) AS inTransitCount,
+            COALESCE(SUM(CASE WHEN reconciliation_status = 'CANCELED' THEN 1 ELSE 0 END), 0) AS canceledCount,
+            COALESCE(SUM(CASE WHEN reconciliation_status = 'MATCHED' THEN 1 ELSE 0 END), 0) AS matchedCount,
+            COALESCE(SUM(CASE WHEN reconciliation_status = 'ANOMALY' THEN 1 ELSE 0 END), 0) AS anomalyCount
+        FROM (
+            SELECT
+                o.id,
+                CASE
+                    <!-- 1. 待履约 -->
+                    WHEN o.erp_status = 'READY_TO_SHIP' THEN 'PENDING'
+                    <!-- 2. 运输中 -->
+                    WHEN o.erp_status IN ('SHIPPED', 'ARRIVED_AT_PLATFORM_WAREHOUSE') THEN 'IN_TRANSIT'
+                    <!-- 3. 已取消 -->
+                    WHEN o.erp_status = 'CANCELED' THEN 'CANCELED'
+                    <!-- 4. 已交付（必须有销售记录） -->
+                    WHEN o.erp_status = 'DELIVERED' AND fr.sale_count > 0 THEN 'MATCHED'
+                    <!-- 5. 已退货（有财务记录即可） -->
+                    WHEN o.erp_status = 'RETURNED' AND fr.record_count > 0 THEN 'MATCHED'
+                    <!-- 6. 异常 -->
+                    ELSE 'ANOMALY'
+                END AS reconciliation_status
+            FROM erp_order o
+            LEFT JOIN (
+                SELECT
+                    r.assembly_id,
+                    r.shop_id,
+                    COUNT(*) AS record_count,
+                    SUM(CASE WHEN r.supplier_oper_name IN ('销售', '合规销售', 'Продажа') THEN 1 ELSE 0 END) AS sale_count
+                FROM wb_report_detail r
+                WHERE r.assembly_id IS NOT NULL
+                  AND r.assembly_id != ''
+                  AND r.period_type = #{qo.periodType}
+                GROUP BY r.assembly_id, r.shop_id
+            ) fr ON fr.assembly_id = o.platform_order_id AND fr.shop_id = o.shop_id
+            WHERE o.platform = 'wildberries'
+            <include refid="orderFilterCondition"/>
+        ) AS order_status
+        <if test="qo.reconciliationStatus != null and qo.reconciliationStatus.size() > 0">
+        WHERE reconciliation_status IN
+            <foreach collection="qo.reconciliationStatus" item="status" open="(" separator="," close=")">
+                #{status}
+            </foreach>
+        </if>
+    </select>
+
+    <!-- ==================== 分页查询订单对账列表 ==================== -->
+    <select id="selectOrderReconciliationPage" resultType="com.erp.admin.financial.model.vo.OrderReconciliationVO">
+        SELECT
+            o.id AS orderId,
+            o.platform,
+            o.platform_order_id AS platformOrderId,
+            o.raw_json ->> '$.rid' AS rid,
+            o.shop_id AS shopId,
+            s.name AS shopName,
+            o.fulfillment_type AS fulfillmentType,
+            o.erp_status AS erpStatus,
+            o.platform_status AS platformStatus,
+            o.platform_substatus AS platformSubstatus,
+            o.platform_created_at_moscow AS orderTimeMoscow,
+            o.total_amount AS totalAmount,
+            o.total_amount_rub AS totalAmountRub,
+            o.currency_code AS currencyCode,
+            o.converted_amount AS convertedAmount,
+            o.converted_currency_code AS convertedCurrencyCode,
+            <!-- 对账状态计算 -->
+            CASE
+                <!-- 1. 待履约 -->
+                WHEN o.erp_status = 'READY_TO_SHIP' THEN 'PENDING'
+                <!-- 2. 运输中 -->
+                WHEN o.erp_status IN ('SHIPPED', 'ARRIVED_AT_PLATFORM_WAREHOUSE') THEN 'IN_TRANSIT'
+                <!-- 3. 已取消 -->
+                WHEN o.erp_status = 'CANCELED' THEN 'CANCELED'
+                <!-- 4. 已交付（必须有销售记录） -->
+                WHEN o.erp_status = 'DELIVERED' AND fr.sale_count > 0 THEN 'MATCHED'
+                <!-- 5. 已退货（有财务记录即可） -->
+                WHEN o.erp_status = 'RETURNED' AND fr.record_count > 0 THEN 'MATCHED'
+                <!-- 6. 异常 -->
+                ELSE 'ANOMALY'
+            END AS reconciliationStatus,
+            <!-- 财务汇总 -->
+            COALESCE(fr.record_count, 0) AS financialRecordCount,
+            COALESCE(fr.sale_amount, 0) AS saleAmount,
+            COALESCE(fr.actual_income, 0) AS actualIncome,
+            fr.currency_name AS financialCurrencyName
+        FROM erp_order o
+        LEFT JOIN shop s ON s.id = o.shop_id
+        LEFT JOIN (
+            SELECT
+                r.assembly_id,
+                r.shop_id,
+                COUNT(*) AS record_count,
+                SUM(CASE WHEN r.supplier_oper_name IN ('销售', '合规销售', 'Продажа') THEN 1 ELSE 0 END) AS sale_count,
+                SUM(CASE WHEN r.supplier_oper_name IN ('销售', '合规销售', 'Продажа') THEN COALESCE(r.ppvz_for_pay, 0) ELSE 0 END) AS sale_amount,
+                <!-- 实际收入 = 销售收入 - 退货扣回 - 罚款 - 扣款 -->
+                SUM(
+                    CASE
+                        WHEN r.supplier_oper_name IN ('销售', '合规销售', 'Продажа')
+                            THEN COALESCE(r.ppvz_for_pay, 0)
+                        WHEN r.supplier_oper_name IN ('退货', 'Возврат', '销售冲销')
+                            THEN -COALESCE(r.ppvz_for_pay, 0)
+                        ELSE 0
+                    END
+                ) - SUM(COALESCE(r.penalty, 0)) - SUM(COALESCE(r.deduction, 0)) AS actual_income,
+                MAX(r.currency_name) AS currency_name
+            FROM wb_report_detail r
+            WHERE r.assembly_id IS NOT NULL
+              AND r.assembly_id != ''
+              AND r.period_type = #{qo.periodType}
+            GROUP BY r.assembly_id, r.shop_id
+        ) fr ON fr.assembly_id = o.platform_order_id AND fr.shop_id = o.shop_id
+        WHERE o.platform = 'wildberries'
+        <include refid="orderFilterCondition"/>
+        <if test="qo.reconciliationStatus != null and qo.reconciliationStatus.size() > 0">
+            AND (
+                <foreach collection="qo.reconciliationStatus" item="status" separator=" OR ">
+                    <choose>
+                        <when test="status == 'PENDING'">
+                            (o.erp_status = 'READY_TO_SHIP')
+                        </when>
+                        <when test="status == 'IN_TRANSIT'">
+                            (o.erp_status IN ('SHIPPED', 'ARRIVED_AT_PLATFORM_WAREHOUSE'))
+                        </when>
+                        <when test="status == 'CANCELED'">
+                            (o.erp_status = 'CANCELED')
+                        </when>
+                        <when test="status == 'MATCHED'">
+                            ((o.erp_status = 'DELIVERED' AND fr.sale_count > 0)
+                             OR (o.erp_status = 'RETURNED' AND fr.record_count > 0))
+                        </when>
+                        <when test="status == 'ANOMALY'">
+                            <!-- 与统计徽章 reconciliation_status 的 ELSE 'ANOMALY' 口径一致：非其它四类即异常 -->
+                            NOT (
+                                o.erp_status = 'READY_TO_SHIP'
+                                OR o.erp_status IN ('SHIPPED', 'ARRIVED_AT_PLATFORM_WAREHOUSE')
+                                OR o.erp_status = 'CANCELED'
+                                OR (o.erp_status = 'DELIVERED' AND COALESCE(fr.sale_count, 0) > 0)
+                                OR (o.erp_status = 'RETURNED' AND COALESCE(fr.record_count, 0) > 0)
+                            )
+                        </when>
+                        <otherwise>
+                            (1 = 0)
+                        </otherwise>
+                    </choose>
+                </foreach>
+            )
+        </if>
+        ORDER BY o.platform_created_at_moscow DESC
+    </select>
+
+    <!-- ==================== 查询订单关联的财务记录 ==================== -->
+    <select id="selectOrderFinancialRecords" resultType="com.erp.admin.financial.model.vo.OrderReconciliationDetailVO$FinancialRecordItemVO">
+        SELECT
+            r.id,
+            r.realizationreport_id AS realizationreportId,
+            r.period_type AS periodType,
+            r.date_from AS dateFrom,
+            r.date_to AS dateTo,
+            r.doc_type_name AS docTypeName,
+            r.supplier_oper_name AS supplierOperName,
+            r.bonus_type_name AS bonusTypeName,
+            r.quantity,
+            r.ppvz_for_pay AS ppvzForPay,
+            r.penalty AS penalty,
+            r.deduction AS deduction,
+            r.currency_name AS currencyName,
+            r.sale_dt AS saleDt,
+            r.rr_dt AS rrDt
+        FROM wb_report_detail r
+        WHERE r.assembly_id = #{platformOrderId}
+          AND r.shop_id = #{shopId}
+          AND r.period_type = #{periodType}
+        ORDER BY r.rr_dt DESC
+    </select>
+
+    <!-- ==================== 导出订单对账数据 ==================== -->
+    <select id="selectOrderReconciliationForExport" resultType="com.erp.admin.financial.model.vo.OrderReconciliationVO">
+        SELECT
+            o.id AS orderId,
+            o.platform,
+            o.platform_order_id AS platformOrderId,
+            o.raw_json ->> '$.rid' AS rid,
+            o.shop_id AS shopId,
+            s.name AS shopName,
+            o.fulfillment_type AS fulfillmentType,
+            o.erp_status AS erpStatus,
+            o.platform_status AS platformStatus,
+            o.platform_substatus AS platformSubstatus,
+            o.platform_created_at_moscow AS orderTimeMoscow,
+            o.total_amount AS totalAmount,
+            o.total_amount_rub AS totalAmountRub,
+            o.currency_code AS currencyCode,
+            o.converted_amount AS convertedAmount,
+            o.converted_currency_code AS convertedCurrencyCode,
+            <!-- 对账状态计算 -->
+            CASE
+                <!-- 1. 待履约 -->
+                WHEN o.erp_status = 'READY_TO_SHIP' THEN 'PENDING'
+                <!-- 2. 运输中 -->
+                WHEN o.erp_status IN ('SHIPPED', 'ARRIVED_AT_PLATFORM_WAREHOUSE') THEN 'IN_TRANSIT'
+                <!-- 3. 已取消 -->
+                WHEN o.erp_status = 'CANCELED' THEN 'CANCELED'
+                <!-- 4. 已交付（必须有销售记录） -->
+                WHEN o.erp_status = 'DELIVERED' AND fr.sale_count > 0 THEN 'MATCHED'
+                <!-- 5. 已退货（有财务记录即可） -->
+                WHEN o.erp_status = 'RETURNED' AND fr.record_count > 0 THEN 'MATCHED'
+                <!-- 6. 异常 -->
+                ELSE 'ANOMALY'
+            END AS reconciliationStatus,
+            COALESCE(fr.record_count, 0) AS financialRecordCount,
+            COALESCE(fr.sale_amount, 0) AS saleAmount,
+            COALESCE(fr.actual_income, 0) AS actualIncome,
+            fr.currency_name AS financialCurrencyName
+        FROM erp_order o
+        LEFT JOIN shop s ON s.id = o.shop_id
+        LEFT JOIN (
+            SELECT
+                r.assembly_id,
+                r.shop_id,
+                COUNT(*) AS record_count,
+                SUM(CASE WHEN r.supplier_oper_name IN ('销售', '合规销售', 'Продажа') THEN 1 ELSE 0 END) AS sale_count,
+                SUM(CASE WHEN r.supplier_oper_name IN ('销售', '合规销售', 'Продажа') THEN COALESCE(r.ppvz_for_pay, 0) ELSE 0 END) AS sale_amount,
+                <!-- 实际收入 = 销售收入 - 退货扣回 - 罚款 - 扣款 -->
+                SUM(
+                    CASE
+                        WHEN r.supplier_oper_name IN ('销售', '合规销售', 'Продажа')
+                            THEN COALESCE(r.ppvz_for_pay, 0)
+                        WHEN r.supplier_oper_name IN ('退货', 'Возврат', '销售冲销')
+                            THEN -COALESCE(r.ppvz_for_pay, 0)
+                        ELSE 0
+                    END
+                ) - SUM(COALESCE(r.penalty, 0)) - SUM(COALESCE(r.deduction, 0)) AS actual_income,
+                MAX(r.currency_name) AS currency_name
+            FROM wb_report_detail r
+            WHERE r.assembly_id IS NOT NULL
+              AND r.assembly_id != ''
+              AND r.period_type = #{qo.periodType}
+            GROUP BY r.assembly_id, r.shop_id
+        ) fr ON fr.assembly_id = o.platform_order_id AND fr.shop_id = o.shop_id
+        WHERE o.platform = 'wildberries'
+        <include refid="orderFilterCondition"/>
+        <if test="qo.reconciliationStatus != null and qo.reconciliationStatus.size() > 0">
+            AND (
+                <foreach collection="qo.reconciliationStatus" item="status" separator=" OR ">
+                    <choose>
+                        <when test="status == 'PENDING'">
+                            (o.erp_status = 'READY_TO_SHIP')
+                        </when>
+                        <when test="status == 'IN_TRANSIT'">
+                            (o.erp_status IN ('SHIPPED', 'ARRIVED_AT_PLATFORM_WAREHOUSE'))
+                        </when>
+                        <when test="status == 'CANCELED'">
+                            (o.erp_status = 'CANCELED')
+                        </when>
+                        <when test="status == 'MATCHED'">
+                            ((o.erp_status = 'DELIVERED' AND fr.sale_count > 0)
+                             OR (o.erp_status = 'RETURNED' AND fr.record_count > 0))
+                        </when>
+                        <when test="status == 'ANOMALY'">
+                            <!-- 与统计徽章 reconciliation_status 的 ELSE 'ANOMALY' 口径一致：非其它四类即异常 -->
+                            NOT (
+                                o.erp_status = 'READY_TO_SHIP'
+                                OR o.erp_status IN ('SHIPPED', 'ARRIVED_AT_PLATFORM_WAREHOUSE')
+                                OR o.erp_status = 'CANCELED'
+                                OR (o.erp_status = 'DELIVERED' AND COALESCE(fr.sale_count, 0) > 0)
+                                OR (o.erp_status = 'RETURNED' AND COALESCE(fr.record_count, 0) > 0)
+                            )
+                        </when>
+                        <otherwise>
+                            (1 = 0)
+                        </otherwise>
+                    </choose>
+                </foreach>
+            )
+        </if>
+        ORDER BY o.platform_created_at_moscow DESC
+        LIMIT 10000
+    </select>
+
+</mapper>

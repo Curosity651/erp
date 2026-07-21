@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.OperatorFinanceMapper">
+
+    <sql id="incomeWhere">
+        r.wms_tenant_id = #{wmsTenantId}
+        AND r.fee_type = 'SHIPPING'
+        <if test="monthStart != null and monthStart != ''">
+            AND r.bill_month &gt;= #{monthStart}
+        </if>
+        <if test="monthEnd != null and monthEnd != ''">
+            AND r.bill_month &lt;= #{monthEnd}
+        </if>
+        <if test="erpTenantId != null">
+            AND r.erp_tenant_id = #{erpTenantId}
+        </if>
+    </sql>
+
+    <select id="sumIncomeByProductMonth" resultType="com.erp.admin.wms.model.vo.OperatorIncomeVO$SummaryRow">
+        SELECT
+            r.logistics_product_id AS productId,
+            r.bill_month AS billMonth,
+            COUNT(*) AS usageCount,
+            COALESCE(SUM(r.amount), 0) AS subtotal
+        FROM wms_client_billing_record r
+        <where>
+            <include refid="incomeWhere"/>
+        </where>
+        GROUP BY r.logistics_product_id, r.bill_month
+        ORDER BY r.bill_month DESC, subtotal DESC
+    </select>
+
+    <select id="listIncomeRecords" resultType="com.erp.admin.wms.model.vo.OperatorIncomeVO$Record">
+        SELECT
+            r.id,
+            r.bill_month AS billMonth,
+            r.logistics_product_id AS productId,
+            t.tenant_name AS ownerName,
+            o.outbound_no AS outboundNo,
+            r.tracking_no AS trackingNo,
+            r.amount,
+            DATE_FORMAT(r.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+        FROM wms_client_billing_record r
+        LEFT JOIN sys_tenant t ON t.id = r.erp_tenant_id
+        LEFT JOIN wms_sales_outbound_order o ON o.id = r.outbound_order_id
+        <where>
+            <include refid="incomeWhere"/>
+            <if test="productId != null">
+                AND r.logistics_product_id = #{productId}
+            </if>
+        </where>
+        ORDER BY r.id DESC
+    </select>
+
+</mapper>

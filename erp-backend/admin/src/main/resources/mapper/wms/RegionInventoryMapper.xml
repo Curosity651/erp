@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.RegionInventoryMapper">
+
+    <!-- 按区域ID批量查询预占汇总（类型安全） -->
+    <select id="selectReservedByRegionIds" resultType="com.erp.admin.wms.model.dto.RegionReservedDTO">
+        SELECT
+            region_id AS regionId,
+            COALESCE(SUM(reserved_quantity), 0) AS totalReserved
+        FROM wms_region_inventory
+        WHERE region_id IN
+        <foreach collection="regionIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        <!-- M-3 加固：显式货主作用域过滤（null=平台看全部；非空=IN；空作用域占位 -999 命中 0 行） -->
+        <if test="erpTenantIds != null and erpTenantIds.size() > 0">
+            AND erp_tenant_id IN
+            <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+        </if>
+        GROUP BY region_id
+    </select>
+
+</mapper>

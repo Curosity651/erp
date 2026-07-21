@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.PurchaseOrderMapper">
+
+    <!-- 分页查询（含SKU筛选，统计数据在Service层批量查询） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.PurchaseOrderPageVO">
+        SELECT
+            po.id,
+            po.order_no,
+            po.supplier_id,
+            s.supplier_code as supplier_code,
+            s.name as supplier_name,
+            po.order_date,
+            po.expected_delivery_date,
+            po.actual_delivery_date,
+            po.total_amount,
+            po.currency_code,
+            po.prepay_status,
+            po.balance_status,
+            po.order_status,
+            po.shipping_status,
+            po.receiving_status,
+            po.create_time
+        FROM wms_purchase_order po
+        LEFT JOIN supplier s ON po.supplier_id = s.id
+        <where>
+            po.deleted = 0
+            <if test="qo.orderNo != null and qo.orderNo != ''">
+                AND po.order_no LIKE CONCAT('%', #{qo.orderNo}, '%')
+            </if>
+            <if test="qo.supplierId != null">
+                AND po.supplier_id = #{qo.supplierId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND po.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.shippingStatus != null and qo.shippingStatus != ''">
+                AND po.shipping_status = #{qo.shippingStatus}
+            </if>
+            <if test="qo.receivingStatus != null and qo.receivingStatus != ''">
+                AND po.receiving_status = #{qo.receivingStatus}
+            </if>
+            <if test="qo.prepayStatus != null">
+                AND po.prepay_status = #{qo.prepayStatus}
+            </if>
+            <if test="qo.balanceStatus != null">
+                AND po.balance_status = #{qo.balanceStatus}
+            </if>
+            <if test="qo.orderDateStart != null">
+                AND po.order_date &gt;= #{qo.orderDateStart}
+            </if>
+            <if test="qo.orderDateEnd != null">
+                AND po.order_date &lt;= #{qo.orderDateEnd}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_purchase_order_item poi
+                    WHERE poi.purchase_order_id = po.id
+                    AND poi.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY po.create_time DESC
+    </select>
+
+    <!-- 导出查询（统计数据在Service层批量查询） -->
+    <select id="selectListForExport" resultType="com.erp.admin.wms.model.vo.PurchaseOrderExportVO">
+        SELECT
+            po.id,
+            po.order_no,
+            s.name as supplier_name,
+            CASE po.order_status
+                WHEN 'DRAFT' THEN '草稿'
+                WHEN 'CONFIRMED' THEN '已确认'
+                WHEN 'IN_PRODUCTION' THEN '生产中'
+                WHEN 'COMPLETED' THEN '已完成'
+                WHEN 'CANCELLED' THEN '已取消'
+                ELSE po.order_status
+            END as order_status_desc,
+            CASE po.shipping_status
+                WHEN 'NOT_SHIPPED' THEN '未发货'
+                WHEN 'PARTIAL_SHIPPED' THEN '部分发货'
+                WHEN 'ALL_SHIPPED' THEN '全部发货'
+                ELSE po.shipping_status
+            END as shipping_status_desc,
+            CASE po.receiving_status
+                WHEN 'NOT_RECEIVED' THEN '未入库'
+                WHEN 'PARTIAL_RECEIVED' THEN '部分入库'
+                WHEN 'ALL_RECEIVED' THEN '全部入库'
+                ELSE po.receiving_status
+            END as receiving_status_desc,
+            DATE_FORMAT(po.order_date, '%Y-%m-%d') as order_date,
+            DATE_FORMAT(po.expected_delivery_date, '%Y-%m-%d') as expected_delivery_date,
+            DATE_FORMAT(po.actual_delivery_date, '%Y-%m-%d') as actual_delivery_date,
+            po.currency_code,
+            po.total_amount,
+            CASE po.prepay_status WHEN 1 THEN '已付' ELSE '未付' END as prepay_status_desc,
+            CASE po.balance_status WHEN 1 THEN '已付' ELSE '未付' END as balance_status_desc,
+            DATE_FORMAT(po.create_time, '%Y-%m-%d %H:%i:%s') as create_time
+        FROM wms_purchase_order po
+        LEFT JOIN supplier s ON po.supplier_id = s.id
+        <where>
+            po.deleted = 0
+            <if test="qo.orderNo != null and qo.orderNo != ''">
+                AND po.order_no LIKE CONCAT('%', #{qo.orderNo}, '%')
+            </if>
+            <if test="qo.supplierId != null">
+                AND po.supplier_id = #{qo.supplierId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND po.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.shippingStatus != null and qo.shippingStatus != ''">
+                AND po.shipping_status = #{qo.shippingStatus}
+            </if>
+            <if test="qo.receivingStatus != null and qo.receivingStatus != ''">
+                AND po.receiving_status = #{qo.receivingStatus}
+            </if>
+            <if test="qo.prepayStatus != null">
+                AND po.prepay_status = #{qo.prepayStatus}
+            </if>
+            <if test="qo.balanceStatus != null">
+                AND po.balance_status = #{qo.balanceStatus}
+            </if>
+            <if test="qo.orderDateStart != null">
+                AND po.order_date &gt;= #{qo.orderDateStart}
+            </if>
+            <if test="qo.orderDateEnd != null">
+                AND po.order_date &lt;= #{qo.orderDateEnd}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_purchase_order_item poi
+                    WHERE poi.purchase_order_id = po.id
+                    AND poi.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY po.create_time DESC
+        LIMIT 10000
+    </select>
+
+</mapper>

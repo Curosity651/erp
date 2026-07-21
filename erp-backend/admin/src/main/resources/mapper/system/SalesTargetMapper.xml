@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.statistics.mapper.SalesTargetMapper">
+
+	<resultMap id="salesTargetMap" type="com.erp.admin.statistics.model.SalesTarget">
+  		<id property="id" column="id"/>
+    		<result property="targetType" column="target_type"/>
+    		<result property="targetYear" column="target_year"/>
+    		<result property="targetMonth" column="target_month"/>
+    		<result property="targetAmount" column="target_amount"/>
+    		<result property="currency" column="currency"/>
+    		<result property="createdBy" column="created_by"/>
+    		<result property="remark" column="remark"/>
+    		<result property="createTime" column="create_time"/>
+    		<result property="updateTime" column="update_time"/>
+      </resultMap>
+
+	<sql id="Base_Column_List">
+		id,        
+		target_type,        
+		target_year,        
+		target_month,        
+		target_amount,        
+		currency,        
+		created_by,        
+		remark,        
+		create_time,        
+		update_time        
+	</sql>
+
+	<sql id="Base_Alias_Column_List">
+		st.id,        
+		st.target_type,        
+		st.target_year,        
+		st.target_month,        
+		st.target_amount,        
+		st.currency,        
+		st.created_by,        
+		st.remark,        
+		st.create_time,        
+		st.update_time        
+	</sql>
+</mapper>

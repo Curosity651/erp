@@ -1,0 +1,209 @@
+/**
+ * @deprecated 请使用 use-file-upload.ts 替代
+ * 此文件保留是为了向后兼容，内部已改为调用新的 useFileUpload
+ */
+import { ref } from 'vue'
+import { message } from 'ant-design-vue'
+import { validateFile, generateTimeBasedFileName } from '@/utils/upload-core'
+import { getUploadSignature, saveFileMetadata } from '@/api/system/file'
+import type { SysFileUploadDTO, UploadSignatureVO } from '@/api/system/file/types'
+import { isSuccess } from '@/api'
+
+// 重新导出工具函数
+export {
+  DEFAULT_ALLOWED_TYPES as ALLOWED_FILE_TYPES,
+  DEFAULT_MAX_FILE_SIZE as MAX_FILE_SIZE,
+  FILE_TYPE_LABELS,
+  formatFileSize,
+  getFileExtension,
+  getFileIconType as getFileIcon
+} from '@/utils/upload-core'
+
+/**
+ * 上传结果
+ */
+export interface SysFileUploadResult {
+  /** 文件ID */
+  fileId: number
+  /** 对象键 */
+  objectKey: string
+  /** 原始文件名 */
+  fileName: string
+  /** 文件大小 */
+  fileSize: number
+  /** MIME类型 */
+  contentType: string
+}
+
+/**
+ * 上传选项
+ */
+export interface SysFileUploadOptions {
+  /** 桶别名，默认 'private-files' */
+  bucketKey?: string
+  /** 允许的文件类型 */
+  allowedTypes?: string[]
+  /** 最大文件大小（字节） */
+  maxSize?: number
+  /** 上传进度回调 */
+  onProgress?: (percent: number) => void
+}
+
+/**
+ * 构建 objectKey
+ */
+function buildObjectKey(signature: UploadSignatureVO, fileName: string): string {
+  const processedFileName = generateTimeBasedFileName(fileName)
+  return signature.dir + processedFileName
+}
+
+/**
+ * 使用 POST 表单方式上传到 OSS
+ */
+function uploadToOSSByPost(
+  file: File,
+  signature: UploadSignatureVO,
+  objectKey: string,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData()
+    formData.append('key', objectKey)
+    formData.append('policy', signature.policy)
+    formData.append('x-oss-signature', signature.signature)
+    formData.append('x-oss-signature-version', signature.version)
+    formData.append('x-oss-credential', signature.xOssCredential)
+    formData.append('x-oss-date', signature.xOssDate)
+    formData.append('success_action_status', '200')
+
+    if (signature.securityToken) {
+      formData.append('x-oss-security-token', signature.securityToken)
+    }
+
+    // file 必须是最后一个字段
+    formData.append('file', file)
+
+    const xhr = new XMLHttpRequest()
+
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', e => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100))
+        }
+      })
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 200) {
+        resolve(`${signature.host}/${objectKey}`)
+      } else {
+        reject(new Error(`上传失败: ${xhr.status}`))
+      }
+    })
+
+    xhr.addEventListener('error', () => reject(new Error('网络错误')))
+    xhr.addEventListener('timeout', () => reject(new Error('上传超时')))
+    xhr.timeout = 120000
+
+    xhr.open('POST', signature.host)
+    xhr.send(formData)
+  })
+}
+
+/**
+ * 系统文件上传 Hook
+ * 实现：获取签名 → POST 表单上传 OSS → 保存元数据
+ *
+ * @deprecated 请使用 useFileUpload 替代
+ */
+export function useSysFileUpload() {
+  const uploading = ref(false)
+  const progress = ref(0)
+
+  /**
+   * 校验文件
+   */
+  const validateFileWrapper = (file: File, options: SysFileUploadOptions = {}): boolean => {
+    const { allowedTypes, maxSize } = options
+    const result = validateFile(file, { allowedTypes, maxSize })
+    if (!result.valid) {
+      message.error(result.message)
+      return false
+    }
+    return true
+  }
+
+  /**
+   * 上传文件到 OSS 并保存元数据
+   */
+  const uploadFile = async (
+    file: File,
+    options: SysFileUploadOptions = {}
+  ): Promise<SysFileUploadResult | null> => {
+    const { bucketKey = 'private-files', onProgress, allowedTypes, maxSize } = options
+
+    // 校验文件
+    if (!validateFileWrapper(file, { allowedTypes, maxSize })) {
+      return null
+    }
+
+    uploading.value = true
+    progress.value = 0
+
+    try {
+      // 1. 获取上传签名（只需 bucketKey）
+      const signatureRes = await getUploadSignature(bucketKey)
+      if (!isSuccess(signatureRes) || !signatureRes.data) {
+        throw new Error(signatureRes.message || '获取上传签名失败')
+      }
+      const signature = signatureRes.data
+
+      // 2. 构建 objectKey
+      const objectKey = buildObjectKey(signature, file.name)
+
+      // 3. POST 表单上传到 OSS
+      await uploadToOSSByPost(file, signature, objectKey, percent => {
+        progress.value = percent
+        onProgress?.(percent)
+      })
+
+      // 4. 保存文件元数据
+      const metadataDto: SysFileUploadDTO = {
+        bucketKey,
+        objectKey,
+        fileName: file.name,
+        fileSize: file.size,
+        contentType: file.type
+      }
+
+      const saveRes = await saveFileMetadata(metadataDto)
+      if (!isSuccess(saveRes) || !saveRes.data) {
+        throw new Error(saveRes.message || '保存文件元数据失败')
+      }
+
+      const result: SysFileUploadResult = {
+        fileId: saveRes.data,
+        objectKey,
+        fileName: file.name,
+        fileSize: file.size,
+        contentType: file.type
+      }
+
+      message.success('上传成功')
+      return result
+    } catch (error: any) {
+      console.error('文件上传失败:', error)
+      message.error(error.message || '文件上传失败')
+      return null
+    } finally {
+      uploading.value = false
+    }
+  }
+
+  return {
+    uploading,
+    progress,
+    uploadFile,
+    validateFile: validateFileWrapper
+  }
+}

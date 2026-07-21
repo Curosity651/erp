@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.SalesOutboundItemMapper">
+
+    <!-- 根据出库单ID查询明细VO列表 -->
+    <select id="selectVoListByOutboundOrderId" resultType="com.erp.admin.wms.model.vo.SalesOutboundItemVO">
+        SELECT
+            soi.id,
+            soi.outbound_order_id,
+            soi.erp_order_id,
+            soi.platform_order_id,
+            soi.sku_code,
+            soi.quantity,
+            soi.remark
+        FROM wms_sales_outbound_order_item soi
+        WHERE soi.outbound_order_id = #{outboundOrderId}
+        ORDER BY soi.id ASC
+    </select>
+
+</mapper>

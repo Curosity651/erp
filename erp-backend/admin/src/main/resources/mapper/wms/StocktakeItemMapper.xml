@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.StocktakeItemMapper">
+
+    <!-- 查询盘点进度统计 -->
+    <select id="selectProgress" resultType="com.erp.admin.wms.model.vo.StocktakeProgressVO">
+        SELECT
+            COUNT(*) AS total_count,
+            SUM(CASE WHEN stocktake_status = 'COUNTED' THEN 1 ELSE 0 END) AS counted_count,
+            SUM(CASE WHEN stocktake_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_count,
+            ROUND(SUM(CASE WHEN stocktake_status = 'COUNTED' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS progress_percent,
+            SUM(CASE WHEN diff_quantity > 0 THEN 1 ELSE 0 END) AS profit_count,
+            COALESCE(SUM(CASE WHEN diff_quantity > 0 THEN diff_quantity ELSE 0 END), 0) AS profit_quantity,
+            SUM(CASE WHEN diff_quantity &lt; 0 THEN 1 ELSE 0 END) AS loss_count,
+            COALESCE(SUM(CASE WHEN diff_quantity &lt; 0 THEN ABS(diff_quantity) ELSE 0 END), 0) AS loss_quantity,
+            COALESCE(SUM(diff_quantity), 0) AS net_diff
+        FROM wms_stocktake_order_item
+        WHERE stocktake_order_id = #{stocktakeOrderId}
+    </select>
+
+</mapper>

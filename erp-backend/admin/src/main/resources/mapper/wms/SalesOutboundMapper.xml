@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.SalesOutboundMapper">
+
+    <!-- 分页查询 -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.SalesOutboundPageVO">
+        SELECT
+            so.id,
+            so.outbound_no,
+            so.platform,
+            so.warehouse_id,
+            so.outbound_date,
+            so.order_count,
+            so.sku_count,
+            so.total_quantity,
+            so.order_status,
+            so.remark,
+            so.create_by,
+            so.create_time
+        FROM wms_sales_outbound_order so
+        <where>
+            <!-- 排除自定义出库单（source_type=CUSTOM），避免混入销售出库列表 -->
+            AND so.source_type = 'SALES'
+            <if test="qo.outboundNo != null and qo.outboundNo != ''">
+                AND so.outbound_no LIKE CONCAT('%', #{qo.outboundNo}, '%')
+            </if>
+            <if test="qo.platform != null and qo.platform != ''">
+                AND so.platform = #{qo.platform}
+            </if>
+            <if test="qo.platformOrderId != null and qo.platformOrderId != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_sales_outbound_order_item soi
+                    WHERE soi.outbound_order_id = so.id
+                    AND soi.platform_order_id LIKE CONCAT('%', #{qo.platformOrderId}, '%')
+                )
+            </if>
+            <if test="qo.warehouseId != null">
+                AND so.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND so.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.outboundDateStart != null">
+                AND so.outbound_date &gt;= #{qo.outboundDateStart}
+            </if>
+            <if test="qo.outboundDateEnd != null">
+                AND so.outbound_date &lt;= #{qo.outboundDateEnd}
+            </if>
+        </where>
+        ORDER BY so.create_time DESC
+    </select>
+
+    <!-- 查询出库单详情 -->
+    <select id="selectDetailById" resultType="com.erp.admin.wms.model.vo.SalesOutboundDetailVO">
+        SELECT
+            so.id,
+            so.outbound_no,
+            so.platform,
+            so.warehouse_id,
+            so.outbound_date,
+            so.order_count,
+            so.sku_count,
+            so.total_quantity,
+            so.order_status,
+            so.posting_id,
+            so.logistics_product_id,
+            lp.product_name AS logistics_product_name,
+            so.channel_name,
+            so.tracking_no,
+            so.weight,
+            so.shipping_fee,
+            so.remark,
+            so.create_by,
+            so.create_time
+        FROM wms_sales_outbound_order so
+        LEFT JOIN wms_logistics_product lp ON lp.id = so.logistics_product_id
+        WHERE so.id = #{id}
+    </select>
+
+    <!-- 查询导出列表 -->
+    <select id="selectListForExport" resultType="com.erp.admin.wms.model.vo.SalesOutboundExportVO">
+        SELECT
+            so.id,
+            so.outbound_no,
+            so.platform,
+            so.warehouse_id,
+            so.outbound_date,
+            so.order_count,
+            so.sku_count,
+            so.total_quantity,
+            so.order_status,
+            so.remark,
+            so.create_by,
+            u.nickname AS create_by_name,
+            so.create_time
+        FROM wms_sales_outbound_order so
+        LEFT JOIN sys_user u ON so.create_by = u.user_id
+        <where>
+            <!-- 排除自定义出库单（source_type=CUSTOM），避免混入销售出库导出 -->
+            AND so.source_type = 'SALES'
+            <if test="qo.outboundNo != null and qo.outboundNo != ''">
+                AND so.outbound_no LIKE CONCAT('%', #{qo.outboundNo}, '%')
+            </if>
+            <if test="qo.platform != null and qo.platform != ''">
+                AND so.platform = #{qo.platform}
+            </if>
+            <if test="qo.platformOrderId != null and qo.platformOrderId != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_sales_outbound_order_item soi
+                    WHERE soi.outbound_order_id = so.id
+                    AND soi.platform_order_id LIKE CONCAT('%', #{qo.platformOrderId}, '%')
+                )
+            </if>
+            <if test="qo.warehouseId != null">
+                AND so.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND so.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.outboundDateStart != null">
+                AND so.outbound_date &gt;= #{qo.outboundDateStart}
+            </if>
+            <if test="qo.outboundDateEnd != null">
+                AND so.outbound_date &lt;= #{qo.outboundDateEnd}
+            </if>
+        </where>
+        ORDER BY so.create_time DESC
+    </select>
+
+</mapper>

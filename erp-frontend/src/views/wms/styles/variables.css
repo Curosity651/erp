@@ -1,0 +1,10 @@
+/* WMS 模块样式变量 */
+
+:root {
+  /* 库存状态色 */
+  --wms-color-warehouse: var(--ant-color-primary);   /* 仓内 */
+  --wms-color-available: var(--ant-color-success);   /* 可用 */
+  --wms-color-reserved: var(--ant-color-warning);    /* 占用 */
+  --wms-color-in-transit: #722ed1;                   /* 在途 */
+  --wms-color-damaged: var(--ant-color-error);       /* 残品 */
+}

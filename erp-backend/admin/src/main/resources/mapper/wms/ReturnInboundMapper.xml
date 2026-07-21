@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.ReturnInboundMapper">
+
+    <!-- 分页查询（重构后去掉状态字段） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.ReturnInboundPageVO">
+        SELECT
+            ri.id,
+            ri.return_no,
+            ri.erp_order_id,
+            ri.platform_order_id,
+            ri.platform,
+            ri.sku_code,
+            ri.warehouse_id,
+            w.warehouse_name,
+            ri.return_date,
+            ri.return_reason,
+            ri.total_quantity,
+            ri.qualified_quantity,
+            ri.unqualified_quantity,
+            ri.to_damaged_quantity,
+            ri.scrap_quantity,
+            ri.return_status,
+            ri.remark,
+            ri.create_by,
+            u.nickname AS create_by_name,
+            ri.create_time
+        FROM wms_return_inbound_order ri
+        LEFT JOIN wms_warehouse w ON ri.warehouse_id = w.id
+        LEFT JOIN sys_user u ON ri.create_by = u.user_id
+        <where>
+            ri.deleted = 0
+            <if test="qo.returnNo != null and qo.returnNo != ''">
+                AND ri.return_no LIKE CONCAT('%', #{qo.returnNo}, '%')
+            </if>
+            <if test="qo.platformOrderId != null and qo.platformOrderId != ''">
+                AND ri.platform_order_id LIKE CONCAT('%', #{qo.platformOrderId}, '%')
+            </if>
+            <if test="qo.platform != null and qo.platform != ''">
+                AND ri.platform = #{qo.platform}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND ri.sku_code = #{qo.skuCode}
+            </if>
+            <if test="qo.warehouseId != null">
+                AND ri.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.returnDateStart != null">
+                AND ri.return_date &gt;= #{qo.returnDateStart}
+            </if>
+            <if test="qo.returnDateEnd != null">
+                AND ri.return_date &lt;= #{qo.returnDateEnd}
+            </if>
+        </where>
+        ORDER BY ri.create_time DESC
+    </select>
+
+    <!-- 查询退货单详情（重构后去掉状态字段） -->
+    <select id="selectDetailById" resultType="com.erp.admin.wms.model.vo.ReturnInboundDetailVO">
+        SELECT
+            ri.id,
+            ri.return_no,
+            ri.erp_order_id,
+            ri.platform_order_id,
+            ri.platform,
+            ri.sku_code,
+            ri.warehouse_id,
+            w.warehouse_name,
+            ri.return_date,
+            ri.return_reason,
+            ri.total_quantity,
+            ri.qualified_quantity,
+            ri.unqualified_quantity,
+            ri.to_damaged_quantity,
+            ri.scrap_quantity,
+            ri.returnable_quantity,
+            ri.return_status,
+            ri.remark,
+            ri.create_by,
+            u.nickname AS create_by_name,
+            ri.create_time
+        FROM wms_return_inbound_order ri
+        LEFT JOIN wms_warehouse w ON ri.warehouse_id = w.id
+        LEFT JOIN sys_user u ON ri.create_by = u.user_id
+        WHERE ri.id = #{id}
+          AND ri.deleted = 0
+    </select>
+
+    <!-- 分页查询可退货订单（item 级别，每行一个可退货 item） -->
+    <select id="selectReturnableOrders" resultType="com.erp.admin.wms.model.vo.ReturnableOrderVO">
+        SELECT
+            o.id AS orderId,
+            o.platform_order_id AS platformOrderId,
+            o.platform,
+            o.outbound_time AS outboundTime,
+            oi.id AS orderItemId,
+            oi.platform_item_id AS platformItemId,
+            COALESCE(NULLIF(oi.sku_code, ''), sm.sku_code) AS skuCode,
+            oi.quantity AS shippedQuantity,
+            COALESCE(oi.returned_quantity, 0) AS returnedQuantity,
+            COALESCE(pending.in_flight_quantity, 0) AS inFlightQuantity,
+            (oi.quantity - COALESCE(oi.returned_quantity, 0)
+                - COALESCE(pending.in_flight_quantity, 0)) AS returnableQuantity
+        FROM erp_order o
+        INNER JOIN erp_order_item oi ON oi.order_id = o.id
+        LEFT JOIN sku_mapping sm
+            ON sm.tenant_id = o.tenant_id
+            AND sm.platform_item_id = oi.platform_item_id
+            AND sm.deleted = 0
+        LEFT JOIN (
+            SELECT order_item_id, SUM(total_quantity) AS in_flight_quantity
+            FROM wms_return_inbound_order
+            WHERE deleted = 0
+              AND return_status IN ('RETURN_PENDING', 'QC_PENDING')
+            GROUP BY order_item_id
+        ) pending ON pending.order_item_id = oi.id
+        WHERE o.outbound_status = 'COMPLETED'
+          AND (oi.quantity - COALESCE(oi.returned_quantity, 0)
+                - COALESCE(pending.in_flight_quantity, 0)) > 0
+        <if test="qo.keyword != null and qo.keyword != ''">
+            AND (o.platform_order_id LIKE CONCAT('%', #{qo.keyword}, '%')
+                 OR COALESCE(NULLIF(oi.sku_code, ''), sm.sku_code) LIKE CONCAT('%', #{qo.keyword}, '%'))
+        </if>
+        <if test="qo.platform != null and qo.platform != ''">
+            AND o.platform = #{qo.platform}
+        </if>
+        ORDER BY o.outbound_time DESC
+    </select>
+
+    <select id="selectSourceForUpdate" resultType="com.erp.admin.wms.model.vo.ReturnOrderSourceVO">
+        SELECT
+            o.id AS orderId,
+            oi.id AS orderItemId,
+            o.tenant_id AS erpTenantId,
+            o.platform_order_id AS platformOrderId,
+            o.platform,
+            o.outbound_status AS outboundStatus,
+            COALESCE(NULLIF(oi.sku_code, ''), sm.sku_code) AS skuCode,
+            oi.quantity AS shippedQuantity,
+            COALESCE(oi.returned_quantity, 0) AS returnedQuantity
+        FROM erp_order_item oi
+        INNER JOIN erp_order o ON o.id = oi.order_id
+        LEFT JOIN sku_mapping sm
+            ON sm.tenant_id = o.tenant_id
+            AND sm.platform_item_id = oi.platform_item_id
+            AND sm.deleted = 0
+        WHERE oi.id = #{orderItemId}
+          AND o.tenant_id = #{erpTenantId}
+          AND oi.tenant_id = #{erpTenantId}
+        FOR UPDATE
+    </select>
+
+
+    <!-- 查询导出列表（重构后去掉状态字段） -->
+    <select id="selectListForExport" resultType="com.erp.admin.wms.model.vo.ReturnInboundExportVO">
+        SELECT
+            ri.id,
+            ri.return_no,
+            ri.erp_order_id,
+            ri.platform_order_id,
+            ri.warehouse_id,
+            w.warehouse_name,
+            ri.return_date,
+            ri.return_reason,
+            ri.total_quantity,
+            ri.qualified_quantity,
+            ri.unqualified_quantity,
+            ri.remark,
+            ri.create_by,
+            u.nickname AS create_by_name,
+            ri.create_time
+        FROM wms_return_inbound_order ri
+        LEFT JOIN wms_warehouse w ON ri.warehouse_id = w.id
+        LEFT JOIN sys_user u ON ri.create_by = u.user_id
+        <where>
+            ri.deleted = 0
+            <if test="qo.returnNo != null and qo.returnNo != ''">
+                AND ri.return_no LIKE CONCAT('%', #{qo.returnNo}, '%')
+            </if>
+            <if test="qo.platformOrderId != null and qo.platformOrderId != ''">
+                AND ri.platform_order_id LIKE CONCAT('%', #{qo.platformOrderId}, '%')
+            </if>
+            <if test="qo.warehouseId != null">
+                AND ri.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.returnDateStart != null">
+                AND ri.return_date &gt;= #{qo.returnDateStart}
+            </if>
+            <if test="qo.returnDateEnd != null">
+                AND ri.return_date &lt;= #{qo.returnDateEnd}
+            </if>
+        </where>
+        ORDER BY ri.create_time DESC
+    </select>
+
+</mapper>

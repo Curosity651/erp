@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.financial.mapper.WbReportDetailMapper">
+
+    <!--
+        分页查询财务报表明细（支持未关联订单筛选）
+        使用 LEFT JOIN erp_order 表，通过 Wrapper 条件结合
+        
+        关于 MyBatis-Plus Wrapper 在 XML 中的使用：
+        - ${ew.customSqlSegment}: 包含 WHERE + 条件 + ORDER BY（如果有条件则以 WHERE 开头）
+        - ${ew.sqlSegment}: 仅条件部分，不含 WHERE 关键字，可能含 ORDER BY
+        - ew.nonEmptyOfNormal: 判断是否有普通条件（不含排序）
+        - ew.nonEmptyOfWhere: 同上，用于判断 WHERE 条件是否存在（部分版本）
+        
+        此处采用更安全的写法：将手写条件通过 Wrapper.apply() 方式加入，避免 XML 中拼接
+    -->
+    <select id="selectPageWithOrderMatch" resultType="com.erp.admin.financial.model.entity.WbReportDetail">
+        SELECT wrd.*
+        FROM wb_report_detail wrd
+        <if test="unmatchedOrderOnly == true">
+            LEFT JOIN erp_order eo ON eo.platform_order_id = CAST(wrd.assembly_id AS CHAR)
+        </if>
+        ${ew.customSqlSegment}
+    </select>
+
+    <!--
+        统计符合条件的记录总数（用于分页）
+    -->
+    <select id="selectCountWithOrderMatch" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM wb_report_detail wrd
+        <if test="unmatchedOrderOnly == true">
+            LEFT JOIN erp_order eo ON eo.platform_order_id = CAST(wrd.assembly_id AS CHAR)
+        </if>
+        ${ew.customSqlSegment}
+    </select>
+
+    <!--
+        导出查询（带限制条数）
+    -->
+    <select id="selectListWithOrderMatch" resultType="com.erp.admin.financial.model.entity.WbReportDetail">
+        SELECT wrd.*
+        FROM wb_report_detail wrd
+        <if test="unmatchedOrderOnly == true">
+            LEFT JOIN erp_order eo ON eo.platform_order_id = CAST(wrd.assembly_id AS CHAR)
+        </if>
+        ${ew.customSqlSegment}
+        LIMIT #{limit}
+    </select>
+
+</mapper>

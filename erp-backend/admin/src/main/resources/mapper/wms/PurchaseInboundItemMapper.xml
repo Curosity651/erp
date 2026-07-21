@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.PurchaseInboundItemMapper">
+
+    <!-- 批量查询入库单商品摘要及统计 -->
+    <select id="selectItemSummaryByOrderIds" resultType="com.erp.admin.wms.model.vo.PurchaseInboundStatsVO">
+        SELECT
+            pioi.inbound_order_id AS inboundOrderId,
+            GROUP_CONCAT(CONCAT(pioi.sku_code, '×', pioi.actual_quantity) SEPARATOR ', ') AS itemSummary,
+            SUM(pioi.expected_quantity) AS totalExpectedQty,
+            SUM(pioi.actual_quantity) AS totalActualQty,
+            SUM(pioi.expected_quantity - pioi.actual_quantity) AS totalShortQty,
+            COUNT(DISTINCT pioi.sku_code) AS skuCount
+        FROM wms_purchase_inbound_order_item pioi
+        WHERE pioi.inbound_order_id IN
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+        GROUP BY pioi.inbound_order_id
+    </select>
+
+    <!-- 批量查询入库单关联的采购单号 -->
+    <select id="selectPurchaseOrderNosByOrderIds" resultType="com.erp.admin.wms.model.vo.InboundPurchaseOrderNoVO">
+        SELECT
+            pioi.inbound_order_id AS inboundOrderId,
+            po.order_no AS purchaseOrderNo
+        FROM wms_purchase_inbound_order_item pioi
+        INNER JOIN wms_purchase_order po ON pioi.purchase_order_id = po.id
+        WHERE pioi.inbound_order_id IN
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+        GROUP BY pioi.inbound_order_id, po.order_no
+        ORDER BY pioi.inbound_order_id, po.order_no
+    </select>
+
+    <!-- 查询入库单明细VO列表 -->
+    <select id="selectItemVOsByInboundOrderId" resultType="com.erp.admin.wms.model.vo.PurchaseInboundItemVO">
+        SELECT
+            pioi.id,
+            pioi.shipping_order_item_id,
+            pioi.purchase_order_id,
+            po.order_no AS purchase_order_no,
+            pioi.purchase_order_item_id,
+            pioi.sku_code,
+            pioi.expected_quantity,
+            pioi.actual_quantity,
+            pioi.expected_quality,
+            (pioi.expected_quantity - pioi.actual_quantity) AS short_quantity,
+            pioi.remark
+        FROM wms_purchase_inbound_order_item pioi
+        LEFT JOIN wms_purchase_order po ON pioi.purchase_order_id = po.id
+        WHERE pioi.inbound_order_id = #{inboundOrderId}
+        ORDER BY pioi.id ASC
+    </select>
+
+</mapper>

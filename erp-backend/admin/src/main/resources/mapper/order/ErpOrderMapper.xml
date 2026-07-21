@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.order.mapper.ErpOrderMapper">
+
+    <!-- 计算指定年份按月分组的已完成订单销售额(RUB) -->
+    <select id="calculateMonthlyCompletedOrdersAmount" resultType="com.erp.admin.order.model.dto.MonthlyAmountDTO">
+        SELECT
+            MONTH(platform_created_at) as month,
+            COALESCE(SUM(total_amount_rub / 100), 0) as amount
+        FROM erp_order
+        WHERE YEAR(platform_created_at) = #{year}
+          AND erp_status = 'DELIVERED'
+          AND total_amount_rub IS NOT NULL
+        GROUP BY MONTH(platform_created_at)
+    </select>
+
+    <!-- 使用乐观锁占用订单用于出库 -->
+    <update id="allocateForOutboundWithVersion">
+        UPDATE erp_order
+        SET outbound_status = 'ALLOCATED',
+            version = version + 1,
+            update_time = NOW()
+        WHERE id = #{id}
+          AND version = #{version}
+          AND outbound_status = 'NONE'
+    </update>
+
+    <!-- 释放订单出库占用 -->
+    <update id="releaseOutboundAllocation">
+        UPDATE erp_order
+        SET outbound_status = 'NONE',
+            outbound_order_id = NULL,
+            update_time = NOW()
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          AND outbound_status = 'ALLOCATED'
+    </update>
+
+    <!-- 使用乐观锁确认出库 -->
+    <update id="confirmOutboundWithVersion">
+        UPDATE erp_order
+        SET outbound_status = 'COMPLETED',
+            outbound_order_id = #{outboundOrderId},
+            outbound_time = NOW(),
+            version = version + 1,
+            update_time = NOW()
+        WHERE id = #{id}
+          AND version = #{version}
+          AND outbound_status = 'ALLOCATED'
+    </update>
+
+    <!-- 按SKU编码批量查询日均销量 -->
+    <select id="selectDailySalesBySkuCodes" resultType="com.erp.admin.order.model.vo.SkuDailySalesVO">
+        SELECT
+            sm.sku_code AS skuCode,
+            COALESCE(SUM(oi.quantity), 0) AS totalQuantity
+        FROM erp_order o
+        INNER JOIN erp_order_item oi ON o.id = oi.order_id
+        INNER JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+        WHERE o.erp_status = 'DELIVERED'
+          AND o.platform_created_at >= #{startTime}
+          AND sm.sku_code IN
+            <foreach collection="skuCodes" item="code" open="(" separator="," close=")">
+                #{code}
+            </foreach>
+        GROUP BY sm.sku_code
+    </select>
+
+    <!-- 查询单个SKU的总销量 -->
+    <select id="selectTotalSalesBySkuCode" resultType="java.lang.Long">
+        SELECT COALESCE(SUM(oi.quantity), 0)
+        FROM erp_order o
+        INNER JOIN erp_order_item oi ON o.id = oi.order_id
+        INNER JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+        WHERE o.erp_status = 'DELIVERED'
+          AND o.platform_created_at >= #{startTime}
+          AND sm.sku_code = #{skuCode}
+    </select>
+
+    <!-- 按平台和 SKU 统计 FBS 订单销量 -->
+    <select id="selectFbsSalesByPlatformsAndSkus" resultType="com.erp.admin.wms.model.dto.PlatformSkuSalesDTO">
+        SELECT
+            o.platform,
+            sm.sku_code AS skuCode,
+            SUM(oi.quantity) AS totalQuantity
+        FROM erp_order o
+        INNER JOIN erp_order_item oi ON o.id = oi.order_id
+        INNER JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+        WHERE o.fulfillment_type = 'FBS'
+          AND o.erp_status NOT IN ('CANCELED', 'RETURNED')
+          AND o.platform_created_at &gt;= #{startTime}
+          <if test="platforms != null and platforms.size() > 0">
+              AND o.platform IN
+              <foreach item="p" collection="platforms" open="(" separator="," close=")">
+                  #{p}
+              </foreach>
+          </if>
+          <if test="skuCodes != null and skuCodes.size() > 0">
+              AND sm.sku_code IN
+              <foreach item="sku" collection="skuCodes" open="(" separator="," close=")">
+                  #{sku}
+              </foreach>
+          </if>
+        GROUP BY o.platform, sm.sku_code
+    </select>
+
+    <!-- 分段查询 FBS 销量（支持时间范围） -->
+    <select id="selectFbsRecentSales" resultType="com.erp.admin.wms.model.dto.PlatformSkuSalesDTO">
+        SELECT
+            o.platform,
+            sm.sku_code AS skuCode,
+            SUM(oi.quantity) AS totalQuantity
+        FROM erp_order o
+        INNER JOIN erp_order_item oi ON o.id = oi.order_id
+        INNER JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+        WHERE o.fulfillment_type = 'FBS'
+          AND o.erp_status NOT IN ('CANCELED', 'RETURNED')
+          AND o.platform_created_at &gt;= #{startTime}
+          AND o.platform_created_at &lt; #{endTime}
+          <if test="platforms != null and platforms.size() > 0">
+              AND o.platform IN
+              <foreach item="p" collection="platforms" open="(" separator="," close=")">
+                  #{p}
+              </foreach>
+          </if>
+          <if test="skuCodes != null and skuCodes.size() > 0">
+              AND sm.sku_code IN
+              <foreach item="sku" collection="skuCodes" open="(" separator="," close=")">
+                  #{sku}
+              </foreach>
+          </if>
+        GROUP BY o.platform, sm.sku_code
+    </select>
+
+    <!-- 查询 SKU 首次 FBS 出单时间 -->
+    <select id="selectFirstFbsOrderTime" resultType="com.erp.admin.wms.model.dto.PlatformSkuSalesDTO">
+        SELECT
+            o.platform,
+            sm.sku_code AS skuCode,
+            MIN(o.platform_created_at) AS firstOrderTime
+        FROM erp_order o
+        INNER JOIN erp_order_item oi ON o.id = oi.order_id
+        INNER JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+        WHERE o.fulfillment_type = 'FBS'
+          AND o.erp_status NOT IN ('CANCELED', 'RETURNED')
+          <if test="platforms != null and platforms.size() > 0">
+              AND o.platform IN
+              <foreach item="p" collection="platforms" open="(" separator="," close=")">
+                  #{p}
+              </foreach>
+          </if>
+          <if test="skuCodes != null and skuCodes.size() > 0">
+              AND sm.sku_code IN
+              <foreach item="sku" collection="skuCodes" open="(" separator="," close=")">
+                  #{sku}
+              </foreach>
+          </if>
+        GROUP BY o.platform, sm.sku_code
+    </select>
+
+    <!-- 通用订单筛选条件片段（供分页查询复用） -->
+    <sql id="orderFilterClause">
+        <if test="qo.id != null">
+            AND o.id = #{qo.id}
+        </if>
+        <if test="qo.shopId != null">
+            AND o.shop_id = #{qo.shopId}
+        </if>
+        <if test="qo.platform != null and qo.platform != ''">
+            AND o.platform = #{qo.platform}
+        </if>
+        <if test="qo.platformOrderId != null and qo.platformOrderId != ''">
+            AND o.platform_order_id LIKE CONCAT('%', #{qo.platformOrderId}, '%')
+        </if>
+        <if test="qo.erpStatus != null and qo.erpStatus != ''">
+            AND o.erp_status = #{qo.erpStatus}
+        </if>
+        <if test="qo.platformStatus != null and qo.platformStatus != ''">
+            AND o.platform_status = #{qo.platformStatus}
+        </if>
+        <if test="qo.platformSubstatus != null and qo.platformSubstatus != ''">
+            AND o.platform_substatus = #{qo.platformSubstatus}
+        </if>
+        <if test="qo.warehouseId != null and qo.warehouseId != ''">
+            AND o.warehouse_id = #{qo.warehouseId}
+        </if>
+        <if test="qo.destinationWarehouseId != null and qo.destinationWarehouseId != ''">
+            AND o.destination_warehouse_id = #{qo.destinationWarehouseId}
+        </if>
+        <if test="qo.fulfillmentType != null and qo.fulfillmentType != ''">
+            AND o.fulfillment_type = #{qo.fulfillmentType}
+        </if>
+        <!-- 仓型（仅 Ozon FBS 有 warehouse_name）：仓库名含「大」字即大仓，其余为小仓 -->
+        <if test="qo.warehouseType == 'BIG'">
+            AND o.warehouse_name LIKE '%大%'
+        </if>
+        <if test="qo.warehouseType == 'SMALL'">
+            AND o.warehouse_name IS NOT NULL AND o.warehouse_name NOT LIKE '%大%'
+        </if>
+        <if test="qo.locked != null">
+            AND o.locked = #{qo.locked}
+        </if>
+        <!-- 时间范围过滤 -->
+        <if test="qo.createTimeStart != null">
+            AND o.create_time &gt;= #{qo.createTimeStart}
+        </if>
+        <if test="qo.createTimeEnd != null">
+            AND o.create_time &lt;= #{qo.createTimeEnd}
+        </if>
+        <if test="qo.updateTimeStart != null">
+            AND o.update_time &gt;= #{qo.updateTimeStart}
+        </if>
+        <if test="qo.updateTimeEnd != null">
+            AND o.update_time &lt;= #{qo.updateTimeEnd}
+        </if>
+        <if test="qo.syncedAtStart != null">
+            AND o.synced_at &gt;= #{qo.syncedAtStart}
+        </if>
+        <if test="qo.syncedAtEnd != null">
+            AND o.synced_at &lt;= #{qo.syncedAtEnd}
+        </if>
+        <if test="qo.createdAtStart != null">
+            AND o.platform_created_at &gt;= #{qo.createdAtStart}
+        </if>
+        <if test="qo.createdAtEnd != null">
+            AND o.platform_created_at &lt;= #{qo.createdAtEnd}
+        </if>
+        <!-- 面单过滤 -->
+        <if test="qo.hasLabel != null and qo.hasLabel">
+            AND o.label_base64 IS NOT NULL AND o.label_base64 != ''
+        </if>
+        <if test="qo.hasLabel != null and !qo.hasLabel">
+            AND (o.label_base64 IS NULL OR o.label_base64 = '')
+        </if>
+        <!-- 关键字模糊匹配：平台单号 / ERP单号 / item 表的平台商品ID和SKU编码 -->
+        <if test="qo.keyword != null and qo.keyword != ''">
+            AND (
+                o.platform_order_id LIKE CONCAT('%', #{qo.keyword}, '%')
+                OR CAST(o.id AS CHAR) LIKE CONCAT('%', #{qo.keyword}, '%')
+                OR EXISTS (SELECT 1 FROM erp_order_item oi
+                    LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+                    WHERE oi.order_id = o.id
+                    AND (oi.platform_item_id LIKE CONCAT('%', #{qo.keyword}, '%')
+                         OR sm.sku_code LIKE CONCAT('%', #{qo.keyword}, '%')))
+            )
+        </if>
+        <!-- 平台商品ID精准匹配（通过 item 子查询） -->
+        <if test="qo.platformItemIds != null and qo.platformItemIds.size() > 0">
+            AND EXISTS (SELECT 1 FROM erp_order_item oi
+                WHERE oi.order_id = o.id
+                AND oi.platform_item_id IN
+                <foreach collection="qo.platformItemIds" item="pid" open="(" separator="," close=")">
+                    #{pid}
+                </foreach>)
+        </if>
+    </sql>
+
+    <!-- 通用订单分页查询 -->
+    <select id="queryPageByQo" resultType="com.erp.admin.order.model.entity.ErpOrder">
+        SELECT o.*
+        FROM erp_order o
+        WHERE 1 = 1
+        <include refid="orderFilterClause"/>
+        ORDER BY o.platform_created_at DESC, o.id DESC
+    </select>
+
+    <!-- 待出库订单分页查询 -->
+    <select id="queryPendingOutboundPage" resultType="com.erp.admin.order.model.entity.ErpOrder">
+        SELECT o.*
+        FROM erp_order o
+        WHERE o.platform = #{qo.platform}
+          AND o.erp_status = 'SHIPPED'
+          AND o.outbound_status = 'NONE'
+          AND o.fulfillment_type = 'fbs'
+          AND o.locked = 0
+        <if test="qo.keyword != null and qo.keyword != ''">
+            AND o.platform_order_id LIKE CONCAT('%', #{qo.keyword}, '%')
+        </if>
+        <!-- SKU 编码精准匹配（订单明细自带 sku_code） -->
+        <if test="qo.skuCodes != null and qo.skuCodes.size() > 0">
+            AND EXISTS (SELECT 1 FROM erp_order_item oi
+                WHERE oi.order_id = o.id
+                AND oi.sku_code IN
+                <foreach collection="qo.skuCodes" item="sku" open="(" separator="," close=")">
+                    #{sku}
+                </foreach>)
+        </if>
+        ORDER BY o.platform_created_at DESC
+    </select>
+
+    <!-- 导出分批查询（复用 orderFilterClause） -->
+    <select id="selectExportBatch" resultType="com.erp.admin.order.model.entity.ErpOrder">
+        SELECT o.*
+        FROM erp_order o
+        WHERE 1 = 1
+        <include refid="orderFilterClause"/>
+        ORDER BY o.platform_created_at DESC, o.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+</mapper>

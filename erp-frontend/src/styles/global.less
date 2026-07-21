@@ -1,0 +1,86 @@
+/**
+ * 全局样式
+ *
+ * 新代码请使用：
+ * - antd Flex/Space 组件（布局）
+ * - Scoped CSS + CSS Variables（组件样式）
+ * - utilities.css 工具类（间距、Flex、文本）
+ */
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+.colorWeak {
+  filter: invert(80%);
+}
+
+.ant-layout {
+  min-height: 100vh;
+}
+
+// Fix for antd 4.x CSS-in-JS overriding flex layout
+// The inner .ant-layout needs flex: auto to fill available space
+.ant-layout-has-sider > .ant-layout {
+  flex: auto !important;
+  width: 0; // Prevent content from overflowing
+}
+
+.ant-pro-sider.ant-layout-sider.ant-pro-sider-fixed {
+  left: unset;
+}
+
+canvas {
+  display: block;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+@media (max-width: 576px) {
+  .ant-table {
+    width: 100%;
+    overflow-x: auto;
+
+    &-thead > tr,
+    &-tbody > tr {
+      > th,
+      > td {
+        white-space: pre;
+
+        > span {
+          display: block;
+        }
+      }
+    }
+  }
+}
+
+// Compatible with IE11
+@media screen and(-ms-high-contrast: active), (-ms-high-contrast: none) {
+  body .ant-design-pro > .ant-layout {
+    min-height: 100vh;
+  }
+}
+
+// --------------- 一些自定义样式 -------------------
+
+// 查询按钮的包装器样式
+.search-actions-wrapper {
+  text-align: right;
+}

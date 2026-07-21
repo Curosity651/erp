@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.OperatorDashboardMapper">
+
+    <sql id="incomeWhere">
+        r.wms_tenant_id = #{wmsTenantId}
+        AND r.fee_type = 'SHIPPING'
+        <if test="monthStart != null and monthStart != ''">
+            AND r.bill_month &gt;= #{monthStart}
+        </if>
+        <if test="monthEnd != null and monthEnd != ''">
+            AND r.bill_month &lt;= #{monthEnd}
+        </if>
+        <if test="erpTenantIds != null and erpTenantIds.size() > 0">
+            AND r.erp_tenant_id IN
+            <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+        </if>
+    </sql>
+
+    <select id="sumIncomeByMonth" resultType="map">
+        SELECT r.bill_month AS billMonth, COALESCE(SUM(r.amount), 0) AS amount, COUNT(*) AS cnt
+        FROM wms_client_billing_record r
+        <where>
+            <include refid="incomeWhere"/>
+        </where>
+        GROUP BY r.bill_month
+    </select>
+
+    <select id="sumExpenseByMonth" resultType="map">
+        SELECT b.bill_month AS billMonth, COALESCE(SUM(b.total_amount), 0) AS amount
+        FROM wms_monthly_bill b
+        <where>
+            b.deleted = 0
+            AND b.wms_tenant_id = #{wmsTenantId}
+            <if test="monthStart != null and monthStart != ''">
+                AND b.bill_month &gt;= #{monthStart}
+            </if>
+            <if test="monthEnd != null and monthEnd != ''">
+                AND b.bill_month &lt;= #{monthEnd}
+            </if>
+        </where>
+        GROUP BY b.bill_month
+    </select>
+
+    <select id="sumByProduct" resultType="com.erp.admin.wms.model.vo.OperatorDashboardVO$ProductStat">
+        SELECT r.logistics_product_id AS productId,
+               COUNT(*) AS usageCount,
+               COALESCE(SUM(r.amount), 0) AS amount
+        FROM wms_client_billing_record r
+        <where>
+            <include refid="incomeWhere"/>
+        </where>
+        GROUP BY r.logistics_product_id
+        ORDER BY amount DESC
+    </select>
+
+    <select id="sumIncomeByOwner" resultType="com.erp.admin.wms.model.vo.OperatorDashboardVO$OwnerStat">
+        SELECT r.erp_tenant_id AS erpTenantId,
+               t.tenant_name AS ownerName,
+               COALESCE(SUM(r.amount), 0) AS amount,
+               COUNT(*) AS usageCount
+        FROM wms_client_billing_record r
+        LEFT JOIN sys_tenant t ON t.id = r.erp_tenant_id
+        <where>
+            <include refid="incomeWhere"/>
+        </where>
+        GROUP BY r.erp_tenant_id, t.tenant_name
+        ORDER BY amount DESC
+        LIMIT 10
+    </select>
+
+    <select id="countOutboundByOwner" resultType="com.erp.admin.wms.model.vo.OperatorDashboardVO$OwnerOrderStat">
+        SELECT o.erp_tenant_id AS erpTenantId,
+               t.tenant_name AS ownerName,
+               COUNT(*) AS orders
+        FROM wms_sales_outbound_order o
+        INNER JOIN sys_tenant t ON t.id = o.erp_tenant_id AND t.parent_wms_tenant_id = #{wmsTenantId}
+        <where>
+            o.order_status &lt;&gt; 'CANCELLED'
+            <if test="dateStart != null">
+                AND o.outbound_date &gt;= #{dateStart}
+            </if>
+            <if test="dateEnd != null">
+                AND o.outbound_date &lt;= #{dateEnd}
+            </if>
+            <if test="erpTenantIds != null and erpTenantIds.size() > 0">
+                AND o.erp_tenant_id IN
+                <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+            </if>
+        </where>
+        GROUP BY o.erp_tenant_id, t.tenant_name
+        ORDER BY orders DESC
+        LIMIT 10
+    </select>
+
+    <select id="countOwners" resultType="map">
+        SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END), 0) AS enabled
+        FROM sys_tenant
+        WHERE tenant_type = 'ERP_USER' AND parent_wms_tenant_id = #{wmsTenantId} AND deleted = 0
+    </select>
+
+    <select id="countProducts" resultType="map">
+        SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END), 0) AS enabled
+        FROM wms_logistics_product
+        WHERE wms_tenant_id = #{wmsTenantId} AND deleted = 0
+    </select>
+
+    <select id="sumOwnerOnHand" resultType="long">
+        SELECT COALESCE(SUM(i.available_quantity + i.reserved_quantity + i.damaged_quantity), 0)
+        FROM wms_inventory i
+        INNER JOIN sys_tenant t ON t.id = i.erp_tenant_id AND t.parent_wms_tenant_id = #{wmsTenantId}
+        <where>
+            <if test="erpTenantIds != null and erpTenantIds.size() > 0">
+                AND i.erp_tenant_id IN
+                <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+            </if>
+        </where>
+    </select>
+
+    <select id="sumRacks" resultType="map">
+        SELECT COUNT(*) AS cnt, COALESCE(SUM(monthly_fee), 0) AS fee
+        FROM wms_rack_assignment
+        WHERE wms_tenant_id = #{wmsTenantId}
+          AND effective_from &lt;= #{today}
+          AND (effective_to IS NULL OR effective_to &gt;= #{today})
+    </select>
+
+</mapper>

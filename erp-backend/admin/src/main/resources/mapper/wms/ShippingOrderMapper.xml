@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.ShippingOrderMapper">
+
+    <!-- 分页查询（单表查询，关联数据由 Service 层填充） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.ShippingOrderPageVO">
+        SELECT
+            so.id,
+            so.shipping_no,
+            so.provider_id,
+            so.shipping_date,
+            so.estimated_arrival_date,
+            so.shipping_method,
+            so.shipping_route,
+            so.target_region_id,
+            so.package_count,
+            so.total_weight,
+            so.total_amount,
+            so.payment_status,
+            so.shipping_status,
+            so.create_time
+        FROM wms_shipping_order so
+        <where>
+            so.deleted = 0
+            <if test="qo.shippingNo != null and qo.shippingNo != ''">
+                AND so.shipping_no LIKE CONCAT('%', #{qo.shippingNo}, '%')
+            </if>
+            <if test="qo.providerId != null">
+                AND so.provider_id = #{qo.providerId}
+            </if>
+            <if test="qo.shippingStatus != null and qo.shippingStatus != ''">
+                AND so.shipping_status = #{qo.shippingStatus}
+            </if>
+            <if test="qo.paymentStatus != null">
+                AND so.payment_status = #{qo.paymentStatus}
+            </if>
+            <if test="qo.shippingMethod != null and qo.shippingMethod != ''">
+                AND so.shipping_method = #{qo.shippingMethod}
+            </if>
+            <if test="qo.shippingRoute != null and qo.shippingRoute != ''">
+                AND so.shipping_route = #{qo.shippingRoute}
+            </if>
+            <if test="qo.targetRegionId != null">
+                AND so.target_region_id = #{qo.targetRegionId}
+            </if>
+            <if test="qo.shippingDateStart != null">
+                AND so.shipping_date &gt;= #{qo.shippingDateStart}
+            </if>
+            <if test="qo.shippingDateEnd != null">
+                AND so.shipping_date &lt;= #{qo.shippingDateEnd}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_shipping_order_item soi
+                    WHERE soi.shipping_order_id = so.id
+                    AND soi.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY so.create_time DESC
+    </select>
+
+    <!-- 批量查询物流单关联的采购单号（返回原始数据，Service层聚合） -->
+    <select id="selectPurchaseOrderNosByIds" resultType="com.erp.admin.wms.model.vo.ShippingOrderStatsVO">
+        SELECT DISTINCT
+            soi.shipping_order_id AS shippingOrderId,
+            po.order_no AS purchaseOrderNo
+        FROM wms_shipping_order_item soi
+        INNER JOIN wms_purchase_order po ON soi.purchase_order_id = po.id
+        WHERE soi.shipping_order_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY soi.shipping_order_id, po.order_no
+    </select>
+
+    <!-- 查询物流单详情（单表查询，关联数据由 Service 层填充） -->
+    <select id="selectDetailById" resultType="com.erp.admin.wms.model.vo.ShippingOrderDetailVO">
+        SELECT
+            so.id,
+            so.shipping_no,
+            so.provider_id,
+            so.shipping_date,
+            so.estimated_arrival_date,
+            so.estimated_days,
+            so.shipping_method,
+            so.shipping_route,
+            so.target_region_id,
+            so.package_count,
+            so.total_weight,
+            so.unit_price,
+            so.shipping_fee,
+            so.misc_fee,
+            so.total_amount,
+            so.total_amount_cny,
+            so.payment_status,
+            so.payment_voucher_file_id,
+            so.shipping_status,
+            so.stock_posting_id,
+            so.remark,
+            so.create_time
+        FROM wms_shipping_order so
+        WHERE so.id = #{id} AND so.deleted = 0
+    </select>
+
+    <!-- 查询可发货采购明细（SKU和供应商信息由 Service 层填充） -->
+    <select id="selectAvailableItems" resultType="com.erp.admin.wms.model.vo.AvailableItemVO">
+        SELECT
+            po.id AS purchase_order_id,
+            po.order_no AS purchase_order_no,
+            poi.id AS purchase_order_item_id,
+            poi.sku_code,
+            poi.quantity AS purchase_quantity,
+            IFNULL(poi.shipped_quantity, 0) AS shipped_quantity,
+            (poi.quantity - IFNULL(poi.shipped_quantity, 0)
+                - IFNULL(pending_reserved.reserved_quantity, 0)) AS available_quantity,
+            po.supplier_id
+        FROM wms_purchase_order_item poi
+        INNER JOIN wms_purchase_order po ON poi.purchase_order_id = po.id
+        LEFT JOIN (
+            SELECT
+                soi.purchase_order_item_id,
+                SUM(soi.quantity) AS reserved_quantity
+            FROM wms_shipping_order_item soi
+            INNER JOIN wms_shipping_order so ON so.id = soi.shipping_order_id
+            WHERE so.deleted = 0
+              AND so.shipping_status = 'PENDING'
+              <if test="qo.shippingOrderId != null">
+                  AND so.id &lt;&gt; #{qo.shippingOrderId}
+              </if>
+            GROUP BY soi.purchase_order_item_id
+        ) pending_reserved ON pending_reserved.purchase_order_item_id = poi.id
+        <where>
+            po.deleted = 0
+            AND po.order_status IN ('IN_PRODUCTION', 'PARTIAL_SHIPPED')
+            AND (poi.quantity - IFNULL(poi.shipped_quantity, 0)
+                - IFNULL(pending_reserved.reserved_quantity, 0)) &gt; 0
+            <if test="qo.purchaseOrderNo != null and qo.purchaseOrderNo != ''">
+                AND po.order_no LIKE CONCAT('%', #{qo.purchaseOrderNo}, '%')
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND poi.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+            </if>
+            <if test="qo.supplierId != null">
+                AND po.supplier_id = #{qo.supplierId}
+            </if>
+        </where>
+        ORDER BY po.expected_delivery_date ASC, po.order_no ASC, poi.id ASC
+    </select>
+
+
+	<!-- 查询可入库物流单列表 -->
+	<select id="selectAvailableShipping" resultType="com.erp.admin.wms.model.vo.AvailableShippingVO">
+		SELECT
+		so.id,
+		so.shipping_no,
+		so.provider_id,
+		lp.provider_name,
+		so.shipping_date,
+		so.target_region_id,
+		COALESCE(SUM(soi.quantity), 0) AS total_quantity,
+		COALESCE(SUM(soi.received_quantity), 0) AS received_quantity,
+		COALESCE(SUM(soi.quantity - soi.received_quantity - soi.inbound_reserved_quantity), 0) AS pending_quantity
+		FROM wms_shipping_order so
+		LEFT JOIN wms_logistics_provider lp ON so.provider_id = lp.id
+		LEFT JOIN wms_shipping_order_item soi ON so.id = soi.shipping_order_id
+		<where>
+			so.deleted = 0
+			AND so.shipping_status IN ('SHIPPED', 'PARTIAL_ARRIVED', 'ALL_ARRIVED')
+			<if test="qo.shippingNo != null and qo.shippingNo != ''">
+				AND so.shipping_no LIKE CONCAT('%', #{qo.shippingNo}, '%')
+			</if>
+			<if test="qo.purchaseOrderNo != null and qo.purchaseOrderNo != ''">
+				AND EXISTS (
+				SELECT 1 FROM wms_shipping_order_item soi2
+				INNER JOIN wms_purchase_order po ON soi2.purchase_order_id = po.id
+				WHERE soi2.shipping_order_id = so.id
+				AND po.order_no LIKE CONCAT('%', #{qo.purchaseOrderNo}, '%')
+				)
+			</if>
+			<if test="qo.providerId != null">
+				AND so.provider_id = #{qo.providerId}
+			</if>
+		</where>
+		GROUP BY so.id, so.shipping_no, so.provider_id, lp.provider_name, so.shipping_date, so.target_region_id
+		HAVING pending_quantity > 0
+		ORDER BY so.shipping_date DESC
+	</select>
+
+    <!-- 根据物流单号查询（用于唯一性校验） -->
+    <select id="selectByShippingNo" resultType="com.erp.admin.wms.model.entity.ShippingOrder">
+        SELECT * FROM wms_shipping_order
+        WHERE shipping_no = #{shippingNo} AND deleted = 0
+        <if test="excludeId != null">
+            AND id != #{excludeId}
+        </if>
+        LIMIT 1
+    </select>
+
+    <!-- 导出列表查询（单表查询，关联数据由 Service 层填充） -->
+    <select id="selectListForExport" resultType="com.erp.admin.wms.model.vo.ShippingOrderExportVO">
+        SELECT
+            so.id,
+            so.shipping_no,
+            so.provider_id,
+            so.shipping_date,
+            so.estimated_arrival_date,
+            CASE so.shipping_method
+                WHEN 'GRAY' THEN '灰关'
+                WHEN 'WHITE' THEN '白关'
+                ELSE so.shipping_method
+            END AS shipping_method_desc,
+            CASE so.shipping_route
+                WHEN 'EAST' THEN '东线'
+                WHEN 'WEST' THEN '西线'
+                WHEN 'RAIL' THEN '铁路'
+                ELSE so.shipping_route
+            END AS shipping_route_desc,
+            so.package_count,
+            so.total_weight,
+            so.total_amount,
+            so.total_amount_cny,
+            CASE so.payment_status
+                WHEN 0 THEN '未付'
+                WHEN 1 THEN '已付'
+                ELSE ''
+            END AS payment_status_desc,
+            CASE so.shipping_status
+                WHEN 'PENDING' THEN '待发货'
+                WHEN 'SHIPPED' THEN '已发货'
+                WHEN 'PARTIAL_ARRIVED' THEN '部分到货'
+                WHEN 'ALL_ARRIVED' THEN '全部到货'
+                WHEN 'COMPLETED' THEN '已完成'
+                ELSE so.shipping_status
+            END AS shipping_status_desc,
+            so.create_time
+        FROM wms_shipping_order so
+        <where>
+            so.deleted = 0
+            <if test="qo.shippingNo != null and qo.shippingNo != ''">
+                AND so.shipping_no LIKE CONCAT('%', #{qo.shippingNo}, '%')
+            </if>
+            <if test="qo.providerId != null">
+                AND so.provider_id = #{qo.providerId}
+            </if>
+            <if test="qo.shippingStatus != null and qo.shippingStatus != ''">
+                AND so.shipping_status = #{qo.shippingStatus}
+            </if>
+            <if test="qo.paymentStatus != null">
+                AND so.payment_status = #{qo.paymentStatus}
+            </if>
+            <if test="qo.shippingMethod != null and qo.shippingMethod != ''">
+                AND so.shipping_method = #{qo.shippingMethod}
+            </if>
+            <if test="qo.shippingRoute != null and qo.shippingRoute != ''">
+                AND so.shipping_route = #{qo.shippingRoute}
+            </if>
+            <if test="qo.shippingDateStart != null">
+                AND so.shipping_date &gt;= #{qo.shippingDateStart}
+            </if>
+            <if test="qo.shippingDateEnd != null">
+                AND so.shipping_date &lt;= #{qo.shippingDateEnd}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_shipping_order_item soi
+                    WHERE soi.shipping_order_id = so.id
+                    AND soi.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY so.create_time DESC
+    </select>
+
+    <!-- 根据采购单ID查询关联物流单（物流商名称由 Service 层填充） -->
+    <select id="selectByPurchaseOrderId" resultType="com.erp.admin.wms.model.vo.ShippingOrderSimpleVO">
+        SELECT
+            so.id,
+            so.shipping_no,
+            so.provider_id,
+            so.shipping_date,
+            so.estimated_arrival_date,
+            so.shipping_method,
+            so.shipping_route,
+            so.shipping_status,
+            so.package_count,
+            so.total_amount,
+            so.payment_status,
+            SUM(soi.quantity) AS shipped_quantity,
+            SUM(soi.received_quantity) AS received_quantity
+        FROM wms_shipping_order so
+        INNER JOIN wms_shipping_order_item soi ON so.id = soi.shipping_order_id
+        WHERE so.deleted = 0
+          AND soi.purchase_order_id = #{purchaseOrderId}
+        GROUP BY so.id, so.shipping_no, so.provider_id, so.shipping_date,
+                 so.estimated_arrival_date, so.shipping_method, so.shipping_route,
+                 so.shipping_status, so.package_count, so.total_amount, so.payment_status
+        ORDER BY so.shipping_date DESC, so.create_time DESC
+    </select>
+
+    <!-- 查询物流单发货数量统计 -->
+    <select id="selectShippingQuantityStats" resultType="com.erp.admin.wms.model.vo.ShippingQuantityStatsVO">
+        SELECT
+            COALESCE(SUM(quantity), 0) AS total_quantity,
+            COALESCE(SUM(received_quantity), 0) AS received_quantity
+        FROM wms_shipping_order_item
+        WHERE shipping_order_id = #{shippingOrderId}
+    </select>
+
+    <!-- 查询在途库存数量（按区域和SKU分组） -->
+    <select id="selectInTransitQuantity" resultType="com.erp.admin.wms.model.vo.InTransitQuantityVO">
+        SELECT
+            so.target_region_id AS regionId,
+            soi.sku_code AS skuCode,
+            COALESCE(SUM(soi.quantity - soi.received_quantity), 0) AS quantity
+        FROM wms_shipping_order so
+        INNER JOIN wms_shipping_order_item soi ON so.id = soi.shipping_order_id
+        WHERE so.deleted = 0
+          AND so.target_region_id IN
+            <foreach collection="regionIds" item="rid" open="(" separator="," close=")">
+                #{rid}
+            </foreach>
+          AND soi.sku_code IN
+            <foreach collection="skuCodes" item="code" open="(" separator="," close=")">
+                #{code}
+            </foreach>
+          AND so.shipping_status IN
+            <foreach collection="statuses" item="status" open="(" separator="," close=")">
+                #{status}
+            </foreach>
+        GROUP BY so.target_region_id, soi.sku_code
+        HAVING quantity > 0
+    </select>
+
+    <!-- 查询入库计划 -->
+    <select id="selectIncomingPlan" resultType="com.erp.admin.wms.model.vo.IncomingPlanVO">
+        SELECT
+            so.id AS shippingOrderId,
+            so.shipping_no AS shippingNo,
+            so.estimated_arrival_date AS estimatedArrivalDate,
+            (soi.quantity - soi.received_quantity) AS quantity
+        FROM wms_shipping_order so
+        INNER JOIN wms_shipping_order_item soi ON so.id = soi.shipping_order_id
+        WHERE so.deleted = 0
+          AND so.target_region_id = #{regionId}
+          AND soi.sku_code = #{skuCode}
+          AND so.shipping_status IN
+            <foreach collection="statuses" item="status" open="(" separator="," close=")">
+                #{status}
+            </foreach>
+          AND soi.quantity > soi.received_quantity
+        ORDER BY so.estimated_arrival_date ASC
+    </select>
+
+</mapper>

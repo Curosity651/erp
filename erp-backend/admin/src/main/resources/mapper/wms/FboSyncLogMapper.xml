@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.FboSyncLogMapper">
+
+    <!-- 分页查询 -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.FboSyncLogPageVO">
+        SELECT
+            l.id,
+            l.log_no,
+            l.platform,
+            l.shop_id,
+            s.shop_name,
+            l.sync_type,
+            l.total_count,
+            l.success_count,
+            l.fail_count,
+            l.unmapped_count,
+            l.sync_status,
+            l.error_message,
+            l.sync_time,
+            l.duration,
+            l.create_time
+        FROM wms_fbo_sync_log l
+        LEFT JOIN shop s ON l.shop_id = s.id
+        <where>
+            <if test="qo.platform != null and qo.platform != ''">
+                AND l.platform = #{qo.platform}
+            </if>
+            <if test="qo.shopId != null">
+                AND l.shop_id = #{qo.shopId}
+            </if>
+            <if test="qo.syncType != null and qo.syncType != ''">
+                AND l.sync_type = #{qo.syncType}
+            </if>
+            <if test="qo.syncStatus != null and qo.syncStatus != ''">
+                AND l.sync_status = #{qo.syncStatus}
+            </if>
+            <if test="qo.syncTimeStart != null">
+                AND l.sync_time &gt;= #{qo.syncTimeStart}
+            </if>
+            <if test="qo.syncTimeEnd != null">
+                AND l.sync_time &lt;= #{qo.syncTimeEnd}
+            </if>
+        </where>
+        ORDER BY l.create_time DESC
+    </select>
+
+    <!-- 统计今日日志数量 -->
+    <select id="countTodayLogs" resultType="int">
+        SELECT COUNT(*) FROM wms_fbo_sync_log WHERE log_no LIKE CONCAT(#{prefix}, '%')
+    </select>
+
+    <!-- 查询详情 -->
+    <select id="selectDetail" resultType="com.erp.admin.wms.model.vo.FboSyncLogDetailVO">
+        SELECT
+            l.id,
+            l.log_no,
+            l.platform,
+            l.shop_id,
+            s.shop_name,
+            l.sync_type,
+            l.total_count,
+            l.success_count,
+            l.fail_count,
+            l.unmapped_count,
+            l.sync_status,
+            l.error_message,
+            l.sync_time,
+            l.duration,
+            l.fail_details,
+            l.auto_created_warehouse_count,
+            l.auto_created_warehouses,
+            l.create_time
+        FROM wms_fbo_sync_log l
+        LEFT JOIN shop s ON l.shop_id = s.id
+        WHERE l.id = #{id}
+    </select>
+
+</mapper>

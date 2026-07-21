@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.ShippingOrderItemMapper">
+
+    <!-- 查询物流单明细VO列表（含采购单号、SKU名称） -->
+    <select id="selectItemVOsByShippingOrderId" resultType="com.erp.admin.wms.model.vo.ShippingOrderItemVO">
+        SELECT
+            soi.id,
+            soi.purchase_order_id,
+            po.order_no AS purchase_order_no,
+            soi.purchase_order_item_id,
+            soi.sku_code,
+            sku.chinese_name as sku_name,
+            soi.quantity,
+            (poi.quantity - IFNULL(poi.shipped_quantity, 0) - COALESCE((
+                SELECT SUM(other_soi.quantity)
+                FROM wms_shipping_order_item other_soi
+                INNER JOIN wms_shipping_order other_so ON other_so.id = other_soi.shipping_order_id
+                WHERE other_soi.purchase_order_item_id = soi.purchase_order_item_id
+                  AND other_so.deleted = 0
+                  AND other_so.shipping_status = 'PENDING'
+                  AND other_so.id &lt;&gt; #{shippingOrderId}
+            ), 0)) AS available_quantity,
+            soi.received_quantity,
+            soi.remark
+        FROM wms_shipping_order_item soi
+        LEFT JOIN wms_purchase_order po ON soi.purchase_order_id = po.id
+        LEFT JOIN wms_purchase_order_item poi ON soi.purchase_order_item_id = poi.id
+        LEFT JOIN sku ON soi.sku_code = sku.sku_code
+        WHERE soi.shipping_order_id = #{shippingOrderId}
+        ORDER BY soi.id ASC
+    </select>
+
+    <!-- 批量查询物流单的SKU种类数 -->
+    <select id="selectSkuCountByShippingOrderIds" resultType="com.erp.admin.wms.model.vo.ShippingOrderSkuCountVO">
+        SELECT
+            shipping_order_id AS shippingOrderId,
+            COUNT(DISTINCT sku_code) AS skuCount
+        FROM wms_shipping_order_item
+        WHERE shipping_order_id IN
+        <foreach collection="shippingOrderIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY shipping_order_id
+    </select>
+
+    <!-- 批量查询物流单的发货/入库数量统计 -->
+    <select id="selectQuantityStatsByShippingOrderIds" resultType="com.erp.admin.wms.model.vo.ShippingQuantityStatsVO">
+        SELECT
+            shipping_order_id AS shippingOrderId,
+            COALESCE(SUM(quantity), 0) AS totalQuantity,
+            COALESCE(SUM(received_quantity), 0) AS receivedQuantity,
+            COALESCE(SUM(quantity - IFNULL(received_quantity, 0) - IFNULL(inbound_reserved_quantity, 0)), 0)
+                AS pendingInboundQuantity
+        FROM wms_shipping_order_item
+        WHERE shipping_order_id IN
+        <foreach collection="shippingOrderIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY shipping_order_id
+    </select>
+
+    <!-- 批量增加已到货数量 -->
+    <update id="batchIncreaseReceivedQuantity">
+        <foreach collection="params" item="param" separator=";">
+            UPDATE wms_shipping_order_item
+            SET received_quantity = received_quantity + #{param.quantity},
+                update_time = NOW()
+            WHERE id = #{param.shippingOrderItemId}
+        </foreach>
+    </update>
+
+    <!-- 查询物流单的到货统计 -->
+    <select id="selectArrivalStats" resultType="com.erp.admin.wms.model.vo.ShippingOrderArrivalStatsVO">
+        SELECT
+            COALESCE(SUM(quantity), 0) AS totalQuantity,
+            COALESCE(SUM(received_quantity), 0) AS totalReceivedQuantity
+        FROM wms_shipping_order_item
+        WHERE shipping_order_id = #{shippingOrderId}
+    </select>
+
+    <!-- 增加已到货数量（入库单确认时） -->
+    <update id="increaseReceivedQuantity">
+        UPDATE wms_shipping_order_item
+        SET received_quantity = IFNULL(received_quantity, 0) + #{quantity},
+            update_time = NOW()
+        WHERE id = #{itemId}
+          AND (quantity - IFNULL(received_quantity, 0)) >= #{quantity}
+    </update>
+
+    <update id="reserveInboundQuantity">
+        UPDATE wms_shipping_order_item
+        SET inbound_reserved_quantity = IFNULL(inbound_reserved_quantity, 0) + #{quantity},
+            update_time = NOW()
+        WHERE id = #{itemId}
+          AND (quantity - IFNULL(received_quantity, 0) - IFNULL(inbound_reserved_quantity, 0)) &gt;= #{quantity}
+    </update>
+
+    <update id="settleInboundReservation">
+        UPDATE wms_shipping_order_item
+        SET inbound_reserved_quantity = inbound_reserved_quantity - #{reservedQuantity},
+            received_quantity = IFNULL(received_quantity, 0) + #{actualQuantity},
+            update_time = NOW()
+        WHERE id = #{itemId}
+          AND inbound_reserved_quantity &gt;= #{reservedQuantity}
+          AND (quantity - IFNULL(received_quantity, 0)) &gt;= #{actualQuantity}
+    </update>
+
+    <select id="lockPurchaseOrderItems" resultType="java.lang.Long">
+        SELECT id
+        FROM wms_purchase_order_item
+        WHERE id IN
+        <foreach collection="purchaseOrderItemIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY id
+        FOR UPDATE
+    </select>
+
+    <select id="selectShippingAllocationRows"
+            resultType="com.erp.admin.wms.model.dto.ShippingAllocationRowDTO">
+        SELECT
+            poi.id AS purchaseOrderItemId,
+            poi.sku_code AS skuCode,
+            poi.quantity AS totalQuantity,
+            IFNULL(poi.shipped_quantity, 0) AS shippedQuantity,
+            COALESCE(SUM(
+                CASE
+                    WHEN so.id IS NOT NULL AND so.id &lt;&gt; #{shippingOrderId}
+                    THEN soi.quantity
+                    ELSE 0
+                END
+            ), 0) AS pendingReservedQuantity
+        FROM wms_purchase_order_item poi
+        LEFT JOIN wms_shipping_order_item soi
+            ON soi.purchase_order_item_id = poi.id
+        LEFT JOIN wms_shipping_order so
+            ON so.id = soi.shipping_order_id
+            AND so.deleted = 0
+            AND so.shipping_status = 'PENDING'
+        WHERE poi.id IN
+        <foreach collection="purchaseOrderItemIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY poi.id, poi.sku_code, poi.quantity, poi.shipped_quantity
+        ORDER BY poi.id
+        FOR UPDATE
+    </select>
+
+</mapper>

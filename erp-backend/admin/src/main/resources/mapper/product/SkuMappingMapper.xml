@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.product.mapper.SkuMappingMapper">
+
+	<!-- 批量统计SKU编码对应的映射数量 -->
+	<select id="countBySkuCodes" resultType="com.erp.admin.product.model.dto.SkuMappingCountDTO">
+		SELECT
+			sku_code AS skuCode,
+			COUNT(*) AS count
+		FROM sku_mapping
+		WHERE sku_code IN
+		<foreach collection="skuCodes" item="skuCode" open="(" separator="," close=")">
+			#{skuCode}
+		</foreach>
+		GROUP BY sku_code
+	</select>
+
+</mapper>

@@ -1,0 +1,130 @@
+/**
+ * WMS 模块共享样式
+ */
+
+// ==================== 颜色变量 ====================
+
+@color-success: #52c41a;
+@color-error: #ff4d4f;
+@color-warning: #faad14;
+@color-primary: #1890ff;
+@color-purple: #722ed1;
+
+@text-primary: #262626;
+@text-secondary: #595959;
+@text-tertiary: #8c8c8c;
+@text-disabled: #bfbfbf;
+
+@bg-base: #ffffff;
+@bg-light: #fafafa;
+@bg-hover: #f5f5f5;
+
+// ==================== 文本工具类 ====================
+
+.text-success {
+  color: @color-success;
+  font-weight: 500;
+}
+
+.text-danger {
+  color: @color-error;
+  font-weight: 500;
+}
+
+.text-warning {
+  color: @color-warning;
+  font-weight: 500;
+}
+
+// ==================== 数字样式 ====================
+
+.quantity-cell {
+  font-variant-numeric: tabular-nums;
+
+  &.negative {
+    color: @color-error;
+    font-weight: 600;
+  }
+
+  &.positive {
+    color: @color-success;
+  }
+
+  &.available {
+    color: @color-success;
+  }
+
+  &.reserved {
+    color: @color-warning;
+  }
+
+  &.in-transit {
+    color: @color-purple;
+  }
+}
+
+// ==================== 搜索区域 ====================
+
+.search-area {
+  background: @bg-light;
+  padding: 16px 16px 0;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+// ==================== 信息单元格 ====================
+
+.warehouse-info-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .warehouse-name {
+    font-weight: 500;
+    color: @text-primary;
+  }
+
+  .warehouse-code {
+    font-size: 12px;
+    color: @text-tertiary;
+    font-family: monospace;
+  }
+}
+
+.sku-info-cell {
+  line-height: 1.4;
+
+  .sku-code {
+    font-weight: 500;
+    cursor: pointer;
+    color: @color-primary;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .sku-name {
+    font-size: 12px;
+    color: @text-secondary;
+  }
+}
+
+// ==================== 时间信息 ====================
+
+.time-info {
+  font-size: 12px;
+  color: @text-secondary;
+
+  .time-label {
+    color: @text-tertiary;
+  }
+}
+
+// ==================== 表格底部 ====================
+
+.table-footer {
+  padding: 8px 0;
+  color: @text-secondary;
+  font-size: 14px;
+}

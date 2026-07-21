@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.PurchaseOrderFileMapper">
+
+    <!-- 查询采购单附件列表（关联文件信息） -->
+    <select id="selectVoListByPurchaseOrderId" resultType="com.erp.admin.wms.model.vo.PurchaseOrderFileVO">
+        SELECT
+            pof.id,
+            pof.purchase_order_id,
+            pof.sys_file_id,
+            pof.file_type,
+            pof.remark,
+            pof.create_by,
+            pof.create_time,
+            sf.file_name,
+            sf.file_size,
+            sf.content_type
+        FROM wms_purchase_order_file pof
+        LEFT JOIN sys_file sf ON pof.sys_file_id = sf.id
+        WHERE pof.purchase_order_id = #{purchaseOrderId}
+        ORDER BY pof.create_time DESC
+    </select>
+
+    <!-- 查询采购单指定类型的附件（返回FileInfoVO） -->
+    <select id="selectFileInfoByOrderIdAndType" resultType="com.erp.admin.wms.model.vo.FileInfoVO">
+        SELECT
+            pof.id,
+            pof.sys_file_id AS sysFileId,
+            sf.file_name AS fileName,
+            sf.file_size AS fileSize,
+            sf.content_type AS contentType,
+            pof.file_type AS fileType,
+            pof.create_time AS createTime
+        FROM wms_purchase_order_file pof
+        LEFT JOIN sys_file sf ON pof.sys_file_id = sf.id
+        WHERE pof.purchase_order_id = #{purchaseOrderId}
+          AND pof.file_type = #{fileType}
+        LIMIT 1
+    </select>
+
+    <!-- 查询采购单指定类型的附件列表（返回FileInfoVO列表） -->
+    <select id="selectFileInfoListByOrderIdAndType" resultType="com.erp.admin.wms.model.vo.FileInfoVO">
+        SELECT
+            pof.id,
+            pof.sys_file_id AS sysFileId,
+            sf.file_name AS fileName,
+            sf.file_size AS fileSize,
+            sf.content_type AS contentType,
+            pof.file_type AS fileType,
+            pof.create_time AS createTime
+        FROM wms_purchase_order_file pof
+        LEFT JOIN sys_file sf ON pof.sys_file_id = sf.id
+        WHERE pof.purchase_order_id = #{purchaseOrderId}
+          AND pof.file_type = #{fileType}
+        ORDER BY pof.create_time DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,427 @@
+package com.erp.admin.wms.service;
+
+import com.erp.admin.tenant.mapper.SysTenantMapper;
+import com.erp.admin.tenant.model.entity.SysTenant;
+import com.erp.admin.tenant.service.TenantIdentityService;
+import com.erp.admin.wms.enums.WmsResultCode;
+import com.erp.admin.wms.mapper.PurchaseInboundItemMapper;
+import com.erp.admin.wms.mapper.PurchaseInboundMapper;
+import com.erp.admin.wms.model.dto.InboundPutawayDTO;
+import com.erp.admin.wms.model.dto.InboundReceiveDTO;
+import com.erp.admin.wms.model.dto.PutawayDTO;
+import com.erp.admin.wms.model.dto.StockPostingDTO;
+import com.erp.admin.wms.model.dto.StockPostingItemDTO;
+import com.erp.admin.wms.model.entity.PurchaseInboundOrder;
+import com.erp.admin.wms.model.entity.PurchaseInboundOrderItem;
+import com.erp.admin.wms.model.entity.ShippingOrder;
+import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsZone;
+import com.erp.admin.wms.model.enums.PostingType;
+import com.erp.admin.wms.model.enums.PurchaseInboundStatus;
+import com.erp.admin.wms.model.enums.SourceType;
+import com.erp.admin.wms.model.enums.StockBucket;
+import com.erp.admin.wms.model.enums.StockDirection;
+import com.erp.admin.wms.model.vo.AvailableLocationVO;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.ballcat.common.core.exception.BusinessException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 平台收货 / 上架执行服务（D2，方案②落地，同一张入库单状态流转）。
+ *
+ * <p>货主在采购/自定义入库单页建单并「提交」(DRAFT→SUBMITTED)后，由平台超管两步作业：
+ * <ul>
+ * <li><b>收货</b> {@link #receive}：校验 SUBMITTED；录实收数量；有物流单则区域在途出账；SUBMITTED→RECEIVED。
+ * <li><b>上架</b> {@link #putaway}：把收货数量分配到库位 → {@link WmsPhysicalInventoryService#putaway} 写批次
+ * → 聚合刷新 {@code wms_inventory.available} + 流水；RECEIVED→COMPLETED。
+ * </ul>
+ *
+ * <p>仓库可用库存唯一真源 = 上架批次聚合（旧一键 confirm 的仓库 AVAILABLE 过账已退役）。货物归属取入库单
+ * {@code erp_tenant_id}（建单时按当前货主写入），用作批次的 {@code erpTenantId}。
+ *
+ * @author erp
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class WmsInboundExecutionService {
+
+	private final PurchaseInboundMapper purchaseInboundMapper;
+
+	private final PurchaseInboundItemMapper purchaseInboundItemMapper;
+
+	private final StockPostingService stockPostingService;
+
+	private final ShippingOrderService shippingOrderService;
+
+	private final ShippingOrderItemService shippingOrderItemService;
+
+	private final PurchaseOrderService purchaseOrderService;
+
+	private final PurchaseOrderItemService purchaseOrderItemService;
+
+	private final WmsPhysicalInventoryService physicalInventoryService;
+
+	private final WmsLocationService wmsLocationService;
+
+	private final WmsZoneService wmsZoneService;
+
+	private final SysTenantMapper sysTenantMapper;
+
+	private final WmsRackAssignmentService wmsRackAssignmentService;
+
+	private final TenantIdentityService tenantIdentityService;
+
+	// ==================== 收货 ====================
+
+	@Transactional(rollbackFor = Exception.class)
+	public void receive(InboundReceiveDTO dto) {
+		assertPlatform();
+		PurchaseInboundOrder order = purchaseInboundMapper.selectById(dto.getInboundOrderId());
+		Assert.notNull(order, "入库单不存在");
+		Assert.isTrue(PurchaseInboundStatus.SUBMITTED.name().equals(order.getOrderStatus()), "只有已提交的入库单可以收货");
+
+		Map<String, Integer> receivedBySku = dto.getItems().stream()
+				.collect(Collectors.toMap(InboundReceiveDTO.ReceiveItem::getSkuCode,
+						InboundReceiveDTO.ReceiveItem::getActualQuantity, Integer::sum));
+
+		List<PurchaseInboundOrderItem> items = purchaseInboundItemMapper.selectByInboundOrderId(order.getId());
+		List<PurchaseInboundOrderItem> validItems = new ArrayList<>();
+		for (PurchaseInboundOrderItem item : items) {
+			int actual = receivedBySku.getOrDefault(item.getSkuCode(), 0);
+			// M-6：实收不得超过应收（收货链此前不校验，自定义链无区域在途兜底 → 超量经上架全额流入 available）。
+			// 仅在建单已声明应收(expectedQuantity 非空)时约束，不误伤无应收基准的单。
+			if (item.getExpectedQuantity() != null) {
+				Assert.isTrue(actual <= item.getExpectedQuantity(),
+						String.format("SKU[%s]实收数量(%d)不能超过应收数量(%d)",
+								item.getSkuCode(), actual, item.getExpectedQuantity()));
+			}
+			item.setActualQuantity(actual);
+			purchaseInboundItemMapper.updateById(item);
+			if (actual > 0) {
+				validItems.add(item);
+			}
+		}
+		Assert.notEmpty(validItems, "至少需要一条明细的实收数量大于0");
+
+		// 有物流单（采购链）：区域在途出账 + 物流单/采购单收货回写；自定义链(MANUAL/CUSTOM_RETURN)无在途与采购关联，跳过。
+		if (order.getShippingOrderId() != null) {
+			postRegionInTransitOut(order, validItems);
+			// 物流单明细已到货数量（乐观校验）→ 物流单到货状态
+			shippingOrderItemService.settleInboundReservations(items);
+			shippingOrderService.recalculateArrivalStatus(order.getShippingOrderId());
+			// 采购单明细已入库数量 → 采购单入库状态
+			purchaseOrderItemService.increaseReceivedQuantity(validItems);
+			updatePurchaseOrderReceivingStatus(validItems);
+		}
+
+		order.setOrderStatus(PurchaseInboundStatus.RECEIVED.name());
+		purchaseInboundMapper.updateById(order);
+		log.info("收货完成, inboundOrderId={}, skuCount={}", order.getId(), validItems.size());
+	}
+
+	private void postRegionInTransitOut(PurchaseInboundOrder order, List<PurchaseInboundOrderItem> validItems) {
+		ShippingOrder shippingOrder = shippingOrderService.getByIdOrThrow(order.getShippingOrderId());
+		Long regionId = shippingOrder.getTargetRegionId();
+		// 货主维取物流单的货主：本笔区域在途 OUT 必须冲减发货时（物流单）建立的同一条
+		// (货主,区域,SKU) 区域库存记录，否则会错位到别的货主或新建出多余记录。
+		Long erpTenantId = shippingOrder.getErpTenantId();
+		List<StockPostingItemDTO> postingItems = validItems.stream()
+				.map(item -> StockPostingItemDTO.builder()
+						.regionId(regionId)
+						.erpTenantId(erpTenantId)
+						.skuCode(item.getSkuCode())
+						.bucket(StockBucket.IN_TRANSIT)
+						.direction(StockDirection.OUT)
+						.quantity(item.getActualQuantity())
+						.build())
+				.collect(Collectors.toList());
+		StockPostingDTO postingDTO = StockPostingDTO.builder()
+				.postingType(PostingType.PURCHASE_RECEIVE)
+				.sourceType(SourceType.PURCHASE_INBOUND.name())
+				.sourceId(order.getId())
+				.sourceNo(order.getInboundNo())
+				.warehouseId(order.getWarehouseId())
+				.regionId(regionId)
+				.erpTenantId(erpTenantId)
+				.items(postingItems)
+				.build();
+		stockPostingService.post(postingDTO);
+	}
+
+	private void updatePurchaseOrderReceivingStatus(List<PurchaseInboundOrderItem> items) {
+		Set<Long> purchaseOrderIds = items.stream()
+				.map(PurchaseInboundOrderItem::getPurchaseOrderId)
+				.filter(poId -> poId != null && poId > 0)
+				.collect(Collectors.toSet());
+		for (Long purchaseOrderId : purchaseOrderIds) {
+			purchaseOrderService.updateReceivingStatus(purchaseOrderId);
+		}
+	}
+
+	// ==================== 上架 ====================
+
+	@Transactional(rollbackFor = Exception.class)
+	public void putaway(InboundPutawayDTO dto) {
+		assertPlatform();
+		PurchaseInboundOrder order = purchaseInboundMapper.selectById(dto.getInboundOrderId());
+		Assert.notNull(order, "入库单不存在");
+		Assert.isTrue(PurchaseInboundStatus.RECEIVED.name().equals(order.getOrderStatus()), "只有已收货的入库单可以上架");
+
+		// 状态 CAS 抢占：RECEIVED→COMPLETED 原子推进，并发/重试上架只有一个赢家（消灭 TOCTOU，防重复批次翻倍）。
+		// 落败者在此即被挡下、不执行后续 putaway；本事务后续任何异常回滚也会一并撤销该状态推进。
+		int claimed = purchaseInboundMapper.casOrderStatus(order.getId(),
+				PurchaseInboundStatus.RECEIVED.name(), PurchaseInboundStatus.COMPLETED.name());
+		if (claimed != 1) {
+			throw new BusinessException(400, "该入库单已上架或正在处理，请勿重复操作");
+		}
+
+		List<PurchaseInboundOrderItem> items = purchaseInboundItemMapper.selectByInboundOrderId(order.getId());
+		Map<String, Integer> receivedBySku = items.stream()
+				.filter(i -> i.getActualQuantity() != null && i.getActualQuantity() > 0)
+				.collect(Collectors.toMap(PurchaseInboundOrderItem::getSkuCode,
+						PurchaseInboundOrderItem::getActualQuantity, Integer::sum));
+		Map<String, Long> itemIdBySku = items.stream().collect(Collectors.toMap(
+				PurchaseInboundOrderItem::getSkuCode, PurchaseInboundOrderItem::getId, (a, b) -> a));
+
+		List<MergedLine> merged = mergeLines(dto.getLines());
+		Map<String, Integer> putawayBySku = sumBySku(merged);
+		if (!coversExactly(receivedBySku, putawayBySku)) {
+			throw new BusinessException(WmsResultCode.PUTAWAY_QUANTITY_MISMATCH.getCode(),
+					WmsResultCode.PUTAWAY_QUANTITY_MISMATCH.getMessage());
+		}
+
+		// 库位校验：真实存在于本仓 + 货架归属(本货主服务商租的货架) + 独占 + 品质↔分区强制联动
+		Map<String, WmsLocation> locByCode = wmsLocationService.listByWarehouse(order.getWarehouseId()).stream()
+				.filter(l -> l.getLocationCode() != null)
+				.collect(Collectors.toMap(WmsLocation::getLocationCode, l -> l, (a, b) -> a));
+		Map<Long, String> zoneTypeById = wmsZoneService.listByWarehouse(order.getWarehouseId()).stream()
+				.collect(Collectors.toMap(WmsZone::getId, z -> z.getZoneType() == null ? "" : z.getZoneType(),
+						(a, b) -> a));
+		Set<String> occupied = new HashSet<>(physicalInventoryService.occupiedLocationCodes(order.getWarehouseId()));
+		// 完全严格：只能上到「货主的父服务商」在本仓当前有效租用的货架排上
+		Set<String> allowedRacks = resolveAllowedRacks(order);
+		Set<String> usedInThisSubmit = new HashSet<>();
+		for (MergedLine line : merged) {
+			WmsLocation loc = locByCode.get(line.locationCode);
+			if (loc == null) {
+				throw new BusinessException(WmsResultCode.PUTAWAY_LOCATION_NOT_FOUND.getCode(),
+						WmsResultCode.PUTAWAY_LOCATION_NOT_FOUND.getMessage() + "：" + line.locationCode);
+			}
+			// 货架归属：库位所在排必须是本货主服务商当前有效租用的货架
+			if (!allowedRacks.contains(loc.getRackNo())) {
+				throw new BusinessException(WmsResultCode.PUTAWAY_RACK_NOT_OWNED.getCode(),
+						WmsResultCode.PUTAWAY_RACK_NOT_OWNED.getMessage() + "：" + line.locationCode);
+			}
+			// 独占：已有批次占用、或同一次提交里被多个 SKU/行占用，均拒绝
+			if (occupied.contains(line.locationCode) || !usedInThisSubmit.add(line.locationCode)) {
+				throw new BusinessException(WmsResultCode.PUTAWAY_LOCATION_OCCUPIED.getCode(),
+						WmsResultCode.PUTAWAY_LOCATION_OCCUPIED.getMessage() + "：" + line.locationCode);
+			}
+			String wantZoneType = zoneTypeForQuality(line.quality);
+			String actualZoneType = loc.getZoneId() == null ? null : zoneTypeById.get(loc.getZoneId());
+			if (!wantZoneType.equals(actualZoneType)) {
+				throw new BusinessException(WmsResultCode.PUTAWAY_ZONE_QUALITY_MISMATCH.getCode(),
+						WmsResultCode.PUTAWAY_ZONE_QUALITY_MISMATCH.getMessage() + "：" + line.locationCode);
+			}
+		}
+
+		Long erpTenantId = order.getErpTenantId() == null ? 1L : order.getErpTenantId();
+		for (MergedLine line : merged) {
+			PutawayDTO put = new PutawayDTO();
+			put.setWmsTenantId(0L);
+			put.setErpTenantId(erpTenantId);
+			put.setWarehouseId(order.getWarehouseId());
+			put.setSkuCode(line.skuCode);
+			put.setInboundItemId(itemIdBySku.getOrDefault(line.skuCode, 0L));
+			put.setQuantity(line.quantity);
+			put.setQuality(line.quality);
+			put.setLocationCode(line.locationCode);
+			// zoneId 以库位实际分区为准（不信任前端传值）
+			put.setZoneId(locByCode.get(line.locationCode).getZoneId());
+			put.setAllocatable(GOOD.equals(line.quality) ? 1 : 0);
+			physicalInventoryService.putaway(put);
+		}
+
+		// 状态已在方法开头 CAS 抢占为 COMPLETED，此处不再重复无条件写。
+		log.info("上架完成, inboundOrderId={}, lines={}, erpTenantId={}", order.getId(), merged.size(), erpTenantId);
+	}
+
+	// ==================== 可用库位（上架分配用）====================
+
+	private static final String ZONE_STANDARD = "STANDARD";
+
+	private static final String ZONE_DEFECTIVE = "DEFECTIVE";
+
+	/** 品质→分区类型：良品(GOOD)入标准区，次品入不良品区。 */
+	static String zoneTypeForQuality(String quality) {
+		return GOOD.equals(normalizeQuality(quality)) ? ZONE_STANDARD : ZONE_DEFECTIVE;
+	}
+
+	/**
+	 * 上架可选库位：本货主服务商租用货架上、空闲且分区匹配品质的库位（完全严格 + 库位独占 → 仅空库位）。
+	 * @param inboundOrderId 入库单ID（据此解析 货主→父服务商→当前有效租用货架）
+	 * @param quality        货物品质 GOOD/DAMAGED（决定可选分区）
+	 */
+	public List<AvailableLocationVO> listAvailableLocations(Long inboundOrderId, String quality) {
+		assertPlatform();
+		PurchaseInboundOrder order = purchaseInboundMapper.selectById(inboundOrderId);
+		Assert.notNull(order, "入库单不存在");
+		Long warehouseId = order.getWarehouseId();
+		// 完全严格：只列本货主父服务商在本仓当前有效租用的货架上的库位；无租用货架 → 无候选
+		Set<String> allowedRacks = resolveAllowedRacks(order);
+		if (allowedRacks.isEmpty()) {
+			return new ArrayList<>();
+		}
+		String zoneType = zoneTypeForQuality(quality);
+		List<WmsZone> zones = wmsZoneService.listByWarehouse(warehouseId);
+		Map<Long, WmsZone> zoneById = zones.stream().collect(Collectors.toMap(WmsZone::getId, z -> z, (a, b) -> a));
+		// 候选分区仅按品质↔分区类型匹配（良品→STANDARD、次品→DEFECTIVE）；
+		// 不能再按 zone.allocatable 过滤：allocatable=0 表示该区库存「出库不可拣」（不良品区正是如此），
+		// 与「能否上架落位」无关，否则次品永远选不到不良品区（与 putaway 守卫只校验 zone_type 的口径也一致）。
+		Set<Long> allowedZoneIds = zones.stream()
+				.filter(z -> zoneType.equals(z.getZoneType()))
+				.map(WmsZone::getId)
+				.collect(Collectors.toSet());
+		if (allowedZoneIds.isEmpty()) {
+			return new ArrayList<>();
+		}
+		Set<String> occupied = new HashSet<>(physicalInventoryService.occupiedLocationCodes(warehouseId));
+		return wmsLocationService.listByWarehouse(warehouseId).stream()
+				.filter(l -> allowedRacks.contains(l.getRackNo()))
+				.filter(l -> l.getZoneId() != null && allowedZoneIds.contains(l.getZoneId()))
+				.filter(l -> !occupied.contains(l.getLocationCode()))
+				.sorted(Comparator.comparing(WmsLocation::getRackNo, Comparator.nullsLast(String::compareTo))
+						.thenComparing(l -> l.getColumnNo() == null ? Integer.MAX_VALUE : l.getColumnNo()))
+				.map(l -> {
+					AvailableLocationVO vo = new AvailableLocationVO();
+					vo.setLocationId(l.getId());
+					vo.setLocationCode(l.getLocationCode());
+					vo.setZoneId(l.getZoneId());
+					WmsZone z = zoneById.get(l.getZoneId());
+					vo.setZoneName(z == null ? null : z.getZoneName());
+					vo.setZoneType(z == null ? null : z.getZoneType());
+					vo.setRackNo(l.getRackNo());
+					vo.setColumnNo(l.getColumnNo());
+					return vo;
+				})
+				.collect(Collectors.toList());
+	}
+
+	private void assertPlatform() {
+		String identityType = tenantIdentityService.currentIdentity(null).getIdentityType();
+		if (!TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM.equals(identityType)) {
+			throw new BusinessException(WmsResultCode.INBOUND_OP_FORBIDDEN.getCode(),
+					WmsResultCode.INBOUND_OP_FORBIDDEN.getMessage());
+		}
+	}
+
+	/**
+	 * 解析该入库单可上架的货架排：货主(erp_tenant_id) → 父服务商(parent_wms_tenant_id) →
+	 * 该仓当前有效租用的货架排号。任一环缺失则返回空集（= 无可上架货架，上架被拦）。
+	 */
+	private Set<String> resolveAllowedRacks(PurchaseInboundOrder order) {
+		Long erpTenantId = order.getErpTenantId();
+		if (erpTenantId == null) {
+			return Collections.emptySet();
+		}
+		SysTenant owner = sysTenantMapper.selectById(erpTenantId);
+		Long operatorId = owner == null ? null : owner.getParentWmsTenantId();
+		if (operatorId == null) {
+			return Collections.emptySet();
+		}
+		return wmsRackAssignmentService.activeRackNos(order.getWarehouseId(), operatorId);
+	}
+
+	// ==================== 纯逻辑（便于单测）====================
+
+	static final String GOOD = "GOOD";
+
+	/**
+	 * 合并上架行（同 SKU×库位×品质累加），品质空值归一为 GOOD。
+	 */
+	public static List<MergedLine> mergeLines(List<InboundPutawayDTO.PutawayLine> lines) {
+		Map<String, MergedLine> map = new LinkedHashMap<>();
+		for (InboundPutawayDTO.PutawayLine line : lines) {
+			String quality = normalizeQuality(line.getQuality());
+			String key = line.getSkuCode() + "|" + line.getLocationCode() + "|" + quality;
+			MergedLine m = map.get(key);
+			if (m == null) {
+				m = new MergedLine(line.getSkuCode(), line.getLocationCode(), quality, 0, line.getZoneId());
+				map.put(key, m);
+			}
+			m.quantity += line.getQuantity();
+		}
+		return new ArrayList<>(map.values());
+	}
+
+	/**
+	 * 按 SKU 汇总上架数量。
+	 */
+	public static Map<String, Integer> sumBySku(List<MergedLine> merged) {
+		Map<String, Integer> map = new LinkedHashMap<>();
+		for (MergedLine line : merged) {
+			map.merge(line.skuCode, line.quantity, Integer::sum);
+		}
+		return map;
+	}
+
+	/**
+	 * 上架按 SKU 是否恰好覆盖收货数量（键集合一致且各数量相等）。
+	 */
+	public static boolean coversExactly(Map<String, Integer> receivedBySku, Map<String, Integer> putawayBySku) {
+		return receivedBySku.equals(putawayBySku);
+	}
+
+	static String normalizeQuality(String quality) {
+		if (quality == null || quality.isEmpty()) {
+			return GOOD;
+		}
+		// M-7：品质白名单 + 大写归一。防非规范值（小写 damaged / DEFECTIVE 等）以 allocatable=0 落库后，
+		// 聚合时既不满足 "DAMAGED" 精确匹配、又因 allocatable≠1 不计 available → 批次两桶双双落空、库存凭空消失。
+		String q = quality.trim().toUpperCase();
+		if (!GOOD.equals(q) && !"DAMAGED".equals(q)) {
+			throw new BusinessException(400, "非法品质值：" + quality + "（仅允许 GOOD/DAMAGED）");
+		}
+		return q;
+	}
+
+	/**
+	 * 合并后的上架行。
+	 */
+	public static class MergedLine {
+
+		public final String skuCode;
+
+		public final String locationCode;
+
+		public final String quality;
+
+		public int quantity;
+
+		public final Long zoneId;
+
+		public MergedLine(String skuCode, String locationCode, String quality, int quantity, Long zoneId) {
+			this.skuCode = skuCode;
+			this.locationCode = locationCode;
+			this.quality = quality;
+			this.quantity = quantity;
+			this.zoneId = zoneId;
+		}
+
+	}
+
+}

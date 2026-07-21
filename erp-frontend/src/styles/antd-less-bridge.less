@@ -1,0 +1,217 @@
+/**
+ * Ant Design Vue 4.x Less 变量桥接层
+ *
+ * @deprecated 此文件仅用于兼容旧代码，新代码禁止使用
+ *
+ * 用途：为旧的 Less 组件提供 antdv 3.x 变量名到 4.x 默认值的映射
+ * 迁移：新代码请使用 scoped CSS + CSS Variables
+ *
+ * 变量值来源：ant-design-vue 4.2.6 默认主题
+ * 源码位置：node_modules/ant-design-vue/es/theme/
+ */
+
+// ========== 主色 (colorPrimary: #1677ff) ==========
+@primary-color: #1677ff;                    // colorPrimary
+@primary-color-hover: #4096ff;              // colorPrimaryHover
+@primary-color-active: #0958d9;             // colorPrimaryActive
+@primary-1: #e6f4ff;                        // colorPrimaryBg
+@primary-2: #bae0ff;                        // colorPrimaryBgHover
+@primary-5: #91caff;                        // colorPrimaryBorder
+@primary-7: #1677ff;                        // colorPrimary
+
+// ========== 功能色 ==========
+@success-color: #52c41a;                    // colorSuccess
+@success-color-hover: #73d13d;              // colorSuccessHover
+@success-color-active: #389e0d;             // colorSuccessActive
+@success-color-deprecated-bg: #f6ffed;      // colorSuccessBg
+
+@warning-color: #faad14;                    // colorWarning
+@warning-color-hover: #ffc53d;              // colorWarningHover
+@warning-color-active: #d48806;             // colorWarningActive
+@warning-color-deprecated-bg: #fffbe6;      // colorWarningBg
+
+@error-color: #ff4d4f;                      // colorError
+@error-color-hover: #ff7875;                // colorErrorHover
+@error-color-active: #d9363e;               // colorErrorActive
+@error-color-deprecated-bg: #fff2f0;        // colorErrorBg
+
+@info-color: #1677ff;                       // colorInfo
+@info-color-hover: #4096ff;                 // colorInfoHover
+@info-color-active: #0958d9;                // colorInfoActive
+@info-color-deprecated-bg: #e6f4ff;         // colorInfoBg
+
+// ========== 文本色 ==========
+@text-color: rgba(0, 0, 0, 0.88);           // colorText
+@text-color-secondary: rgba(0, 0, 0, 0.65); // colorTextSecondary
+@text-color-inverse: #ffffff;               // colorTextLightSolid
+@heading-color: rgba(0, 0, 0, 0.88);        // colorTextHeading
+@label-color: rgba(0, 0, 0, 0.65);          // colorTextLabel
+
+// ========== 边框与背景 ==========
+@border-width-base: 1px;                    // lineWidth
+@border-style-base: solid;                  // lineType
+@border-color-base: #d9d9d9;                // colorBorder
+@border-color-split: rgba(5, 5, 5, 0.06);   // colorBorderSecondary
+
+@body-background: #f5f5f5;                  // colorBgLayout
+@layout-body-background: #f5f5f5;           // colorBgLayout
+@component-background: #ffffff;             // colorBgContainer
+@background-color-light: rgba(0, 0, 0, 0.06); // colorFillSecondary
+@background-color-base: rgba(0, 0, 0, 0.15);  // colorFill
+
+// ========== 圆角 ==========
+@border-radius-base: 6px;                   // borderRadius
+@border-radius-sm: 4px;                     // borderRadiusSM
+
+// ========== 阴影 ==========
+@box-shadow-base: 0 1px 2px 0 rgba(0, 0, 0, 0.03),
+                  0 1px 6px -1px rgba(0, 0, 0, 0.02),
+                  0 2px 4px 0 rgba(0, 0, 0, 0.02);  // boxShadow
+@shadow-1-up: 0 6px 16px 0 rgba(0, 0, 0, 0.08),
+              0 3px 6px -4px rgba(0, 0, 0, 0.12),
+              0 9px 28px 8px rgba(0, 0, 0, 0.05);   // boxShadowSecondary
+@shadow-1-down: 0 6px 16px 0 rgba(0, 0, 0, 0.08),
+                0 3px 6px -4px rgba(0, 0, 0, 0.12),
+                0 9px 28px 8px rgba(0, 0, 0, 0.05); // boxShadowSecondary
+@shadow-2: 0 6px 16px 0 rgba(0, 0, 0, 0.08),
+           0 3px 6px -4px rgba(0, 0, 0, 0.12),
+           0 9px 28px 8px rgba(0, 0, 0, 0.05);      // boxShadowSecondary
+
+// ========== 字体 ==========
+@font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+              'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+              'Noto Color Emoji';                   // fontFamily
+@code-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; // fontFamilyCode
+@font-size-base: 14px;                      // fontSize
+@font-size-lg: 16px;                        // fontSizeLG
+@font-size-sm: 12px;                        // fontSizeSM
+
+// ========== 间距 (sizeUnit=4, sizeStep=4) ==========
+@padding: 16px;                             // padding   (size = 4*4)
+@padding-lg: 24px;                          // paddingLG (sizeLG = 4*(4+2))
+@padding-md: 20px;                          // paddingMD (sizeMD = 4*(4+1))
+@padding-sm: 12px;                          // paddingSM (sizeSM = 4*(4-1))
+@padding-xs: 8px;                           // paddingXS (sizeXS = 4*(4-2))
+
+@margin-lg: 24px;                           // marginLG
+@margin-md: 20px;                           // marginMD
+@margin-sm: 12px;                           // marginSM
+@margin-xs: 8px;                            // marginXS
+
+// ========== 动画 ==========
+@animation-duration-base: 0.2s;             // motionDurationMid
+@animation-duration-fast: 0.1s;             // motionDurationFast
+@animation-duration-slow: 0.3s;             // motionDurationSlow
+@ease-base-out: cubic-bezier(0.215, 0.61, 0.355, 1);       // motionEaseOut
+@ease-base-in: cubic-bezier(0.755, 0.05, 0.855, 0.06);     // motionEaseInQuint
+@ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);        // motionEaseInOut
+
+// ========== 链接 ==========
+@link-color: #1677ff;                       // colorLink
+@link-hover-color: #4096ff;                 // colorLinkHover
+@link-active-color: #0958d9;                // colorLinkActive
+
+// ========== 禁用状态 ==========
+@disabled-color: rgba(0, 0, 0, 0.25);       // colorTextDisabled
+@disabled-bg: rgba(0, 0, 0, 0.04);          // colorBgContainerDisabled
+
+// ========== 其他常用变量 ==========
+@white: #ffffff;
+@black: #000000;
+@ant-prefix: ant;
+@popover-bg: #ffffff;                       // colorBgElevated
+@item-active-bg: #e6f4ff;                   // controlItemBgActive (colorPrimaryBg)
+@item-hover-bg: rgba(0, 0, 0, 0.04);        // controlItemBgHover
+
+// ========== 响应式断点 ==========
+@grid-columns: 24;
+@screen-xs: 480px;
+@screen-xs-min: @screen-xs;
+@screen-sm: 576px;
+@screen-sm-min: @screen-sm;
+@screen-md: 768px;
+@screen-md-min: @screen-md;
+@screen-lg: 992px;
+@screen-lg-min: @screen-lg;
+@screen-xl: 1200px;
+@screen-xl-min: @screen-xl;
+@screen-xxl: 1600px;
+@screen-xxl-min: @screen-xxl;
+
+// 断点最大值
+@screen-xs-max: (@screen-sm-min - 1px);
+@screen-sm-max: (@screen-md-min - 1px);
+@screen-md-max: (@screen-lg-min - 1px);
+@screen-lg-max: (@screen-xl-min - 1px);
+@screen-xl-max: (@screen-xxl-min - 1px);
+
+// ========== Layout 相关 ==========
+@layout-sider-background: #001529;
+@layout-header-background: #001529;
+@layout-header-height: 64px;
+@layout-header-padding: 0 50px;
+
+// ========== Menu 相关 ==========
+@menu-dark-bg: #001529;
+@menu-dark-submenu-bg: #000c17;
+@menu-dark-color: rgba(255, 255, 255, 0.65);
+@menu-dark-highlight-color: #fff;
+@menu-dark-item-active-bg: #1677ff;         // colorPrimary
+@menu-item-height: 40px;
+@menu-inline-toplevel-item-height: 40px;
+@menu-item-active-bg: #e6f4ff;              // colorPrimaryBg
+@menu-highlight-color: #1677ff;             // colorPrimary
+
+// ========== 组件特定变量 ==========
+@table-header-bg: #fafafa;
+@table-row-hover-bg: #fafafa;
+@table-border-color: #d9d9d9;               // colorBorder
+@input-height-base: 32px;                   // controlHeight
+@input-height-lg: 40px;                     // controlHeightLG
+@input-height-sm: 24px;                     // controlHeightSM
+@btn-height-base: 32px;                     // controlHeight
+@btn-height-lg: 40px;                       // controlHeightLG
+@btn-height-sm: 24px;                       // controlHeightSM
+@btn-primary-color: #ffffff;
+@btn-primary-bg: #1677ff;                   // colorPrimary
+@icon-color: rgba(0, 0, 0, 0.45);           // colorTextTertiary
+@icon-color-hover: rgba(0, 0, 0, 0.88);     // colorText
+@card-radius: 6px;                          // borderRadius
+@card-shadow: 0 1px 2px -2px rgba(0, 0, 0, 0.16),
+              0 3px 6px 0 rgba(0, 0, 0, 0.12),
+              0 5px 12px 4px rgba(0, 0, 0, 0.09);  // boxShadowCard
+@card-head-padding: 16px;
+@card-head-padding-sm: 12px;
+@card-padding-base: 24px;
+@card-padding-base-sm: 12px;
+@card-head-font-size: 16px;                 // fontSizeLG
+@card-head-font-size-sm: 14px;              // fontSize
+@card-head-height: 48px;
+@card-head-height-sm: 36px;
+@card-head-color: rgba(0, 0, 0, 0.88);      // colorText
+@card-head-extra-color: rgba(0, 0, 0, 0.65); // colorTextSecondary
+@card-inner-head-padding: 12px;
+@card-actions-li-margin: 12px 0;
+@card-skeleton-bg: #cfd8dc;
+@card-background: #ffffff;                  // colorBgContainer
+@outline-color: #1677ff;                    // colorPrimary
+@outline-width: 2px;
+
+// ========== 行高 ==========
+@line-height-base: 1.5714285714285714;      // lineHeight
+
+// ========== Card Actions ==========
+@card-actions-background: #ffffff;          // colorBgContainer
+
+// ========== Mixins ==========
+.clearfix() {
+  zoom: 1;
+  &::before,
+  &::after {
+    display: table;
+    content: '';
+  }
+  &::after {
+    clear: both;
+  }
+}

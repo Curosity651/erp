@@ -1,0 +1,149 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: @artifactId@
+  profiles:
+    active: local  # 当前激活配置，默认dev
+  messages:
+    # basename 中的 . 和 / 都可以用来表示文件层级，默认的 basename 是 messages
+    # 必须注册此 basename, 否则 security 错误信息将一直都是英文
+    basename: 'org.ballcat.**.messages, org.springframework.security.messages'
+
+  mvc:
+    format:
+      date-time: yyyy-MM-dd HH:mm:ss
+
+
+# 天爱图形验证码
+captcha:
+  secondary:
+    enabled: false
+
+# mybatis-plus相关配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*Mapper.xml
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      insert-strategy: not_empty
+      update-strategy: not_empty
+      logic-delete-value: "NOW()" # 逻辑已删除值(使用当前时间标识)
+      logic-not-delete-value: 0 # 逻辑未删除值(默认为 0)
+
+
+# BallCat 相关配置
+ballcat:
+  pageable:
+    max-page-size: 500
+  web:
+    accesslog:
+      enabled: true
+      default-record-options:
+        include-query-string: true
+        include-request-body: true
+        include-response-body: true
+        max-request-body-length: 2048
+        max-response-body-length: 2048
+      rules:
+        # 注意，这里规则取命中的第一个，所以 /** 要放在最后一个
+        - url-pattern: /system/user/avatar
+          record-options:
+              ignored: true
+        - url-pattern: /swagger-ui/**
+          record-options:
+            ignored: true
+        - url-pattern: /webjars/**
+          record-options:
+            ignored: true
+        - url-pattern: /favicon.ico
+          record-options:
+            ignored: true
+  security:
+    # 前端传输密码的 AES 加密密钥
+    password-secret-key: '==BallCat-Auth=='
+    xss:
+      enabled: false
+  springsecurity:
+    form-login:
+      enabled: true
+      separated: true
+      login-captcha: false
+    ## 忽略鉴权的 url 列表
+    ignore-urls:
+      - /public/**
+      - /actuator/**
+      - /doc.html
+      - /v2/api-docs/**
+      - /v3/api-docs/**
+      - /swagger-resources/**
+      - /swagger-ui/**
+      - /webjars/**
+      - /bycdao-ui/**
+      - /favicon.ico
+      - /captcha/**
+  # 项目 redis 缓存的 key 前缀
+  redis:
+    key-prefix: 'ballcat:'
+  # actuator 加解密密钥
+  actuator:
+    auth: true
+    secret-id: 'ballcat-monitor'
+    secret-key: '=BallCat-Monitor'
+  openapi:
+    info:
+      title: BallCat-Admin Docs
+      description: BallCat 后台管理服务Api文档
+      version: ${project.version}
+      terms-of-service: http://www.ballcat.cn/
+      license:
+        name: Powered By BallCat
+        url: http://www.ballcat.cn/
+      contact:
+        name: Hccake
+        email: chengbohua@foxmail.com
+        url: https://github.com/Hccake
+    components:
+      security-schemes:
+        apiKey:
+          type: APIKEY
+          in: HEADER
+          name: 'api-key'
+        oauth2:
+          type: OAUTH2
+          flows:
+            password:
+              token-url: /oauth/token
+    security:
+      - oauth2: [ ]
+      - apiKey: [ ]
+
+springdoc:
+  # 开启 oauth2 端点显示
+  show-oauth2-endpoints: true
+  swagger-ui:
+    oauth:
+      client-id: test
+      client-secret: test
+    display-request-duration: true
+    disable-swagger-default-url: true
+    persist-authorization: true
+
+# 库存预警邮件配置
+inventory:
+  alert:
+    mail:
+      subject-prefix: 【库存预警】
+
+# 货币汇率转换
+fixer:
+  api:
+    keys:
+      - '3edac32c010fc7d03f0fff73bc42c62e'
+      - 'f68e8210a40aa84e79a94a8c4524131e'
+      - 'fad35173414eebd4fde14d735ec5dd63'
+      - '76c3839bfd00e2bc1ccbe52da7a73aa0'
+      - '16af88eecf19f332437f33bd47915b46'
+      - '95380f64066a6ba1abdcae807720e2a6'

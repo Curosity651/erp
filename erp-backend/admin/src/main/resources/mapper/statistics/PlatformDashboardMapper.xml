@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.platform.dashboard.mapper.PlatformDashboardMapper">
+
+    <!--
+      服务商过滤：业务单据表只有 erp_tenant_id（无可靠 wms_tenant_id，实测为 0），
+      故按服务商收窄时统一映射 erp_tenant_id → sys_tenant.parent_wms_tenant_id。
+      使用处传入列名前缀（如 "p."）以适配不同别名；无前缀传空串。
+    -->
+    <sql id="operatorFilter">
+        <if test="qo.wmsTenantIds != null and qo.wmsTenantIds.size() > 0">
+            AND ${col}erp_tenant_id IN (
+                SELECT st.id FROM sys_tenant st
+                WHERE st.deleted = 0 AND st.parent_wms_tenant_id IN
+                <foreach collection="qo.wmsTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+            )
+        </if>
+    </sql>
+
+    <!-- ===== A 在库总量 ===== -->
+    <select id="selectOnHand" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$StockRow">
+        SELECT
+            COALESCE(SUM(available_quantity + reserved_quantity + damaged_quantity), 0) AS onHandQty,
+            COUNT(DISTINCT sku_code) AS skuCount,
+            COUNT(DISTINCT erp_tenant_id) AS ownerCount
+        FROM wms_inventory
+        <where>
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+    </select>
+
+    <!-- ===== A 今日入库（采购入库，inbound_date=今日 且已收货/完成） ===== -->
+    <select id="selectTodayInbound" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$MetricRow">
+        SELECT
+            COALESCE(SUM(i.actual_quantity), 0) AS qty,
+            COUNT(DISTINCT o.id) AS orders
+        FROM wms_purchase_inbound_order o
+        LEFT JOIN wms_purchase_inbound_order_item i ON i.inbound_order_id = o.id
+        <where>
+            o.deleted = 0
+            AND o.inbound_date = CURDATE()
+            AND o.order_status IN ('RECEIVED', 'COMPLETED')
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND o.warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value="o."/></include>
+        </where>
+    </select>
+
+    <!-- ===== A 今日出库（销售出库，outbound_date=今日） ===== -->
+    <select id="selectTodayOutbound" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$MetricRow">
+        SELECT
+            COALESCE(SUM(total_quantity), 0) AS qty,
+            COUNT(*) AS orders
+        FROM wms_sales_outbound_order
+        <where>
+            outbound_date = CURDATE()
+            AND order_status &lt;&gt; 'CANCELLED'
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+    </select>
+
+    <!-- ===== A 待办：采购入库 SUBMITTED / RECEIVED ===== -->
+    <select id="countPendingReceiving" resultType="long">
+        SELECT COUNT(*) FROM wms_purchase_inbound_order
+        <where>
+            deleted = 0 AND order_status = 'SUBMITTED'
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+    </select>
+
+    <select id="countPendingPutaway" resultType="long">
+        SELECT COUNT(*) FROM wms_purchase_inbound_order
+        <where>
+            deleted = 0 AND order_status = 'RECEIVED'
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+    </select>
+
+    <!-- ===== A 待办：销售出库 待拣货打包 / 待出库 ===== -->
+    <select id="countPendingPickPack" resultType="long">
+        SELECT COUNT(*) FROM wms_sales_outbound_order
+        <where>
+            order_status IN ('CONFIRMED', 'PICKING')
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+    </select>
+
+    <select id="countPendingOutbound" resultType="long">
+        SELECT COUNT(*) FROM wms_sales_outbound_order
+        <where>
+            order_status IN ('PICKED', 'PACKED')
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+    </select>
+
+    <!-- ===== B 各仓库容占用 ===== -->
+    <select id="selectWarehouseCapacity"
+            resultType="com.erp.admin.platform.dashboard.model.vo.PlatformDashboardDataVO$WarehouseCapacity">
+        SELECT
+            w.id AS warehouseId,
+            w.warehouse_name AS warehouseName,
+            (SELECT COUNT(*) FROM wms_location l WHERE l.warehouse_id = w.id AND l.deleted = 0) AS total,
+            (SELECT COUNT(DISTINCT p.location_code) FROM wms_physical_inventory p
+                WHERE p.warehouse_id = w.id
+                <include refid="operatorFilter"><property name="col" value="p."/></include>
+            ) AS used
+        FROM wms_warehouse w
+        <where>
+            w.deleted = 0
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND w.id IN
+                <foreach collection="qo.warehouseIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>
+            </if>
+        </where>
+        ORDER BY w.id
+    </select>
+
+    <!-- ===== B 分区占用（按 zone_type 聚合） ===== -->
+    <select id="selectZoneOccupancy"
+            resultType="com.erp.admin.platform.dashboard.model.vo.PlatformDashboardDataVO$ZoneOccupancy">
+        SELECT
+            zt.zone_type AS zone,
+            COALESCE(loc.cnt, 0) AS locationCount,
+            COALESCE(inv.qty, 0) AS invQty
+        FROM (
+            SELECT DISTINCT zone_type FROM wms_zone
+            <where>
+                deleted = 0
+                <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                    AND warehouse_id IN
+                    <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+                </if>
+            </where>
+        ) zt
+        LEFT JOIN (
+            SELECT z.zone_type AS zone_type, COUNT(l.id) AS cnt
+            FROM wms_location l
+            JOIN wms_zone z ON z.id = l.zone_id AND z.deleted = 0
+            <where>
+                l.deleted = 0
+                <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                    AND l.warehouse_id IN
+                    <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+                </if>
+            </where>
+            GROUP BY z.zone_type
+        ) loc ON loc.zone_type = zt.zone_type
+        LEFT JOIN (
+            SELECT z.zone_type AS zone_type, COALESCE(SUM(p.quantity), 0) AS qty
+            FROM wms_physical_inventory p
+            JOIN wms_zone z ON z.id = p.zone_id AND z.deleted = 0
+            <where>
+                <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                    AND p.warehouse_id IN
+                    <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+                </if>
+                <include refid="operatorFilter"><property name="col" value="p."/></include>
+            </where>
+            GROUP BY z.zone_type
+        ) inv ON inv.zone_type = zt.zone_type
+    </select>
+
+    <!-- ===== C 吞吐趋势（按日单据数） ===== -->
+    <select id="selectInboundDaily" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$DailyCountRow">
+        SELECT DATE_FORMAT(inbound_date, '%Y-%m-%d') AS bizDate, COUNT(*) AS cnt
+        FROM wms_purchase_inbound_order
+        <where>
+            deleted = 0
+            AND inbound_date BETWEEN #{qo.startDate} AND #{qo.endDate}
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+        GROUP BY inbound_date
+    </select>
+
+    <select id="selectOutboundDaily" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$DailyCountRow">
+        SELECT DATE_FORMAT(outbound_date, '%Y-%m-%d') AS bizDate, COUNT(*) AS cnt
+        FROM wms_sales_outbound_order
+        <where>
+            order_status &lt;&gt; 'CANCELLED'
+            AND outbound_date BETWEEN #{qo.startDate} AND #{qo.endDate}
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+        GROUP BY outbound_date
+    </select>
+
+    <select id="selectReturnDaily" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$DailyCountRow">
+        SELECT DATE_FORMAT(return_date, '%Y-%m-%d') AS bizDate, COUNT(*) AS cnt
+        FROM wms_return_inbound_order
+        <where>
+            deleted = 0
+            AND return_date BETWEEN #{qo.startDate} AND #{qo.endDate}
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <include refid="operatorFilter"><property name="col" value=""/></include>
+        </where>
+        GROUP BY return_date
+    </select>
+
+    <!-- ===== D 服务商排名（按 WMS 服务商聚合：erp_tenant_id → sys_tenant.parent_wms_tenant_id） ===== -->
+    <select id="selectOperatorByStock"
+            resultType="com.erp.admin.platform.dashboard.model.vo.PlatformDashboardDataVO$OperatorRankingItem">
+        SELECT
+            op.id AS wmsTenantId,
+            op.tenant_name AS operatorName,
+            COALESCE(SUM(i.available_quantity + i.reserved_quantity + i.damaged_quantity), 0) AS qty
+        FROM wms_inventory i
+        JOIN sys_tenant owner ON owner.id = i.erp_tenant_id AND owner.deleted = 0
+        JOIN sys_tenant op ON op.id = owner.parent_wms_tenant_id AND op.deleted = 0
+        <where>
+            <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                AND i.warehouse_id IN
+                <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+            </if>
+            <if test="qo.wmsTenantIds != null and qo.wmsTenantIds.size() > 0">
+                AND op.id IN
+                <foreach collection="qo.wmsTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+            </if>
+        </where>
+        GROUP BY op.id, op.tenant_name
+        HAVING qty > 0
+        ORDER BY qty DESC
+        LIMIT 10
+    </select>
+
+    <select id="selectOperatorByThroughput"
+            resultType="com.erp.admin.platform.dashboard.model.vo.PlatformDashboardDataVO$OperatorRankingItem">
+        SELECT
+            op.id AS wmsTenantId,
+            op.tenant_name AS operatorName,
+            COUNT(*) AS qty
+        FROM (
+            SELECT erp_tenant_id FROM wms_purchase_inbound_order
+            <where>
+                deleted = 0
+                AND inbound_date BETWEEN #{qo.startDate} AND #{qo.endDate}
+                <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                    AND warehouse_id IN
+                    <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+                </if>
+                <include refid="operatorFilter"><property name="col" value=""/></include>
+            </where>
+            UNION ALL
+            SELECT erp_tenant_id FROM wms_sales_outbound_order
+            <where>
+                order_status &lt;&gt; 'CANCELLED'
+                AND outbound_date BETWEEN #{qo.startDate} AND #{qo.endDate}
+                <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
+                    AND warehouse_id IN
+                    <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
+                </if>
+                <include refid="operatorFilter"><property name="col" value=""/></include>
+            </where>
+        ) s
+        JOIN sys_tenant owner ON owner.id = s.erp_tenant_id AND owner.deleted = 0
+        JOIN sys_tenant op ON op.id = owner.parent_wms_tenant_id AND op.deleted = 0
+        GROUP BY op.id, op.tenant_name
+        ORDER BY qty DESC
+        LIMIT 10
+    </select>
+
+</mapper>

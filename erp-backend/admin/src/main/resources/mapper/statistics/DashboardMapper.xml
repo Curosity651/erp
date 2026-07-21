@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.statistics.mapper.DashboardMapper">
+
+	<!-- Dashboard通用筛选条件片段（场景A：金额汇总，SKU/品类用 EXISTS 子查询避免多商品订单金额重复） -->
+	<sql id="dashboardFilterClause">
+		<if test="qo.platform != null and qo.platform != ''">
+			AND o.platform = #{qo.platform}
+		</if>
+		<if test="qo.shopIds != null and qo.shopIds.size() > 0">
+			AND o.shop_id IN
+			<foreach collection="qo.shopIds" item="shopId" open="(" separator="," close=")">
+				#{shopId}
+			</foreach>
+		</if>
+		<if test="qo.platformItemIds != null and qo.platformItemIds.size() > 0">
+			AND EXISTS (SELECT 1 FROM erp_order_item oi WHERE oi.order_id = o.id
+				AND oi.platform_item_id IN
+				<foreach collection="qo.platformItemIds" item="pid" open="(" separator="," close=")">
+					#{pid}
+				</foreach>)
+		</if>
+		<if test="qo.categoryId != null">
+			AND EXISTS (SELECT 1 FROM erp_order_item oi
+				INNER JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+				INNER JOIN sku s ON sm.sku_code = s.sku_code
+				WHERE oi.order_id = o.id AND s.category_id = #{qo.categoryId})
+		</if>
+	</sql>
+
+	<!-- Dashboard SKU聚合筛选条件片段（场景B：已 JOIN oi/s，直接引用别名） -->
+	<sql id="skuRankingFilterClause">
+		<if test="qo.platform != null and qo.platform != ''">
+			AND o.platform = #{qo.platform}
+		</if>
+		<if test="qo.shopIds != null and qo.shopIds.size() > 0">
+			AND o.shop_id IN
+			<foreach collection="qo.shopIds" item="shopId" open="(" separator="," close=")">
+				#{shopId}
+			</foreach>
+		</if>
+		<if test="qo.skuCodes != null and qo.skuCodes.size() > 0">
+			AND sm.sku_code IN
+			<foreach collection="qo.skuCodes" item="skuCode" open="(" separator="," close=")">
+				#{skuCode}
+			</foreach>
+		</if>
+		<if test="qo.categoryId != null">
+			AND s.category_id = #{qo.categoryId}
+		</if>
+	</sql>
+
+	<!-- Dashboard简单筛选条件片段（不需要 JOIN，仅平台和店铺筛选） -->
+	<sql id="simpleFilterClause">
+		<if test="qo.platform != null and qo.platform != ''">
+			AND platform = #{qo.platform}
+		</if>
+		<if test="qo.shopIds != null and qo.shopIds.size() > 0">
+			AND shop_id IN
+			<foreach collection="qo.shopIds" item="shopId" open="(" separator="," close=")">
+				#{shopId}
+			</foreach>
+		</if>
+	</sql>
+
+	<!-- 查询指定年月的销售总额（用于目标进度，不受额外筛选影响） -->
+	<select id="sumTotalAmountRubByYearMonth" resultType="java.math.BigDecimal">
+		SELECT COALESCE(SUM(total_amount_rub), 0)
+		FROM erp_order
+		WHERE YEAR(platform_created_at_moscow) = #{year}
+		  AND MONTH(platform_created_at_moscow) = #{month}
+		  AND erp_status != 'CANCELED'
+		<if test="platform != null and platform != ''">
+			AND platform = #{platform}
+		</if>
+	</select>
+
+	<!-- 查询指定年份的销售总额（用于目标进度，不受额外筛选影响） -->
+	<select id="sumTotalAmountRubByYear" resultType="java.math.BigDecimal">
+		SELECT COALESCE(SUM(total_amount_rub), 0)
+		FROM erp_order
+		WHERE YEAR(platform_created_at_moscow) = #{year}
+		AND erp_status != 'CANCELED'
+		<if test="platform != null and platform != ''">
+			AND platform = #{platform}
+		</if>
+	</select>
+
+	<!-- 查询日期范围内的销售总额（支持SKU、店铺、品类筛选） -->
+	<select id="sumTotalAmountRubByDateRange" resultType="java.math.BigDecimal">
+		SELECT COALESCE(SUM(o.total_amount_rub), 0)
+		FROM erp_order o
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		AND o.erp_status != 'CANCELED'
+		<include refid="dashboardFilterClause"/>
+	</select>
+
+	<!-- 按平台和履约类型聚合销售数据 -->
+	<select id="aggregateByPlatformAndFulfillment" resultType="com.erp.admin.statistics.model.stat.PlatformFulfillmentStat">
+		SELECT
+			o.platform,
+			COALESCE(o.fulfillment_type, 'UNKNOWN') AS fulfillmentType,
+			COUNT(*) AS orderCount,
+			COALESCE(SUM(o.total_amount_rub), 0) AS totalAmount
+		FROM erp_order o
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		AND o.erp_status != 'CANCELED'
+		<include refid="dashboardFilterClause"/>
+		GROUP BY o.platform, o.fulfillment_type
+		ORDER BY o.platform, o.fulfillment_type
+	</select>
+
+	<!-- 按小时聚合销售趋势 -->
+	<select id="aggregateSalesByHour" resultType="com.erp.admin.statistics.model.stat.SalesTrendStat">
+		SELECT
+			DATE_FORMAT(o.platform_created_at_moscow, '%Y-%m-%d %H:00') AS timePoint,
+			COALESCE(SUM(o.total_amount_rub), 0) AS totalSales,
+			COALESCE(SUM(CASE WHEN o.erp_status = 'DELIVERED' THEN o.total_amount_rub ELSE 0 END), 0) AS effectiveSales
+		FROM erp_order o
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		AND o.erp_status != 'CANCELED'
+		<include refid="dashboardFilterClause"/>
+		GROUP BY DATE_FORMAT(o.platform_created_at_moscow, '%Y-%m-%d %H:00')
+		ORDER BY timePoint
+	</select>
+
+	<!-- 按天聚合销售趋势 -->
+	<select id="aggregateSalesByDay" resultType="com.erp.admin.statistics.model.stat.SalesTrendStat">
+		SELECT
+			DATE_FORMAT(o.platform_created_at_moscow, '%Y-%m-%d') AS timePoint,
+			COALESCE(SUM(o.total_amount_rub), 0) AS totalSales,
+			COALESCE(SUM(CASE WHEN o.erp_status = 'DELIVERED' THEN o.total_amount_rub ELSE 0 END), 0) AS effectiveSales
+		FROM erp_order o
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		AND o.erp_status != 'CANCELED'
+		<include refid="dashboardFilterClause"/>
+		GROUP BY DATE_FORMAT(o.platform_created_at_moscow, '%Y-%m-%d')
+		ORDER BY timePoint
+	</select>
+
+	<!-- 按订单状态聚合 -->
+	<select id="aggregateByOrderStatus" resultType="com.erp.admin.statistics.model.stat.OrderStatusStat">
+		SELECT
+			o.erp_status AS status,
+			COUNT(*) AS orderCount,
+			COALESCE(SUM(o.total_amount_rub), 0) AS totalAmount
+		FROM erp_order o
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		<include refid="dashboardFilterClause"/>
+		GROUP BY o.erp_status
+		ORDER BY o.erp_status
+	</select>
+
+	<!-- 按SKU聚合销量（通过 item 表，金额用 item_amount_rub） -->
+	<select id="aggregateSalesByArticle" resultType="com.erp.admin.statistics.model.stat.ArticleSalesStat">
+		SELECT
+			COALESCE(sm.sku_code, oi.platform_item_id) AS article,
+			MAX(CASE WHEN sm.sku_code IS NOT NULL THEN TRUE ELSE FALSE END) AS isMapped,
+			SUM(oi.quantity) AS quantity,
+			COALESCE(SUM(oi.item_amount_rub), 0) AS totalAmount
+		FROM erp_order o
+		INNER JOIN erp_order_item oi ON o.id = oi.order_id
+		LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+		LEFT JOIN sku s ON sm.sku_code = s.sku_code
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		  AND oi.platform_item_id IS NOT NULL AND oi.platform_item_id != ''
+		  AND o.erp_status != 'CANCELED'
+		<include refid="skuRankingFilterClause"/>
+		GROUP BY COALESCE(sm.sku_code, oi.platform_item_id)
+		ORDER BY totalAmount DESC
+	</select>
+
+	<!-- 分页查询SKU销量排名 -->
+	<select id="selectSkuRankingPage" resultType="com.erp.admin.statistics.model.vo.SkuRankingItemVO">
+		SELECT
+			COALESCE(sm.sku_code, oi.platform_item_id) AS sku,
+			MAX(CASE WHEN sm.sku_code IS NOT NULL THEN TRUE ELSE FALSE END) AS isMapped,
+			SUM(oi.quantity) AS quantity,
+			COALESCE(SUM(oi.item_amount_rub), 0) / 100 AS amount,
+			MAX(s.id) AS skuId,
+			MAX(s.chinese_name) AS skuNameCn,
+			MAX(s.category_id) AS categoryId,
+			MAX(c.name) AS categoryName
+		FROM erp_order o
+		INNER JOIN erp_order_item oi ON o.id = oi.order_id
+		LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+		LEFT JOIN sku s ON sm.sku_code = s.sku_code
+		LEFT JOIN category c ON s.category_id = c.id
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		  AND oi.platform_item_id IS NOT NULL AND oi.platform_item_id != ''
+		  AND o.erp_status != 'CANCELED'
+		<include refid="skuRankingFilterClause"/>
+		GROUP BY COALESCE(sm.sku_code, oi.platform_item_id)
+		<choose>
+			<when test="sortField == 'quantity' and sortOrder == 'asc'">
+				ORDER BY quantity ASC
+			</when>
+			<when test="sortField == 'quantity' and sortOrder == 'desc'">
+				ORDER BY quantity DESC
+			</when>
+			<when test="sortField == 'amount' and sortOrder == 'asc'">
+				ORDER BY amount ASC
+			</when>
+			<otherwise>
+				ORDER BY amount DESC
+			</otherwise>
+		</choose>
+	</select>
+
+	<!-- 查询SKU销量排名（不分页，用于导出） -->
+	<select id="selectSkuRankingList" resultType="com.erp.admin.statistics.model.vo.SkuRankingItemVO">
+		SELECT
+			COALESCE(sm.sku_code, oi.platform_item_id) AS sku,
+			MAX(CASE WHEN sm.sku_code IS NOT NULL THEN TRUE ELSE FALSE END) AS isMapped,
+			SUM(oi.quantity) AS quantity,
+			COALESCE(SUM(oi.item_amount_rub), 0) / 100 AS amount,
+			MAX(s.id) AS skuId,
+			MAX(s.chinese_name) AS skuNameCn,
+			MAX(s.category_id) AS categoryId,
+			MAX(c.name) AS categoryName
+		FROM erp_order o
+		INNER JOIN erp_order_item oi ON o.id = oi.order_id
+		LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
+		LEFT JOIN sku s ON sm.sku_code = s.sku_code
+		LEFT JOIN category c ON s.category_id = c.id
+		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
+		  AND oi.platform_item_id IS NOT NULL AND oi.platform_item_id != ''
+		  AND o.erp_status != 'CANCELED'
+		<include refid="skuRankingFilterClause"/>
+		GROUP BY COALESCE(sm.sku_code, oi.platform_item_id)
+		<choose>
+			<when test="sortField == 'quantity' and sortOrder == 'asc'">
+				ORDER BY quantity ASC
+			</when>
+			<when test="sortField == 'quantity' and sortOrder == 'desc'">
+				ORDER BY quantity DESC
+			</when>
+			<when test="sortField == 'amount' and sortOrder == 'asc'">
+				ORDER BY amount ASC
+			</when>
+			<otherwise>
+				ORDER BY amount DESC
+			</otherwise>
+		</choose>
+	</select>
+
+</mapper>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.product.mapper.SkuFilesMapper">
+
+	<resultMap id="skuFilesMap" type="com.erp.admin.product.model.entity.SkuFiles">
+  		<id property="id" column="id"/>
+    		<result property="skuId" column="sku_id"/>
+    		<result property="fileType" column="file_type"/>
+    		<result property="objectKey" column="object_key"/>
+    		<result property="sortOrder" column="sort_order"/>
+    		<result property="createTime" column="create_time"/>
+    		<result property="createBy" column="create_by"/>
+      </resultMap>
+
+	<sql id="Base_Column_List">
+		id,        
+		sku_id,        
+		file_type,        
+		object_key,        
+		sort_order,        
+		create_time,        
+		create_by        
+	</sql>
+
+	<sql id="Base_Alias_Column_List">
+		sf.id,        
+		sf.sku_id,        
+		sf.file_type,        
+		sf.object_key,        
+		sf.sort_order,        
+		sf.create_time,        
+		sf.create_by        
+	</sql>
+</mapper>

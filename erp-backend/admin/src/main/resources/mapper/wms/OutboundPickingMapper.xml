@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.OutboundPickingMapper">
+
+    <sql id="baseColumns">
+        o.id,
+        o.outbound_no AS outboundNo,
+        o.erp_tenant_id AS erpTenantId,
+        t.tenant_name AS ownerName,
+        t.parent_wms_tenant_id AS operatorId,
+        op.tenant_name AS operatorName,
+        o.warehouse_id AS warehouseId,
+        w.warehouse_name AS warehouseName,
+        o.sku_count AS skuKinds,
+        o.total_quantity AS totalQty,
+        o.pick_mode AS pickMode,
+        o.picker_id AS pickerId,
+        o.picker_name AS pickerName,
+        o.order_status AS status,
+        DATE_FORMAT(o.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+    </sql>
+
+    <select id="pageOrders" resultType="com.erp.admin.wms.model.vo.OutboundOrderVO">
+        SELECT
+        <include refid="baseColumns"/>
+        FROM wms_sales_outbound_order o
+        LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        LEFT JOIN wms_warehouse w ON w.id = o.warehouse_id
+        <where>
+            <if test="qo.outboundNo != null and qo.outboundNo != ''">
+                AND o.outbound_no LIKE CONCAT('%', #{qo.outboundNo}, '%')
+            </if>
+            <if test="qo.erpTenantId != null">
+                AND o.erp_tenant_id = #{qo.erpTenantId}
+            </if>
+            <if test="qo.wmsTenantId != null">
+                AND t.parent_wms_tenant_id = #{qo.wmsTenantId}
+            </if>
+            <if test="qo.warehouseId != null">
+                AND o.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.createTimeStart != null">
+                AND DATE(o.create_time) &gt;= #{qo.createTimeStart}
+            </if>
+            <if test="qo.createTimeEnd != null">
+                AND DATE(o.create_time) &lt;= #{qo.createTimeEnd}
+            </if>
+            <if test="qo.dbStatuses != null and qo.dbStatuses.size() > 0">
+                AND o.order_status IN
+                <foreach collection="qo.dbStatuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+            </if>
+        </where>
+        ORDER BY o.create_time DESC
+    </select>
+
+    <select id="selectOrderById" resultType="com.erp.admin.wms.model.vo.OutboundOrderVO">
+        SELECT
+        <include refid="baseColumns"/>
+        FROM wms_sales_outbound_order o
+        LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        LEFT JOIN wms_warehouse w ON w.id = o.warehouse_id
+        WHERE o.id = #{id}
+    </select>
+
+    <select id="selectPickers" resultType="com.erp.admin.wms.model.vo.PickerVO">
+        SELECT user_id AS id, nickname AS name
+        FROM sys_user
+        WHERE deleted = 0 AND status = 1
+        ORDER BY user_id
+    </select>
+
+    <select id="selectPickerName" resultType="string">
+        SELECT nickname FROM sys_user WHERE user_id = #{id} LIMIT 1
+    </select>
+
+</mapper>

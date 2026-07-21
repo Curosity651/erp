@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.InventoryMapper">
+
+    <!-- ==================== 查询方法 ==================== -->
+
+    <!-- 库存明细分页查询（含仓库类型筛选） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.entity.Inventory">
+        SELECT i.*
+        FROM wms_inventory i
+        <if test="qo.warehouseType != null and qo.warehouseType != ''">
+            INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
+        </if>
+        <where>
+            <!-- 数据级可见性：按货主作用域（货主=自己；平台-1/服务商运营商id→0行） -->
+            AND i.erp_tenant_id = #{qo.erpTenantId}
+            <if test="qo.warehouseId != null">
+                AND i.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND i.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+            </if>
+            <if test="qo.regionId != null">
+                AND i.warehouse_id IN (SELECT id FROM wms_warehouse WHERE region_id = #{qo.regionId})
+            </if>
+            <if test="qo.warehouseType != null and qo.warehouseType != ''">
+                AND w.warehouse_type = #{qo.warehouseType}
+            </if>
+            <if test="qo.hasDamaged != null and qo.hasDamaged">
+                AND i.damaged_quantity &gt; 0
+            </if>
+            <if test="qo.stockStatus != null and qo.stockStatus != ''">
+                <choose>
+                    <when test="qo.stockStatus == 'HAS_STOCK'">
+                        AND (i.available_quantity + i.reserved_quantity + i.in_transit_quantity + i.damaged_quantity) &gt; 0
+                    </when>
+                    <when test="qo.stockStatus == 'ZERO_STOCK'">
+                        AND i.available_quantity = 0 AND i.reserved_quantity = 0 AND i.in_transit_quantity = 0 AND i.damaged_quantity = 0
+                    </when>
+                    <when test="qo.stockStatus == 'NEGATIVE_STOCK'">
+                        AND i.available_quantity &lt; 0
+                    </when>
+                </choose>
+            </if>
+        </where>
+        ORDER BY i.id DESC
+    </select>
+
+    <!-- 库存汇总统计（含体积） -->
+    <select id="selectSummary" resultType="com.erp.admin.wms.model.vo.InventorySummaryVO">
+        SELECT
+            COUNT(DISTINCT i.sku_code) AS totalSkuCount,
+            COALESCE(SUM(i.available_quantity), 0) AS availableQuantity,
+            COALESCE(SUM(i.reserved_quantity), 0) AS reservedQuantity,
+            COALESCE(SUM(i.in_transit_quantity), 0) AS inTransitQuantity,
+            COALESCE(SUM(i.damaged_quantity), 0) AS damagedQuantity,
+            (SELECT COUNT(*) FROM wms_warehouse WHERE deleted = 0 AND status = 1) AS warehouseCount,
+            ROUND(COALESCE(SUM(
+                CASE
+                    WHEN s.package_length IS NOT NULL AND s.package_width IS NOT NULL AND s.package_height IS NOT NULL
+                         AND s.package_length > 0 AND s.package_width > 0 AND s.package_height > 0
+                    THEN s.package_length * s.package_width * s.package_height
+                         * POWER(
+                             CASE COALESCE(UPPER(s.package_unit), 'M')
+                                 WHEN 'CM' THEN 0.01
+                                 WHEN 'MM' THEN 0.001
+                                 ELSE 1
+                             END, 3)
+                         * (i.available_quantity + i.reserved_quantity)
+                    ELSE 0
+                END
+            ), 0), 2) AS totalVolume,
+            (SELECT COUNT(DISTINCT i2.sku_code)
+             FROM wms_inventory i2
+             LEFT JOIN sku s2 ON i2.sku_code = s2.sku_code
+             WHERE i2.erp_tenant_id = #{erpTenantId}
+                   AND (s2.package_length IS NULL OR s2.package_width IS NULL OR s2.package_height IS NULL
+                   OR s2.package_length &lt;= 0 OR s2.package_width &lt;= 0 OR s2.package_height &lt;= 0)
+            ) AS volumeMissingSkuCount
+        FROM wms_inventory i
+        LEFT JOIN sku s ON i.sku_code = s.sku_code
+        WHERE i.erp_tenant_id = #{erpTenantId}
+    </select>
+
+    <!-- 按仓库汇总（含体积） -->
+    <select id="selectSummaryByWarehouse" resultType="com.erp.admin.wms.model.vo.WarehouseSummaryVO">
+        SELECT
+            w.id AS warehouseId,
+            COUNT(DISTINCT i.sku_code) AS skuCount,
+            COALESCE(SUM(i.available_quantity), 0) AS availableQuantity,
+            COALESCE(SUM(i.reserved_quantity), 0) AS reservedQuantity,
+            COALESCE(SUM(i.in_transit_quantity), 0) AS inTransitQuantity,
+            COALESCE(SUM(i.damaged_quantity), 0) AS damagedQuantity,
+            ROUND(COALESCE(SUM(
+                CASE
+                    WHEN s.package_length IS NOT NULL AND s.package_width IS NOT NULL AND s.package_height IS NOT NULL
+                         AND s.package_length > 0 AND s.package_width > 0 AND s.package_height > 0
+                    THEN s.package_length * s.package_width * s.package_height
+                         * POWER(
+                             CASE COALESCE(UPPER(s.package_unit), 'M')
+                                 WHEN 'CM' THEN 0.01
+                                 WHEN 'MM' THEN 0.001
+                                 ELSE 1
+                             END, 3)
+                         * (i.available_quantity + i.reserved_quantity)
+                    ELSE 0
+                END
+            ), 0), 2) AS totalVolume
+        FROM wms_warehouse w
+        LEFT JOIN wms_inventory i ON w.id = i.warehouse_id AND i.erp_tenant_id = #{erpTenantId}
+        LEFT JOIN sku s ON i.sku_code = s.sku_code
+        WHERE w.deleted = 0 AND w.status = 1
+        <if test="warehouseType != null and warehouseType != ''">
+            AND w.warehouse_type = #{warehouseType}
+        </if>
+        GROUP BY w.id
+        ORDER BY availableQuantity DESC
+    </select>
+
+    <!-- 按SKU汇总分页 -->
+    <select id="selectSummaryBySku" resultType="com.erp.admin.wms.model.vo.SkuSummaryVO">
+        SELECT
+            i.sku_code AS skuCode,
+            COUNT(DISTINCT i.warehouse_id) AS warehouseCount,
+            COALESCE(SUM(i.available_quantity), 0) AS availableQuantity,
+            COALESCE(SUM(i.reserved_quantity), 0) AS reservedQuantity,
+            COALESCE(SUM(i.in_transit_quantity), 0) AS inTransitQuantity,
+            COALESCE(SUM(i.damaged_quantity), 0) AS damagedQuantity,
+            COALESCE(SUM(CASE WHEN w.warehouse_type = 'FBO'
+                THEN i.available_quantity + i.reserved_quantity ELSE 0 END), 0) AS fboWarehouseQuantity,
+            COALESCE(SUM(CASE WHEN w.warehouse_type = 'OWN'
+                THEN i.available_quantity + i.reserved_quantity ELSE 0 END), 0) AS ownWarehouseQuantity
+        FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
+        <where>
+            AND i.erp_tenant_id = #{erpTenantId}
+            <if test="keyword != null and keyword != ''">
+                AND i.sku_code LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+        </where>
+        GROUP BY i.sku_code
+        <if test="stockStatus != null and stockStatus != ''">
+            <choose>
+                <when test="stockStatus == 'HAS_STOCK'">
+                    HAVING (SUM(i.available_quantity) + SUM(i.reserved_quantity) + SUM(i.in_transit_quantity)) &gt; 0
+                </when>
+                <when test="stockStatus == 'ZERO_STOCK'">
+                    HAVING (SUM(i.available_quantity) + SUM(i.reserved_quantity) + SUM(i.in_transit_quantity)) = 0
+                </when>
+                <when test="stockStatus == 'NEGATIVE_STOCK'">
+                    HAVING SUM(i.available_quantity) &lt; 0
+                </when>
+            </choose>
+        </if>
+        ORDER BY availableQuantity DESC
+    </select>
+
+    <!-- 分页查询可调拨库存 -->
+    <select id="selectAvailableStockPage" resultType="com.erp.admin.wms.model.vo.AvailableStockVO">
+        SELECT
+            i.sku_code AS skuCode,
+            i.available_quantity AS availableQuantity
+        FROM wms_inventory i
+        INNER JOIN sku s ON i.sku_code = s.sku_code
+        <where>
+            i.warehouse_id = #{warehouseId}
+            AND i.available_quantity &gt; 0
+            <if test="keyword != null and keyword != ''">
+                AND (i.sku_code LIKE CONCAT('%', #{keyword}, '%') OR s.chinese_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY i.sku_code ASC
+    </select>
+
+    <!-- 按区域ID批量查询仓库库存聚合（仅自有仓） -->
+    <select id="selectAggregateByRegionIds" resultType="com.erp.admin.wms.model.dto.WarehouseAggregateDTO">
+        SELECT
+            w.region_id AS regionId,
+            COUNT(DISTINCT w.id) AS warehouseCount,
+            COALESCE(SUM(i.available_quantity), 0) AS totalAvailable,
+            COALESCE(SUM(i.in_transit_quantity), 0) AS totalInTransit,
+            COALESCE(SUM(i.damaged_quantity), 0) AS totalDamaged
+        FROM wms_warehouse w
+        LEFT JOIN wms_inventory i ON i.warehouse_id = w.id
+            <if test="erpTenantIds != null and erpTenantIds.size() > 0">
+                AND i.erp_tenant_id IN
+                <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+            </if>
+        WHERE w.warehouse_type = 'OWN'
+          AND w.status = 1
+          AND w.region_id IN
+        <foreach collection="regionIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY w.region_id
+    </select>
+
+    <!-- 按区域和 SKU 聚合库存数据（仅自有仓） -->
+    <select id="selectAggregateByRegionsAndKeyword" resultType="com.erp.admin.wms.model.dto.RegionSkuStockDTO">
+        SELECT
+            w.region_id AS regionId,
+            i.sku_code AS skuCode,
+            SUM(COALESCE(i.available_quantity, 0)) AS totalAvailable,
+            SUM(COALESCE(i.in_transit_quantity, 0)) AS totalInTransit,
+            SUM(COALESCE(i.damaged_quantity, 0)) AS totalDamaged
+        FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
+        WHERE w.warehouse_type = 'OWN'
+          AND w.status = 1
+          AND w.deleted = 0
+          <if test="regionIds != null and regionIds.size() > 0">
+              AND w.region_id IN
+              <foreach item="id" collection="regionIds" open="(" separator="," close=")">
+                  #{id}
+              </foreach>
+          </if>
+          <if test="skuKeyword != null and skuKeyword != ''">
+              AND i.sku_code LIKE CONCAT('%', #{skuKeyword}, '%')
+          </if>
+          <if test="erpTenantIds != null and erpTenantIds.size() > 0">
+              AND i.erp_tenant_id IN
+              <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+          </if>
+        GROUP BY w.region_id, i.sku_code
+    </select>
+
+    <!-- 查询单个区域单个 SKU 的库存聚合 -->
+    <select id="selectAggregateByRegionAndSku" resultType="com.erp.admin.wms.model.dto.RegionSkuStockDTO">
+        SELECT
+            w.region_id AS regionId,
+            i.sku_code AS skuCode,
+            SUM(COALESCE(i.available_quantity, 0)) AS totalAvailable,
+            SUM(COALESCE(i.in_transit_quantity, 0)) AS totalInTransit,
+            SUM(COALESCE(i.damaged_quantity, 0)) AS totalDamaged
+        FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
+        WHERE w.region_id = #{regionId}
+          AND w.warehouse_type = 'OWN'
+          AND w.status = 1
+          AND w.deleted = 0
+          AND i.sku_code = #{skuCode}
+          <if test="erpTenantIds != null and erpTenantIds.size() > 0">
+              AND i.erp_tenant_id IN
+              <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>
+          </if>
+        GROUP BY w.region_id, i.sku_code
+    </select>
+
+</mapper>

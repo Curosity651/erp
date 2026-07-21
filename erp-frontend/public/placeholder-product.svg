@@ -1,0 +1,7 @@
+<svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="60" height="60" fill="#F5F5F5" rx="8"/>
+  <rect x="15" y="15" width="30" height="30" fill="#E8E8E8" rx="4"/>
+  <circle cx="25" cy="25" r="3" fill="#BFBFBF"/>
+  <path d="M15 40L20 35L25 40L30 35L35 40L40 35L45 40V45H15V40Z" fill="#BFBFBF"/>
+  <text x="30" y="52" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#999999">产品</text>
+</svg>

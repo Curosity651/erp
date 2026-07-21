@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.WmsStorageOverviewMapper">
+
+    <!--
+      归属口径：占用 = physical_inventory 落在「本服务商 active 货架分配」的库位上。
+      physical → wms_location(取 rack_no) → wms_rack_assignment(wms_tenant_id=本服务商, active)。
+      不依赖 physical_inventory.wms_tenant_id（历史可能为 0）。全部只读。
+    -->
+
+    <select id="listWarehouses" resultType="com.erp.admin.wms.model.vo.StorageOverviewVO$WarehouseRow">
+        WITH ra AS (
+            SELECT DISTINCT warehouse_id, rack_no
+            FROM wms_rack_assignment
+            WHERE wms_tenant_id = #{wmsTenantId}
+              AND effective_from &lt;= #{today}
+              AND (effective_to IS NULL OR effective_to &gt;= #{today})
+        ),
+        alloc AS (
+            SELECT l.warehouse_id, l.location_code
+            FROM wms_location l
+            JOIN ra ON ra.warehouse_id = l.warehouse_id AND ra.rack_no = l.rack_no
+            WHERE l.deleted = 0
+        ),
+        occ AS (
+            SELECT a.warehouse_id, a.location_code, SUM(pi.quantity) AS qty
+            FROM alloc a
+            JOIN wms_physical_inventory pi
+              ON pi.warehouse_id = a.warehouse_id AND pi.location_code = a.location_code AND pi.quantity &gt; 0
+            GROUP BY a.warehouse_id, a.location_code
+        )
+        SELECT w.id                                                        AS warehouseId,
+               w.warehouse_name                                            AS warehouseName,
+               w.warehouse_code                                            AS warehouseCode,
+               reg.region_name                                             AS regionName,
+               (SELECT COUNT(*) FROM ra WHERE ra.warehouse_id = w.id)      AS rackCount,
+               (SELECT COUNT(*) FROM alloc a WHERE a.warehouse_id = w.id)  AS allocatedLocations,
+               (SELECT COUNT(*) FROM occ o WHERE o.warehouse_id = w.id)    AS occupiedLocations,
+               (SELECT COALESCE(SUM(o.qty), 0) FROM occ o WHERE o.warehouse_id = w.id) AS onHandQty
+        FROM wms_warehouse w
+        LEFT JOIN wms_region reg ON reg.id = w.region_id
+        WHERE w.deleted = 0
+          AND w.id IN (SELECT warehouse_id FROM ra)
+        ORDER BY w.id
+    </select>
+
+    <select id="listRacks" resultType="com.erp.admin.wms.model.vo.StorageOverviewVO$RackRow">
+        SELECT a.rack_no       AS rackNo,
+               a.monthly_fee   AS monthlyFee,
+               a.effective_to  AS effectiveTo,
+               (SELECT COUNT(*) FROM wms_location l
+                  WHERE l.warehouse_id = a.warehouse_id AND l.rack_no = a.rack_no AND l.deleted = 0) AS locationCount,
+               (SELECT COUNT(DISTINCT pi.location_code)
+                  FROM wms_physical_inventory pi
+                  JOIN wms_location l2 ON l2.warehouse_id = pi.warehouse_id
+                       AND l2.location_code = pi.location_code AND l2.deleted = 0
+                  WHERE pi.warehouse_id = a.warehouse_id AND l2.rack_no = a.rack_no AND pi.quantity &gt; 0) AS occupiedCount
+        FROM wms_rack_assignment a
+        WHERE a.wms_tenant_id = #{wmsTenantId}
+          AND a.warehouse_id = #{warehouseId}
+          AND a.effective_from &lt;= #{today}
+          AND (a.effective_to IS NULL OR a.effective_to &gt;= #{today})
+        ORDER BY a.rack_no
+    </select>
+
+    <select id="listOwners" resultType="com.erp.admin.wms.model.vo.StorageOverviewVO$OwnerRow">
+        SELECT pi.erp_tenant_id                    AS erpTenantId,
+               t.tenant_name                       AS ownerName,
+               COUNT(DISTINCT pi.location_code)     AS occupiedLocations,
+               COALESCE(SUM(pi.quantity), 0)        AS onHandQty,
+               COUNT(DISTINCT pi.sku_code)          AS skuCount
+        FROM wms_physical_inventory pi
+        JOIN wms_location l ON l.warehouse_id = pi.warehouse_id
+             AND l.location_code = pi.location_code AND l.deleted = 0
+        JOIN wms_rack_assignment a ON a.warehouse_id = pi.warehouse_id AND a.rack_no = l.rack_no
+             AND a.wms_tenant_id = #{wmsTenantId}
+             AND a.effective_from &lt;= #{today}
+             AND (a.effective_to IS NULL OR a.effective_to &gt;= #{today})
+        LEFT JOIN sys_tenant t ON t.id = pi.erp_tenant_id
+        WHERE pi.warehouse_id = #{warehouseId} AND pi.quantity &gt; 0
+        GROUP BY pi.erp_tenant_id, t.tenant_name
+        ORDER BY onHandQty DESC
+    </select>
+
+</mapper>

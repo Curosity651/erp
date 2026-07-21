@@ -1,0 +1,82 @@
+spring:
+  # 邮件配置
+  mail:
+    host: smtp.example.com
+    port: 465
+    username: alert@example.com
+    password: your-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+    default-encoding: UTF-8
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3307/erp?rewriteBatchedStatements=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+    username: root
+    password: '123456'
+    # HikariCP 连接池配置（2C4G 服务器优化）
+    hikari:
+      pool-name: ERP-HikariPool
+      # 连接池大小：2核CPU建议 10-15，考虑到有外部HTTP调用场景适当增加
+      maximum-pool-size: 15
+      minimum-idle: 5
+      # 连接获取超时：10秒，快速失败避免请求堆积
+      connection-timeout: 10000
+      # 空闲连接超时：5分钟后回收
+      idle-timeout: 300000
+      # 连接最大存活时间：25分钟（小于MySQL wait_timeout 8小时）
+      max-lifetime: 1500000
+      # 连接泄漏检测：30秒（开发环境开启，生产可关闭）
+      leak-detection-threshold: 30000
+      # 连接验证超时
+      validation-timeout: 5000
+      # 连接测试查询（MySQL 8.0+ 可省略，HikariCP 会自动使用 Connection.isValid()）
+      # connection-test-query: SELECT 1
+  redis:
+    host: 127.0.0.1
+    password: ''
+    port: 6379
+
+
+ballcat:
+  oss:
+    endpoint: http://oss-cn-shanghai.aliyuncs.com
+    access-key: your-access-key-id-here
+    access-secret: your-access-key-secret-here
+    bucket: your-bucket-name-here
+
+aliyun:
+  oss:
+    access-key-id: your-access-key-id-here
+    access-key-secret: your-access-key-secret-here
+    buckets:
+      public-files:
+        bucket-name: your-public-bucket-name
+        storage-type: PUBLIC
+        endpoint: oss-cn-shanghai.aliyuncs.com
+        region: cn-shanghai
+        path-prefix: uploads/
+        cdn-domain:
+        enable-https: true
+        sts-endpoint: sts.cn-shanghai.aliyuncs.com
+        role-arn: your-role-arn
+        sign-expire-seconds: 1800
+      private-files:
+        bucket-name: your-private-bucket-name
+        storage-type: PRIVATE
+        endpoint: oss-cn-shanghai.aliyuncs.com
+        region: cn-shanghai
+        path-prefix: private/
+        enable-https: true
+        sts-endpoint: sts.cn-shanghai.aliyuncs.com
+        role-arn: your-role-arn
+        sign-expire-seconds: 1800
+        signed-url-expire-seconds: 1800
+
+springdoc:
+  swagger-ui:
+    urls:
+      - { name: 'admin', url: '/v3/api-docs' }
+      - { name: 'api', url: 'http://ballcat-api/v3/api-docs' }

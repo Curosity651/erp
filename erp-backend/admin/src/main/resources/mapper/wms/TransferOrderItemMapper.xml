@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.TransferOrderItemMapper">
+
+    <!-- 批量查询调拨单明细（返回原始数据，Service层聚合生成摘要） -->
+    <select id="selectItemSummaryByIds" resultType="com.erp.admin.wms.model.vo.TransferOrderStatsVO">
+        SELECT
+            transfer_order_id AS transferOrderId,
+            sku_code AS skuCode,
+            quantity
+        FROM wms_transfer_order_item
+        WHERE transfer_order_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY transfer_order_id, id
+    </select>
+
+</mapper>

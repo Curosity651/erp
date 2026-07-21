@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.ReturnQcMapper">
+
+    <sql id="baseColumns">
+        o.id,
+        o.return_no AS returnNo,
+        o.erp_tenant_id AS erpTenantId,
+        t.tenant_name AS ownerName,
+        t.parent_wms_tenant_id AS operatorId,
+        op.tenant_name AS operatorName,
+        o.warehouse_id AS warehouseId,
+        w.warehouse_name AS warehouseName,
+        GREATEST((SELECT COUNT(*) FROM wms_return_qc_item ri WHERE ri.return_order_id = o.id), 1) AS skuKinds,
+        o.total_quantity AS totalQty,
+        o.return_status AS status,
+        DATE_FORMAT(o.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+    </sql>
+
+    <select id="pageOrders" resultType="com.erp.admin.wms.model.vo.ReturnOrderVO">
+        SELECT
+        <include refid="baseColumns"/>
+        FROM wms_return_inbound_order o
+        LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        LEFT JOIN wms_warehouse w ON w.id = o.warehouse_id
+        <where>
+            o.deleted = 0
+            <if test="qo.returnNo != null and qo.returnNo != ''">
+                AND o.return_no LIKE CONCAT('%', #{qo.returnNo}, '%')
+            </if>
+            <if test="qo.erpTenantId != null">
+                AND o.erp_tenant_id = #{qo.erpTenantId}
+            </if>
+            <if test="qo.wmsTenantId != null">
+                AND t.parent_wms_tenant_id = #{qo.wmsTenantId}
+            </if>
+            <if test="qo.createTimeStart != null">
+                AND DATE(o.create_time) &gt;= #{qo.createTimeStart}
+            </if>
+            <if test="qo.createTimeEnd != null">
+                AND DATE(o.create_time) &lt;= #{qo.createTimeEnd}
+            </if>
+            <if test="qo.dbStatuses != null and qo.dbStatuses.size() > 0">
+                AND o.return_status IN
+                <foreach collection="qo.dbStatuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+            </if>
+        </where>
+        ORDER BY o.create_time DESC
+    </select>
+
+    <select id="selectOrderById" resultType="com.erp.admin.wms.model.vo.ReturnOrderVO">
+        SELECT
+        <include refid="baseColumns"/>
+        FROM wms_return_inbound_order o
+        LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        LEFT JOIN wms_warehouse w ON w.id = o.warehouse_id
+        WHERE o.id = #{id} AND o.deleted = 0
+    </select>
+
+</mapper>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.AdjustmentMapper">
+
+    <!-- 分页查询（简单查询，不含统计字段） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.AdjustmentPageVO">
+        SELECT
+            ao.id,
+            ao.adjustment_no,
+            ao.adjustment_type,
+            ao.warehouse_id,
+            w.warehouse_name,
+            ao.erp_tenant_id,
+            t.tenant_name AS owner_name,
+            t.parent_wms_tenant_id AS wms_tenant_id,
+            op.tenant_name AS operator_name,
+            ao.adjustment_date,
+            ao.order_status,
+            ao.adjustment_reason,
+            ao.reject_reason,
+            ao.confirm_time,
+            ao.create_time
+        FROM wms_adjustment_order ao
+        LEFT JOIN wms_warehouse w ON ao.warehouse_id = w.id
+        LEFT JOIN sys_tenant t ON t.id = ao.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        <where>
+            AND ao.deleted = 0
+            <if test="qo.adjustmentNo != null and qo.adjustmentNo != ''">
+                AND ao.adjustment_no LIKE CONCAT('%', #{qo.adjustmentNo}, '%')
+            </if>
+            <if test="qo.warehouseId != null">
+                AND ao.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.erpTenantId != null">
+                AND ao.erp_tenant_id = #{qo.erpTenantId}
+            </if>
+            <if test="qo.wmsTenantId != null">
+                AND t.parent_wms_tenant_id = #{qo.wmsTenantId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND ao.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.adjustmentDateStart != null">
+                AND ao.adjustment_date &gt;= #{qo.adjustmentDateStart}
+            </if>
+            <if test="qo.adjustmentDateEnd != null">
+                AND ao.adjustment_date &lt;= #{qo.adjustmentDateEnd}
+            </if>
+        </where>
+        ORDER BY ao.create_time DESC
+    </select>
+
+    <!-- 批量查询调整单统计信息（SKU数量和调整总数量） -->
+    <select id="selectStatsByIds" resultType="com.erp.admin.wms.model.vo.AdjustmentStatsVO">
+        SELECT
+            adjustment_order_id AS adjustmentOrderId,
+            COUNT(*) AS skuCount,
+            COALESCE(SUM(quantity), 0) AS totalQuantity
+        FROM wms_adjustment_order_item
+        WHERE adjustment_order_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY adjustment_order_id
+    </select>
+
+    <!-- 查询调整单详情 -->
+    <select id="selectDetailById" resultType="com.erp.admin.wms.model.vo.AdjustmentDetailVO">
+        SELECT
+            ao.id,
+            ao.adjustment_no,
+            ao.adjustment_type,
+            ao.warehouse_id,
+            w.warehouse_name,
+            ao.erp_tenant_id,
+            t.tenant_name AS owner_name,
+            ao.adjustment_date,
+            ao.order_status,
+            ao.adjustment_reason,
+            ao.reject_reason,
+            ao.confirm_time,
+            ao.create_time
+        FROM wms_adjustment_order ao
+        LEFT JOIN wms_warehouse w ON ao.warehouse_id = w.id
+        LEFT JOIN sys_tenant t ON t.id = ao.erp_tenant_id
+        WHERE ao.id = #{id} AND ao.deleted = 0
+    </select>
+
+    <!-- 查询今日调整单数量（用于生成单号） -->
+    <select id="countTodayOrders" resultType="int">
+        SELECT COUNT(*)
+        FROM wms_adjustment_order
+        WHERE adjustment_no LIKE CONCAT(#{prefix}, '%') AND deleted = 0
+    </select>
+
+</mapper>

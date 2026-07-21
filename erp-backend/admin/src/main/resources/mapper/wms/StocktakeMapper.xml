@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.StocktakeMapper">
+
+    <!-- 分页查询（简单查询，不含统计字段） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.StocktakePageVO">
+        SELECT
+            so.id,
+            so.stocktake_no,
+            so.warehouse_id,
+            w.warehouse_name,
+            so.stocktake_date,
+            so.stocktake_scope,
+            so.stocktake_mode,
+            so.freeze_mode,
+            so.blind_count,
+            so.order_status,
+            so.confirm_time,
+            so.confirm_by,
+            cu.nickname AS confirm_by_name,
+            so.create_by,
+            u.nickname AS create_by_name,
+            so.create_time
+        FROM wms_stocktake_order so
+        LEFT JOIN wms_warehouse w ON so.warehouse_id = w.id
+        LEFT JOIN sys_user u ON so.create_by = u.user_id
+        LEFT JOIN sys_user cu ON so.confirm_by = cu.user_id
+        <where>
+            AND so.deleted = 0
+            <if test="qo.stocktakeNo != null and qo.stocktakeNo != ''">
+                AND so.stocktake_no LIKE CONCAT('%', #{qo.stocktakeNo}, '%')
+            </if>
+            <if test="qo.warehouseId != null">
+                AND so.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND so.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.stocktakeDateStart != null">
+                AND so.stocktake_date &gt;= #{qo.stocktakeDateStart}
+            </if>
+            <if test="qo.stocktakeDateEnd != null">
+                AND so.stocktake_date &lt;= #{qo.stocktakeDateEnd}
+            </if>
+        </where>
+        ORDER BY so.create_time DESC
+    </select>
+
+    <!-- 批量查询盘点单统计信息（SKU数量和差异数量） -->
+    <select id="selectStatsByIds" resultType="com.erp.admin.wms.model.vo.StocktakeStatsVO">
+        SELECT
+            stocktake_order_id AS stocktakeOrderId,
+            COUNT(*) AS skuCount,
+            SUM(CASE WHEN diff_quantity IS NOT NULL AND diff_quantity != 0 THEN 1 ELSE 0 END) AS diffCount,
+			SUM(CASE WHEN stocktake_status = 'COUNTED' THEN 1 ELSE 0 END) AS countedCount
+		FROM wms_stocktake_order_item
+        WHERE stocktake_order_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY stocktake_order_id
+    </select>
+
+    <!-- 查询盘点单详情 -->
+    <select id="selectDetailById" resultType="com.erp.admin.wms.model.vo.StocktakeDetailVO">
+        SELECT
+            so.id,
+            so.stocktake_no,
+            so.warehouse_id,
+            w.warehouse_name,
+            so.stocktake_date,
+            so.stocktake_scope,
+            so.stocktake_mode,
+            so.freeze_mode,
+            so.blind_count,
+            so.order_status,
+            so.confirm_time,
+            so.confirm_by,
+            cu.nickname AS confirm_by_name,
+            so.remark,
+            so.create_by,
+            u.nickname AS create_by_name,
+            so.create_time
+        FROM wms_stocktake_order so
+        LEFT JOIN wms_warehouse w ON so.warehouse_id = w.id
+        LEFT JOIN sys_user u ON so.create_by = u.user_id
+        LEFT JOIN sys_user cu ON so.confirm_by = cu.user_id
+        WHERE so.id = #{id} AND so.deleted = 0
+    </select>
+
+    <!-- 查询今日盘点单数量（用于生成单号） -->
+    <select id="countTodayOrders" resultType="int">
+        SELECT COUNT(*)
+        FROM wms_stocktake_order
+        WHERE stocktake_no LIKE CONCAT(#{prefix}, '%') AND deleted = 0
+    </select>
+
+</mapper>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.platform.finance.mapper.WmsMonthlyBillMapper">
+
+    <sql id="baseColumns">
+        b.id,
+        b.bill_month AS billMonth,
+        b.wms_tenant_id AS wmsTenantId,
+        t.tenant_name AS wmsTenantName,
+        b.rack_fee AS rackFee,
+        b.inbound_fee AS inboundFee,
+        b.outbound_fee AS outboundFee,
+        b.delivery_fee AS deliveryFee,
+        b.return_fee AS returnFee,
+        b.inspection_fee AS inspectionFee,
+        b.driver_fee AS driverFee,
+        b.total_amount AS totalAmount,
+        b.status,
+        DATE_FORMAT(b.confirmed_time, '%Y-%m-%d %H:%i:%s') AS confirmedTime,
+        DATE_FORMAT(b.paid_time, '%Y-%m-%d %H:%i:%s') AS paidTime,
+        b.remark
+    </sql>
+
+    <select id="pageBills" resultType="com.erp.admin.platform.finance.model.vo.MonthlyBillVO">
+        SELECT
+        <include refid="baseColumns"/>
+        FROM wms_monthly_bill b
+        LEFT JOIN sys_tenant t ON t.id = b.wms_tenant_id
+        <where>
+            b.deleted = 0
+            <if test="qo.billMonthStart != null and qo.billMonthStart != ''">
+                AND b.bill_month &gt;= #{qo.billMonthStart}
+            </if>
+            <if test="qo.billMonthEnd != null and qo.billMonthEnd != ''">
+                AND b.bill_month &lt;= #{qo.billMonthEnd}
+            </if>
+            <if test="qo.wmsTenantId != null">
+                AND b.wms_tenant_id = #{qo.wmsTenantId}
+            </if>
+            <if test="qo.statuses != null and qo.statuses.size() > 0">
+                AND b.status IN
+                <foreach collection="qo.statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+            </if>
+        </where>
+        ORDER BY b.bill_month DESC, b.wms_tenant_id ASC
+    </select>
+
+    <select id="selectVoById" resultType="com.erp.admin.platform.finance.model.vo.MonthlyBillVO">
+        SELECT
+        <include refid="baseColumns"/>
+        FROM wms_monthly_bill b
+        LEFT JOIN sys_tenant t ON t.id = b.wms_tenant_id
+        WHERE b.id = #{id} AND b.deleted = 0
+    </select>
+
+    <select id="sumRackFee" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(monthly_fee), 0)
+        FROM wms_rack_assignment
+        WHERE wms_tenant_id = #{wmsTenantId}
+          AND effective_from &lt;= #{monthEnd}
+          AND (effective_to IS NULL OR effective_to &gt;= #{monthStart})
+    </select>
+
+    <select id="sumFeeByType" resultType="com.erp.admin.platform.finance.model.vo.FeeAmountRow">
+        SELECT fee_type AS feeType, COALESCE(SUM(amount), 0) AS amount
+        FROM wms_billing_record
+        WHERE wms_tenant_id = #{wmsTenantId} AND bill_month = #{billMonth}
+        GROUP BY fee_type
+    </select>
+
+    <select id="selectWmsOperatorIds" resultType="java.lang.Long">
+        SELECT id FROM sys_tenant
+        WHERE tenant_type = 'WMS_OPERATOR' AND deleted = 0 AND status = 1
+        ORDER BY id
+    </select>
+
+    <select id="selectDiscountPct" resultType="java.math.BigDecimal">
+        SELECT discount_pct FROM wms_tenant_rate_discount
+        WHERE wms_tenant_id = #{wmsTenantId}
+        ORDER BY id DESC LIMIT 1
+    </select>
+
+</mapper>

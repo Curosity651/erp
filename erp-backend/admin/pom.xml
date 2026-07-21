@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<parent>
+		<groupId>com.erp</groupId>
+		<artifactId>parent</artifactId>
+		<version>${revision}</version>
+	</parent>
+	<modelVersion>4.0.0</modelVersion>
+
+	<artifactId>admin</artifactId>
+	<packaging>jar</packaging>
+
+	<properties>
+		<knife4j.version>3.0.3</knife4j.version>
+		<tianai-captcha.version>1.4.1</tianai-captcha.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.ballcat.business</groupId>
+			<artifactId>ballcat-admin-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.ballcat.business</groupId>
+			<artifactId>ballcat-admin-websocket</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.ballcat</groupId>
+			<artifactId>ballcat-spring-security</artifactId>
+		</dependency>
+
+		<!--mysql驱动-->
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+		</dependency>
+
+		<!-- openapi 扩展处理 -->
+		<dependency>
+			<groupId>org.ballcat</groupId>
+			<artifactId>ballcat-spring-boot-starter-openapi</artifactId>
+		</dependency>
+		<!-- excel 扩展处理 -->
+		<dependency>
+			<groupId>org.ballcat</groupId>
+			<artifactId>ballcat-spring-boot-starter-fastexcel</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-security</artifactId>
+		</dependency>
+		<!-- swagger 增强版 ui -->
+		<dependency>
+			<groupId>com.github.xiaoymin</groupId>
+			<artifactId>knife4j-springdoc-ui</artifactId>
+			<version>${knife4j.version}</version>
+		</dependency>
+
+		<!-- tianai 图形验证码 -->
+		<dependency>
+			<groupId>cloud.tianai.captcha</groupId>
+			<artifactId>tianai-captcha-springboot-starter</artifactId>
+			<version>${tianai-captcha.version}</version>
+		</dependency>
+
+		<!-- API, java.xml.bind module -->
+		<!-- add it when jdk11 -->
+		<dependency>
+			<groupId>jakarta.xml.bind</groupId>
+			<artifactId>jakarta.xml.bind-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.glassfish.jaxb</groupId>
+			<artifactId>jaxb-runtime</artifactId>
+		</dependency>
+
+
+		<!-- https://mvnrepository.com/artifact/com.aliyun/credentials-java -->
+		<dependency>
+			<groupId>com.aliyun.oss</groupId>
+			<artifactId>aliyun-sdk-oss</artifactId>
+			<version>3.17.4</version>
+		</dependency>
+		<!-- PDF 生成（用于面单合并） -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>2.0.27</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.aliyun</groupId>
+			<artifactId>sts20150401</artifactId>
+			<version>1.1.6</version>
+		</dependency>
+
+
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
+		</dependency>
+
+		<!-- OkHttp for image preloading -->
+		<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp</artifactId>
+			<version>4.12.0</version>
+		</dependency>
+
+		<!-- 邮件发送 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
+		<!-- 单元测试（JUnit5 + AssertJ + Mockito，版本由 Spring Boot 2.7.18 管理） -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<version>2.7.18</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.tenant.mapper.TenantRoleMapper">
+
+    <!--
+      按身份类型取允许的菜单 id 集合（递归 sys_menu 子树）。与 menu-filter.ts / 迁移脚本 V20 严格一致。
+      系统管理(100000) 子模块：用户100100/角色100200/组织100700/字典100500/配置100400/菜单权限100800/店铺101100/项目组100900/岗位101000。
+        ERP_USER         : 商品130000/订单140000/财务150000/仓储160000/库存165000/日志110000/个人页10028 全子树
+                           + 系统{用户100100,角色100200,组织100700,店铺101100,项目组100900,岗位101000} + 数据分析{900100,900200} + 系统/数据分析容器
+        WMS_OPERATOR     : 服务商运营180000/个人页10028 + 系统{用户100100,角色100200} + 数据分析900400 + 容器
+        OVERSEAS_PLATFORM: 客户170700/仓库170400/作业170500/平台财务170600/日志110000/个人页10028
+                           + 系统{用户100100,角色100200,组织100700,字典100500,配置100400,菜单权限100800,项目组100900,岗位101000} + 数据分析900300 + 容器
+      字典100500/配置100400 仅海外仓平台可管（货主/服务商不含），与方案A一致。
+    -->
+    <select id="selectAllowedMenuIds" resultType="java.lang.Long">
+        <choose>
+            <when test="identityType == 'ERP_USER'">
+                WITH RECURSIVE inc AS (
+                    SELECT id FROM sys_menu WHERE id IN (130000,140000,150000,160000,165000,110000,10028,
+                        100100,100200,100700,101100,100900,101000, 900100,900200)
+                    UNION ALL SELECT m.id FROM sys_menu m JOIN inc ON m.parent_id = inc.id
+                )
+                SELECT id FROM inc
+                WHERE id NOT IN (162004, 162009, 162010, 162011, 162012)
+                UNION SELECT 100000 UNION SELECT 900000
+                -- 共享只读码：仓库查看160101/区域查看161601（页面下拉依赖；菜单仍被 menu-filter 隐藏）
+                UNION SELECT 160101 UNION SELECT 161601
+                -- 角色授权必需：菜单权限查询100801(system:menu:read)——grant-list 接口 @Authorize 要求；
+                -- 含容器100800仅为授权树结构完整(避免孤儿被 listToTree 丢弃)，页面仍被 menu-filter 隐藏，
+                -- 不授新增/修改/删除(100802-4)，货主/服务商无权改全局 sys_menu。
+                UNION SELECT 100800 UNION SELECT 100801
+            </when>
+            <when test="identityType == 'WMS_OPERATOR'">
+                WITH RECURSIVE inc AS (
+                    SELECT id FROM sys_menu WHERE id IN (180000,10028,100100,100200,900400)
+                    UNION ALL SELECT m.id FROM sys_menu m JOIN inc ON m.parent_id = inc.id
+                )
+                SELECT id FROM inc
+                UNION SELECT 100000 UNION SELECT 900000
+                -- 共享只读码：仓库查看160101/区域查看161601（货架库存等页面依赖）
+                UNION SELECT 160101 UNION SELECT 161601
+                -- 角色授权必需：菜单权限查询100801(system:menu:read)——同 ERP_USER 说明
+                UNION SELECT 100800 UNION SELECT 100801
+            </when>
+            <when test="identityType == 'OVERSEAS_PLATFORM'">
+                WITH RECURSIVE inc AS (
+                    SELECT id FROM sys_menu WHERE id IN (170700,170400,170500,170600,110000,10028,
+                        100100,100200,100700,100500,100400,100800,100900,101000, 900300)
+                    UNION ALL SELECT m.id FROM sys_menu m JOIN inc ON m.parent_id = inc.id
+                )
+                SELECT id FROM inc
+                UNION SELECT 100000 UNION SELECT 900000
+            </when>
+            <otherwise>
+                SELECT NULL WHERE 1 = 0
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 铸造租户管理员角色（type=1 系统角色，租户内不可删；scope_type=1）。tenant_id 显式写入，配合 @InterceptorIgnore 不被回填。 -->
+    <insert id="insertTenantAdminRole">
+        INSERT INTO sys_role (name, code, tenant_id, type, scope_type, remarks, create_time)
+        VALUES (#{name}, #{code}, #{tenantId}, 1, 1, #{remarks}, NOW())
+    </insert>
+
+    <!-- 批量授菜单 -->
+    <insert id="insertRoleMenus">
+        INSERT INTO sys_role_menu (role_code, menu_id) VALUES
+        <foreach collection="menuIds" item="menuId" separator=",">
+            (#{roleCode}, #{menuId})
+        </foreach>
+    </insert>
+
+</mapper>

@@ -1,0 +1,469 @@
+package com.erp.admin.wms.service;
+
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.erp.admin.common.tenant.TenantContext;
+import com.erp.admin.tenant.service.TenantIdentityService;
+import com.erp.admin.wms.mapper.ReturnInboundMapper;
+import com.erp.admin.wms.mapper.ReturnQcMapper;
+import com.erp.admin.wms.mapper.WmsReturnQcItemMapper;
+import com.erp.admin.wms.model.dto.PutawayDTO;
+import com.erp.admin.wms.model.dto.ReturnQcDTO;
+import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
+import com.erp.admin.wms.model.entity.ReturnInboundOrder;
+import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsReturnQcItem;
+import com.erp.admin.wms.model.entity.WmsZone;
+import com.erp.admin.wms.model.enums.ReturnQcStatus;
+import com.erp.admin.wms.model.qo.ReturnQO;
+import com.erp.admin.wms.model.vo.ReturnOrderItemVO;
+import com.erp.admin.wms.model.vo.ReturnOrderVO;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.ballcat.common.core.exception.BusinessException;
+import org.ballcat.common.model.domain.PageParam;
+import org.ballcat.common.model.domain.PageResult;
+import org.ballcat.mybatisplus.toolkit.PageUtil;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 海外仓平台出库作业·退货质检（业务需求 1.4）。退货=带质检的重新入库。
+ *
+ * <p>基于既有 {@code wms_return_inbound_order}（附加 return_status 工作流）+ {@code wms_return_qc_item} 质检明细。
+ * PASS→退货区/标准区 GOOD 生成新批次（新 inbound_date，FIFO 重排，可分配）；FAIL→不良品区 DAMAGED（不可分配）。
+ * 批次生成复用 {@link WmsPhysicalInventoryService#putaway}（同事务聚合刷新 + 流水）。</p>
+ *
+ * @author erp
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ReturnQcService {
+
+    private static final List<String> ALL_SCOPE = Arrays.asList(
+            ReturnQcStatus.RETURN_PENDING.name(),
+            ReturnQcStatus.QC_PENDING.name(),
+            ReturnQcStatus.COMPLETED.name(),
+            ReturnQcStatus.CLOSED.name());
+
+    private static final String ZONE_RETURN = "RETURN";
+    private static final String ZONE_STANDARD = "STANDARD";
+    private static final String ZONE_DEFECTIVE = "DEFECTIVE";
+    private static final String PASS = "PASS";
+    private static final String FAIL = "FAIL";
+
+    private final ReturnQcMapper returnQcMapper;
+
+    private final ReturnInboundMapper returnInboundMapper;
+
+    private final WmsReturnQcItemMapper returnQcItemMapper;
+
+    private final WmsPhysicalInventoryService physicalInventoryService;
+
+    private final WmsLocationService wmsLocationService;
+
+    private final WmsZoneService wmsZoneService;
+
+    private final TenantIdentityService tenantIdentityService;
+
+    private final com.erp.admin.order.mapper.ErpOrderItemMapper erpOrderItemMapper;
+
+    private final com.erp.admin.order.mapper.ErpOrderMapper erpOrderMapper;
+
+    private final com.erp.admin.tenant.mapper.SysTenantMapper sysTenantMapper;
+
+    private final WmsRackAssignmentService wmsRackAssignmentService;
+
+    // ==================== 查询 ====================
+
+    public PageResult<ReturnOrderVO> page(PageParam pageParam, ReturnQO qo) {
+        assertPlatform();
+        if (qo.getStatus() != null && !qo.getStatus().isEmpty()) {
+            qo.setDbStatuses(java.util.Collections.singletonList(qo.getStatus()));
+        } else {
+            qo.setDbStatuses(ALL_SCOPE);
+        }
+        IPage<ReturnOrderVO> page = PageUtil.prodPage(pageParam);
+        returnQcMapper.pageOrders(page, qo);
+        return new PageResult<>(page.getRecords(), page.getTotal());
+    }
+
+    public ReturnOrderVO getDetail(Long id) {
+        assertPlatform();
+        ReturnOrderVO vo = returnQcMapper.selectOrderById(id);
+        Assert.notNull(vo, "退货单不存在");
+        vo.setItems(buildItems(id));
+        return vo;
+    }
+
+    // ==================== 收货 ====================
+
+    @Transactional(rollbackFor = Exception.class)
+    public void receive(ReturnReceiveDTO dto) {
+        assertPlatform();
+        ReturnInboundOrder order = returnInboundMapper.selectById(dto.getReturnOrderId());
+        Assert.notNull(order, "退货单不存在");
+        if (!ReturnQcStatus.RETURN_PENDING.name().equals(order.getReturnStatus())) {
+            throw new BusinessException(400, "仅待退货收货的单据可以收货");
+        }
+        Assert.notEmpty(dto.getItems(), "收货明细不能为空");
+
+        // 状态 CAS 抢占：RETURN_PENDING→QC_PENDING 原子推进，并发/双击收货只有一个赢家（消灭 TOCTOU，防重复建收货行）。
+        int claimed = returnInboundMapper.casReturnStatus(order.getId(),
+                ReturnQcStatus.RETURN_PENDING.name(), ReturnQcStatus.QC_PENDING.name());
+        if (claimed != 1) {
+            throw new BusinessException(400, "该退货单已收货或正在处理，请勿重复操作");
+        }
+
+        // 重置并按收货明细重建质检明细行（幂等：同单重复收货以最新为准）
+        List<WmsReturnQcItem> existing = returnQcItemMapper.selectByReturnOrderId(order.getId());
+        for (WmsReturnQcItem old : existing) {
+            returnQcItemMapper.deleteById(old.getId());
+        }
+        // 应退数 = 退货单头件数（本系统退货单为单 SKU 单据）
+        int expectedQty = nz(order.getTotalQuantity());
+        Set<String> seenSku = new HashSet<>();
+        for (ReturnReceiveDTO.ReceiveLine line : dto.getItems()) {
+            // H-5 守恒守卫①：收货 SKU 必须属于本退货单（单 SKU 单据只应是单头 SKU），杜绝注入任意 SKU 幽灵库存
+            Assert.isTrue(line.getSkuCode() != null && line.getSkuCode().equals(order.getSkuCode()),
+                    "收货 SKU 不属于本退货单: " + line.getSkuCode());
+            // 同一 SKU 不允许重复收货行
+            Assert.isTrue(seenSku.add(line.getSkuCode()), "同一 SKU 收货行重复: " + line.getSkuCode());
+            int received = nz(line.getReceivedQty());
+            // Zero receipt is handled by the explicit close action and must not enter QC_PENDING.
+            Assert.isTrue(received > 0, "实收数必须大于0；未收到货物请关闭退货单: " + line.getSkuCode());
+            Assert.isTrue(received <= expectedQty,
+                    String.format("实收数(%d)不能超过应退数(%d): %s", received, expectedQty, line.getSkuCode()));
+
+            WmsReturnQcItem item = new WmsReturnQcItem();
+            item.setReturnOrderId(order.getId());
+            item.setSkuCode(line.getSkuCode());
+            item.setElectronic(0);
+            item.setExpectedQty(expectedQty);
+            item.setReceivedQty(received);
+            returnQcItemMapper.insert(item);
+        }
+        // 状态已在方法开头 CAS 抢占为 QC_PENDING，此处不再重复无条件写。
+        log.info("退货收货完成, returnId={}, lines={}", order.getId(), dto.getItems().size());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void close(Long returnOrderId) {
+        assertPlatform();
+        Assert.notNull(returnInboundMapper.selectById(returnOrderId), "退货单不存在");
+        int closed = returnInboundMapper.casReturnStatus(returnOrderId,
+                ReturnQcStatus.RETURN_PENDING.name(), ReturnQcStatus.CLOSED.name());
+        if (closed != 1) {
+            throw new BusinessException(400, "仅待收货的退货单可以按未收到/拒收关闭");
+        }
+        log.info("退货单按未收到/拒收关闭, returnId={}", returnOrderId);
+    }
+
+    // ==================== 质检 + 上架 ====================
+
+    @Transactional(rollbackFor = Exception.class)
+    public void qc(ReturnQcDTO dto) {
+        assertPlatform();
+        ReturnInboundOrder order = returnInboundMapper.selectById(dto.getReturnOrderId());
+        Assert.notNull(order, "退货单不存在");
+        if (!ReturnQcStatus.QC_PENDING.name().equals(order.getReturnStatus())) {
+            throw new BusinessException(400, "仅待质检的单据可以质检");
+        }
+        Assert.notEmpty(dto.getLines(), "质检明细不能为空");
+
+        // 状态 CAS 抢占：QC_PENDING→COMPLETED 原子推进，并发/双击质检只有一个赢家（消灭 TOCTOU，防同一退货双份上架翻倍）。
+        // 落败者在此即被挡下、不执行后续 putaway；本事务后续任何异常回滚也会一并撤销该状态推进。
+        int claimed = returnInboundMapper.casReturnStatus(order.getId(),
+                ReturnQcStatus.QC_PENDING.name(), ReturnQcStatus.COMPLETED.name());
+        if (claimed != 1) {
+            throw new BusinessException(400, "该退货单已质检或正在处理，请勿重复操作");
+        }
+
+        Map<String, WmsReturnQcItem> itemBySku = new HashMap<>();
+        for (WmsReturnQcItem it : returnQcItemMapper.selectByReturnOrderId(order.getId())) {
+            itemBySku.put(it.getSkuCode(), it);
+        }
+        // 分区类型 → zoneId
+        Map<String, Long> zoneIdByType = new HashMap<>();
+        for (WmsZone z : wmsZoneService.listByWarehouse(order.getWarehouseId())) {
+            zoneIdByType.putIfAbsent(z.getZoneType(), z.getId());
+        }
+        // 回库库位校验用：本仓库位表 + 已占用集合 + 本次提交去重（复用入库上架同一套独占口径，防幽灵批次/一库位多批次）
+        Map<String, WmsLocation> locByCode = wmsLocationService.listByWarehouse(order.getWarehouseId()).stream()
+                .filter(l -> l.getLocationCode() != null)
+                .collect(Collectors.toMap(WmsLocation::getLocationCode, l -> l, (a, b) -> a));
+        Set<String> occupied = new HashSet<>(physicalInventoryService.occupiedLocationCodes(order.getWarehouseId()));
+        Set<String> usedInThisSubmit = new HashSet<>();
+        // 货架归属：只能上到本货主父服务商在本仓当前有效租用的货架排（与前端库位下拉同口径，防绕过直接提交）
+        Set<String> allowedRacks = resolveAllowedRacks(order.getErpTenantId(), order.getWarehouseId());
+
+        int qualified = 0;
+        int unqualified = 0;
+        // H-4：同一 SKU 只能质检一行，防同 SKU 多行各自整批 putaway 致超量翻倍
+        Set<String> judgedSku = new HashSet<>();
+        for (ReturnQcDTO.ReturnQcLineDTO line : dto.getLines()) {
+            WmsReturnQcItem item = itemBySku.get(line.getSkuCode());
+            Assert.notNull(item, "质检明细缺少 SKU: " + line.getSkuCode());
+            Assert.isTrue(judgedSku.add(line.getSkuCode()), "同一 SKU 不能重复质检: " + line.getSkuCode());
+            int receivedQty = nz(item.getReceivedQty());
+            int qualifiedQty = nz(line.getQualifiedQty());
+            int damagedQty = nz(line.getDamagedQty());
+            Assert.isTrue(receivedQty > 0, "实收数为0，无法上架: " + line.getSkuCode());
+            Assert.isTrue(qualifiedQty >= 0 && damagedQty >= 0, "良品和残次品数量不能为负数");
+            Assert.isTrue(qualifiedQty + damagedQty == receivedQty,
+                    "良品数量与残次品数量之和必须等于实收数量: " + line.getSkuCode());
+
+            if (qualifiedQty > 0) {
+                String zone = line.getQualifiedZone();
+                Assert.isTrue(ZONE_RETURN.equals(zone) || ZONE_STANDARD.equals(zone),
+                        "良品分区须为退货区或标准区");
+                Long zoneId = zoneIdByType.get(zone);
+                validateLocation(line.getQualifiedLocationCode(), zone, zoneId, locByCode,
+                        occupied, usedInThisSubmit, allowedRacks);
+                putaway(order, line.getSkuCode(), qualifiedQty, "GOOD",
+                        line.getQualifiedLocationCode(), zoneId, 1);
+            }
+            if (damagedQty > 0) {
+                Long zoneId = zoneIdByType.get(ZONE_DEFECTIVE);
+                validateLocation(line.getDamagedLocationCode(), ZONE_DEFECTIVE, zoneId, locByCode,
+                        occupied, usedInThisSubmit, allowedRacks);
+                putaway(order, line.getSkuCode(), damagedQty, "DAMAGED",
+                        line.getDamagedLocationCode(), zoneId, 0);
+            }
+
+            item.setQualifiedQty(qualifiedQty);
+            item.setDamagedQty(damagedQty);
+            item.setQualifiedZone(qualifiedQty > 0 ? line.getQualifiedZone() : null);
+            item.setQualifiedLocationCode(qualifiedQty > 0 ? line.getQualifiedLocationCode() : null);
+            item.setDamagedLocationCode(damagedQty > 0 ? line.getDamagedLocationCode() : null);
+            item.setQcResult(qualifiedQty > 0 && damagedQty > 0 ? "MIXED" : qualifiedQty > 0 ? PASS : FAIL);
+            item.setZone(qualifiedQty > 0 && damagedQty == 0 ? line.getQualifiedZone()
+                    : damagedQty > 0 && qualifiedQty == 0 ? ZONE_DEFECTIVE : null);
+            item.setQuality(qualifiedQty > 0 && damagedQty == 0 ? "GOOD"
+                    : damagedQty > 0 && qualifiedQty == 0 ? "DAMAGED" : null);
+            item.setLocationCode(qualifiedQty > 0 && damagedQty == 0 ? line.getQualifiedLocationCode()
+                    : damagedQty > 0 && qualifiedQty == 0 ? line.getDamagedLocationCode() : null);
+            item.setQcRemark(line.getQcRemark());
+            item.setQcPhotos(joinPhotoIds(line.getPhotoFileIds()));
+            Assert.isTrue(returnQcItemMapper.updateById(item) == 1, "质检明细更新失败");
+
+            qualified += qualifiedQty;
+            unqualified += damagedQty;
+        }
+
+        // M-5：每个已收货 SKU 必须被质检覆盖（判定 SKU 集合 == 已收货明细集合），
+        // 防漏行货物永不入库、单据卡在 QC_PENDING 无法闭合。
+        Assert.isTrue(judgedSku.size() == itemBySku.size(),
+                "存在未质检的收货明细，请对全部收货 SKU 判定后再提交");
+
+        order.setQualifiedQuantity(qualified);
+        order.setUnqualifiedQuantity(unqualified);
+        order.setReturnStatus(ReturnQcStatus.COMPLETED.name());
+        returnInboundMapper.updateById(order);
+
+        // 质检完成才真正扣减订单「已退数量」（申报期不扣，货主侧只申报）。按实收量=合格+不合格累加。
+        int received = qualified + unqualified;
+        if (received > 0 && order.getOrderItemId() != null) {
+            // Platform users have tenant_id=-1. Temporarily switch to the return owner so the
+            // tenant interceptor can update that owner's ERP order rows without weakening isolation.
+            TenantContext.runAs(order.getErpTenantId(), () -> {
+                int itemUpdated = erpOrderItemMapper.updateReturnedQuantity(order.getOrderItemId(), received);
+                Assert.isTrue(itemUpdated == 1, "订单明细已退数量更新失败或超过原出库数量");
+                if (order.getErpOrderId() != null) {
+                    int orderUpdated = erpOrderMapper.updateReturnedQuantity(order.getErpOrderId(), received);
+                    Assert.isTrue(orderUpdated == 1, "订单已退数量更新失败或超过订单总数量");
+                }
+                return null;
+            });
+        } else if (order.getOrderItemId() == null) {
+            log.warn("退货单 {} 缺 orderItemId（历史申报），跳过已退数量回写", order.getId());
+        }
+        log.info("退货质检完成, returnId={}, qualified={}, unqualified={}, 回写已退数量={}",
+                order.getId(), qualified, unqualified, received);
+    }
+
+    private void validateLocation(String locationCode, String zone, Long zoneId,
+                                  Map<String, WmsLocation> locByCode, Set<String> occupied,
+                                  Set<String> usedInThisSubmit, Set<String> allowedRacks) {
+        Assert.hasText(locationCode, "请填写回库库位");
+        Assert.notNull(zoneId, "该仓库无对应分区: " + zone);
+        WmsLocation loc = locByCode.get(locationCode);
+        Assert.notNull(loc, "回库库位不存在于本仓: " + locationCode);
+        if (occupied.contains(locationCode) || !usedInThisSubmit.add(locationCode)) {
+            throw new BusinessException(400, "回库库位已被占用: " + locationCode);
+        }
+        Assert.isTrue(zoneId.equals(loc.getZoneId()),
+                "回库库位不属于所选分区(" + zone + "): " + locationCode);
+        Assert.isTrue(allowedRacks.contains(loc.getRackNo()),
+                "回库库位不在本货主可用货架排: " + locationCode);
+    }
+
+    private void putaway(ReturnInboundOrder order, String skuCode, int quantity, String quality,
+                         String locationCode, Long zoneId, int allocatable) {
+        PutawayDTO put = new PutawayDTO();
+        put.setWmsTenantId(0L);
+        put.setErpTenantId(order.getErpTenantId());
+        put.setWarehouseId(order.getWarehouseId());
+        put.setSkuCode(skuCode);
+        put.setInboundItemId(0L);
+        put.setQuantity(quantity);
+        put.setQuality(quality);
+        put.setLocationCode(locationCode);
+        put.setZoneId(zoneId);
+        put.setAllocatable(allocatable);
+        physicalInventoryService.putaway(put);
+    }
+
+    // ==================== 可用库位 ====================
+
+    /**
+     * 按「退货单所属仓库」+分区列出「未被占用」的可选库位（供质检上架下拉）。
+     * <p>仓库不由前端传入，而是从退货单取（该退货单所属货主申报时选定的仓库），
+     * 保证平台操作员只能选到本单对应仓库的库位，不能越权到其它仓库/货主。
+     * 质检口径：PASS→退货区(RETURN)，FAIL→次品区(DEFECTIVE)；仅平台身份可查。</p>
+     */
+    public List<String> listAvailableLocations(Long returnOrderId, String zoneType) {
+        assertPlatform();
+        Assert.notNull(returnOrderId, "退货单ID不能为空");
+        Assert.hasText(zoneType, "分区不能为空");
+        ReturnInboundOrder order = returnInboundMapper.selectById(returnOrderId);
+        Assert.notNull(order, "退货单不存在");
+        Long warehouseId = order.getWarehouseId();
+        Assert.notNull(warehouseId, "退货单未指定仓库");
+
+        // 货架归属：只允许上到「本退货单货主的父服务商」在本仓当前有效租用的货架排上（与入库上架同口径）。
+        // 任一环缺失 → 无可上架货架 → 空列表。
+        Set<String> allowedRacks = resolveAllowedRacks(order.getErpTenantId(), warehouseId);
+        if (allowedRacks.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Long zoneId = null;
+        for (WmsZone z : wmsZoneService.listByWarehouse(warehouseId)) {
+            if (zoneType.equals(z.getZoneType())) {
+                zoneId = z.getId();
+                break;
+            }
+        }
+        if (zoneId == null) {
+            return new ArrayList<>();
+        }
+        final Long zid = zoneId;
+        Set<String> occupied = new HashSet<>(physicalInventoryService.occupiedLocationCodes(warehouseId));
+        return wmsLocationService.listByWarehouse(warehouseId).stream()
+                .filter(l -> zid.equals(l.getZoneId()))
+                .filter(l -> allowedRacks.contains(l.getRackNo()))
+                .map(WmsLocation::getLocationCode)
+                .filter(code -> code != null && !code.isEmpty() && !occupied.contains(code))
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 该退货单可上架的货架排：货主(erp_tenant_id) → 父服务商(parent_wms_tenant_id) →
+     * 该仓当前有效租用的货架排号。任一环缺失返回空集。
+     */
+    private Set<String> resolveAllowedRacks(Long erpTenantId, Long warehouseId) {
+        if (erpTenantId == null) {
+            return new HashSet<>();
+        }
+        com.erp.admin.tenant.model.entity.SysTenant owner = sysTenantMapper.selectById(erpTenantId);
+        Long operatorId = owner == null ? null : owner.getParentWmsTenantId();
+        if (operatorId == null) {
+            return new HashSet<>();
+        }
+        return new HashSet<>(wmsRackAssignmentService.activeRackNos(warehouseId, operatorId));
+    }
+
+    // ==================== 组装 / 辅助 ====================
+
+    private List<ReturnOrderItemVO> buildItems(Long orderId) {
+        List<WmsReturnQcItem> items = returnQcItemMapper.selectByReturnOrderId(orderId);
+        List<ReturnOrderItemVO> result = new ArrayList<>();
+        if (!items.isEmpty()) {
+            for (WmsReturnQcItem it : items) {
+                ReturnOrderItemVO vo = new ReturnOrderItemVO();
+                vo.setSkuCode(it.getSkuCode());
+                vo.setElectronic(it.getElectronic() != null && it.getElectronic() == 1);
+                vo.setExpectedQty(it.getExpectedQty());
+                vo.setReceivedQty(it.getReceivedQty());
+                vo.setQualifiedQty(it.getQualifiedQty());
+                vo.setDamagedQty(it.getDamagedQty());
+                vo.setQualifiedZone(it.getQualifiedZone());
+                vo.setQualifiedLocationCode(it.getQualifiedLocationCode());
+                vo.setDamagedLocationCode(it.getDamagedLocationCode());
+                vo.setQcResult(it.getQcResult());
+                vo.setZone(it.getZone());
+                vo.setQuality(it.getQuality());
+                vo.setLocationCode(it.getLocationCode());
+                vo.setQcRemark(it.getQcRemark());
+                vo.setQcPhotoFileIds(parsePhotoIds(it.getQcPhotos()));
+                result.add(vo);
+            }
+            return result;
+        }
+        // 尚未收货：由退货单头合成单一明细（单SKU扁平结构）
+        ReturnInboundOrder order = returnInboundMapper.selectById(orderId);
+        if (order != null && order.getSkuCode() != null) {
+            ReturnOrderItemVO vo = new ReturnOrderItemVO();
+            vo.setSkuCode(order.getSkuCode());
+            vo.setElectronic(false);
+            vo.setExpectedQty(order.getTotalQuantity());
+            result.add(vo);
+        }
+        return result;
+    }
+
+    private static int nz(Integer v) {
+        return v == null ? 0 : v;
+    }
+
+    /** 质检照片文件ID列表 → CSV 存库（null/空返回 null，清空照片） */
+    private static String joinPhotoIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        return ids.stream()
+                .filter(id -> id != null)
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+
+    /** CSV → 质检照片文件ID列表，供只读回显 */
+    private static List<Long> parsePhotoIds(String csv) {
+        List<Long> ids = new ArrayList<>();
+        if (csv == null || csv.trim().isEmpty()) {
+            return ids;
+        }
+        for (String s : csv.split(",")) {
+            String t = s.trim();
+            if (t.isEmpty()) {
+                continue;
+            }
+            try {
+                ids.add(Long.valueOf(t));
+            } catch (NumberFormatException ignore) {
+                // 脏数据跳过，不影响回显
+            }
+        }
+        return ids;
+    }
+
+    private void assertPlatform() {
+        String identityType = tenantIdentityService.currentIdentity(null).getIdentityType();
+        if (!TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM.equals(identityType)) {
+            throw new BusinessException(403, "仅海外仓平台可执行退货质检");
+        }
+    }
+
+}

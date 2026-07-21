@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.LocationTransferOrderMapper">
+
+    <!-- 分页查询（联表出所属服务商/货主/仓库名） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.LocationTransferPageVO">
+        SELECT
+            o.id,
+            o.transfer_no,
+            o.warehouse_id,
+            w.warehouse_name,
+            o.erp_tenant_id,
+            t.tenant_name AS owner_name,
+            t.parent_wms_tenant_id AS wms_tenant_id,
+            op.tenant_name AS operator_name,
+            o.order_status,
+            o.remark,
+            o.complete_time,
+            o.create_time
+        FROM wms_location_transfer_order o
+        LEFT JOIN wms_warehouse w ON o.warehouse_id = w.id
+        LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        <where>
+            AND o.deleted = 0
+            <if test="qo.transferNo != null and qo.transferNo != ''">
+                AND o.transfer_no LIKE CONCAT('%', #{qo.transferNo}, '%')
+            </if>
+            <if test="qo.warehouseId != null">
+                AND o.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.erpTenantId != null">
+                AND o.erp_tenant_id = #{qo.erpTenantId}
+            </if>
+            <if test="qo.wmsTenantId != null">
+                AND t.parent_wms_tenant_id = #{qo.wmsTenantId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND o.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.createTimeStart != null">
+                AND DATE(o.create_time) &gt;= #{qo.createTimeStart}
+            </if>
+            <if test="qo.createTimeEnd != null">
+                AND DATE(o.create_time) &lt;= #{qo.createTimeEnd}
+            </if>
+        </where>
+        ORDER BY o.create_time DESC
+    </select>
+
+    <!-- 详情 -->
+    <select id="selectDetailById" resultType="com.erp.admin.wms.model.vo.LocationTransferDetailVO">
+        SELECT
+            o.id,
+            o.transfer_no,
+            o.warehouse_id,
+            w.warehouse_name,
+            o.erp_tenant_id,
+            t.tenant_name AS owner_name,
+            t.parent_wms_tenant_id AS wms_tenant_id,
+            op.tenant_name AS operator_name,
+            o.order_status,
+            o.remark,
+            o.complete_time,
+            o.create_time
+        FROM wms_location_transfer_order o
+        LEFT JOIN wms_warehouse w ON o.warehouse_id = w.id
+        LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        WHERE o.id = #{id} AND o.deleted = 0
+    </select>
+
+    <!-- 今日单量（生成单号） -->
+    <select id="countTodayOrders" resultType="int">
+        SELECT COUNT(*)
+        FROM wms_location_transfer_order
+        WHERE transfer_no LIKE CONCAT(#{prefix}, '%') AND deleted = 0
+    </select>
+
+    <!-- 批量统计（明细行数、移动总数量） -->
+    <select id="selectStatsByIds" resultType="com.erp.admin.wms.model.vo.LocationTransferStatsVO">
+        SELECT
+            transfer_order_id AS transferOrderId,
+            COUNT(*) AS itemCount,
+            COALESCE(SUM(quantity), 0) AS totalQuantity
+        FROM wms_location_transfer_item
+        WHERE transfer_order_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY transfer_order_id
+    </select>
+
+</mapper>

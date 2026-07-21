@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.PurchaseInboundMapper">
+
+    <!-- 分页查询（主表 + 字典表，物流商名称在Service层聚合） -->
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.PurchaseInboundPageVO">
+        SELECT
+            pio.id,
+            pio.inbound_no,
+            pio.return_type,
+            pio.ref_no,
+            pio.shipping_order_id,
+            so.shipping_no AS shipping_order_no,
+            so.provider_id,
+            pio.erp_tenant_id,
+            pio.warehouse_id,
+            w.warehouse_name,
+            pio.inbound_date,
+            pio.order_status,
+            pio.create_time
+        FROM wms_purchase_inbound_order pio
+        LEFT JOIN wms_shipping_order so ON pio.shipping_order_id = so.id
+        LEFT JOIN wms_warehouse w ON pio.warehouse_id = w.id
+        <where>
+            pio.deleted = 0
+            <if test="qo.inboundNo != null and qo.inboundNo != ''">
+                AND pio.inbound_no LIKE CONCAT('%', #{qo.inboundNo}, '%')
+            </if>
+            <if test="qo.shippingOrderNo != null and qo.shippingOrderNo != ''">
+                AND so.shipping_no LIKE CONCAT('%', #{qo.shippingOrderNo}, '%')
+            </if>
+            <if test="qo.purchaseOrderNo != null and qo.purchaseOrderNo != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_purchase_inbound_order_item pioi
+                    INNER JOIN wms_purchase_order po ON pioi.purchase_order_id = po.id
+                    WHERE pioi.inbound_order_id = pio.id
+                    AND po.order_no LIKE CONCAT('%', #{qo.purchaseOrderNo}, '%')
+                )
+            </if>
+            <if test="qo.warehouseId != null">
+                AND pio.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND pio.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.orderStatuses != null and qo.orderStatuses.size() > 0">
+                AND pio.order_status IN
+                <foreach collection="qo.orderStatuses" item="st" open="(" separator="," close=")">
+                    #{st}
+                </foreach>
+            </if>
+            <if test="qo.sourceType != null and qo.sourceType != ''">
+                AND pio.source_type = #{qo.sourceType}
+            </if>
+            <if test="qo.returnType != null and qo.returnType != ''">
+                AND pio.return_type = #{qo.returnType}
+            </if>
+            <if test="qo.erpTenantId != null">
+                AND pio.erp_tenant_id = #{qo.erpTenantId}
+            </if>
+            <if test="qo.wmsTenantId != null">
+                AND EXISTS (
+                    SELECT 1 FROM sys_tenant ot
+                    WHERE ot.id = pio.erp_tenant_id
+                    AND ot.parent_wms_tenant_id = #{qo.wmsTenantId}
+                )
+            </if>
+            <if test="qo.inboundDateStart != null">
+                AND pio.inbound_date &gt;= #{qo.inboundDateStart}
+            </if>
+            <if test="qo.inboundDateEnd != null">
+                AND pio.inbound_date &lt;= #{qo.inboundDateEnd}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_purchase_inbound_order_item pioi
+                    WHERE pioi.inbound_order_id = pio.id
+                    AND pioi.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY pio.create_time DESC
+    </select>
+
+    <!-- 查询入库单详情 -->
+    <select id="selectDetailById" resultType="com.erp.admin.wms.model.vo.PurchaseInboundDetailVO">
+        SELECT
+            pio.id,
+            pio.inbound_no,
+            pio.return_type,
+            pio.ref_no,
+            pio.shipping_order_id,
+            so.shipping_no AS shipping_order_no,
+            pio.warehouse_id,
+            w.warehouse_name,
+            pio.inbound_date,
+            pio.order_status,
+            pio.remark,
+            pio.create_by,
+            su.nickname AS create_by_name,
+            pio.create_time
+        FROM wms_purchase_inbound_order pio
+        LEFT JOIN wms_shipping_order so ON pio.shipping_order_id = so.id
+        LEFT JOIN wms_warehouse w ON pio.warehouse_id = w.id
+        LEFT JOIN sys_user su ON pio.create_by = su.user_id
+        WHERE pio.id = #{id} AND pio.deleted = 0
+    </select>
+
+    <!-- 根据入库单号查询（用于唯一性校验） -->
+    <select id="selectByInboundNo" resultType="com.erp.admin.wms.model.entity.PurchaseInboundOrder">
+        SELECT * FROM wms_purchase_inbound_order
+        WHERE inbound_no = #{inboundNo} AND deleted = 0
+        <if test="excludeId != null">
+            AND id != #{excludeId}
+        </if>
+        LIMIT 1
+    </select>
+
+
+    <!-- 查询物流单待入库明细 -->
+    <select id="selectShippingItemsForInbound" resultType="com.erp.admin.wms.model.vo.ShippingItemForInboundVO">
+        SELECT
+            soi.id AS shipping_order_item_id,
+            soi.purchase_order_id,
+            po.order_no AS purchase_order_no,
+            soi.purchase_order_item_id,
+            soi.sku_code,
+            soi.quantity AS shipped_quantity,
+            soi.received_quantity,
+            (soi.quantity - soi.received_quantity - soi.inbound_reserved_quantity) AS pending_quantity,
+            po.expected_delivery_date
+        FROM wms_shipping_order_item soi
+        INNER JOIN wms_purchase_order po ON soi.purchase_order_id = po.id
+        WHERE soi.shipping_order_id = #{shippingOrderId}
+        AND soi.quantity > soi.received_quantity + soi.inbound_reserved_quantity
+        ORDER BY po.expected_delivery_date ASC, po.order_no ASC, soi.id ASC
+    </select>
+
+    <!-- 导出列表查询（主表 + 字典表，物流商名称在Service层聚合） -->
+    <select id="selectListForExport" resultType="com.erp.admin.wms.model.vo.PurchaseInboundPageVO">
+        SELECT
+            pio.id,
+            pio.inbound_no,
+            pio.return_type,
+            pio.ref_no,
+            pio.shipping_order_id,
+            so.shipping_no AS shipping_order_no,
+            so.provider_id,
+            pio.warehouse_id,
+            w.warehouse_name,
+            pio.inbound_date,
+            pio.order_status,
+            pio.create_time
+        FROM wms_purchase_inbound_order pio
+        LEFT JOIN wms_shipping_order so ON pio.shipping_order_id = so.id
+        LEFT JOIN wms_warehouse w ON pio.warehouse_id = w.id
+        <where>
+            pio.deleted = 0
+            <if test="qo.inboundNo != null and qo.inboundNo != ''">
+                AND pio.inbound_no LIKE CONCAT('%', #{qo.inboundNo}, '%')
+            </if>
+            <if test="qo.shippingOrderNo != null and qo.shippingOrderNo != ''">
+                AND so.shipping_no LIKE CONCAT('%', #{qo.shippingOrderNo}, '%')
+            </if>
+            <if test="qo.purchaseOrderNo != null and qo.purchaseOrderNo != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_purchase_inbound_order_item pioi
+                    INNER JOIN wms_purchase_order po ON pioi.purchase_order_id = po.id
+                    WHERE pioi.inbound_order_id = pio.id
+                    AND po.order_no LIKE CONCAT('%', #{qo.purchaseOrderNo}, '%')
+                )
+            </if>
+            <if test="qo.warehouseId != null">
+                AND pio.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.orderStatus != null and qo.orderStatus != ''">
+                AND pio.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.sourceType != null and qo.sourceType != ''">
+                AND pio.source_type = #{qo.sourceType}
+            </if>
+            <if test="qo.returnType != null and qo.returnType != ''">
+                AND pio.return_type = #{qo.returnType}
+            </if>
+            <if test="qo.erpTenantId != null">
+                AND pio.erp_tenant_id = #{qo.erpTenantId}
+            </if>
+            <if test="qo.inboundDateStart != null">
+                AND pio.inbound_date &gt;= #{qo.inboundDateStart}
+            </if>
+            <if test="qo.inboundDateEnd != null">
+                AND pio.inbound_date &lt;= #{qo.inboundDateEnd}
+            </if>
+            <if test="qo.skuCode != null and qo.skuCode != ''">
+                AND EXISTS (
+                    SELECT 1 FROM wms_purchase_inbound_order_item pioi
+                    WHERE pioi.inbound_order_id = pio.id
+                    AND pioi.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY pio.create_time DESC
+    </select>
+
+    <!-- 根据物流单ID查询关联入库单 -->
+    <select id="selectByShippingOrderId" resultType="com.erp.admin.wms.model.vo.PurchaseInboundSimpleVO">
+        SELECT
+            pio.id,
+            pio.inbound_no,
+            pio.warehouse_id,
+            pio.inbound_date,
+            pio.order_status
+        FROM wms_purchase_inbound_order pio
+        WHERE pio.shipping_order_id = #{shippingOrderId}
+          AND pio.deleted = 0
+        ORDER BY pio.create_time DESC
+    </select>
+
+    <!-- 判断物流单是否存在已确认的入库单 -->
+    <select id="existsConfirmedByShippingOrderId" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1 FROM wms_purchase_inbound_order
+            WHERE shipping_order_id = #{shippingOrderId}
+              AND order_status IN ('RECEIVED', 'COMPLETED')
+              AND deleted = 0
+            LIMIT 1
+        )
+    </select>
+
+    <!-- 统计物流单已入库数量（按物流单ID分组） -->
+    <select id="sumInboundedQuantityByShippingOrderIds" resultType="com.erp.admin.wms.model.vo.ShippingOrderInboundedQuantityVO">
+        SELECT
+            pio.shipping_order_id AS shippingOrderId,
+            SUM(pioi.actual_quantity) AS inboundedQuantity
+        FROM wms_purchase_inbound_order pio
+        INNER JOIN wms_purchase_inbound_order_item pioi ON pio.id = pioi.inbound_order_id
+        WHERE pio.shipping_order_id IN
+        <foreach collection="shippingOrderIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND pio.order_status IN ('RECEIVED', 'COMPLETED')
+        AND pio.deleted = 0
+        GROUP BY pio.shipping_order_id
+    </select>
+
+</mapper>
