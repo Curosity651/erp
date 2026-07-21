@@ -6,6 +6,8 @@ import com.erp.admin.wms.model.qo.PurchaseInboundQO;
 import com.erp.admin.wms.model.vo.AvailableLocationVO;
 import com.erp.admin.wms.model.vo.PurchaseInboundDetailVO;
 import com.erp.admin.wms.model.vo.PurchaseInboundPageVO;
+import com.erp.admin.wms.model.vo.InboundPutawayPlanVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.service.PurchaseInboundService;
 import com.erp.admin.wms.service.WmsInboundExecutionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -67,6 +69,13 @@ public class WmsInboundExecutionController {
 		return ApiResult.ok(this.inboundExecutionService.listAvailableLocations(inboundOrderId, quality));
 	}
 
+	@Operation(summary = "Generate pallet split and three-level slot recommendation")
+	@GetMapping("/putaway-plan")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<InboundPutawayPlanVO> putawayPlan(@RequestParam Long inboundOrderId) {
+		return ApiResult.ok(inboundExecutionService.planPutaway(inboundOrderId));
+	}
+
 	@Operation(summary = "收货(录实收数量)")
 	@PostMapping("/receive")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
@@ -78,9 +87,8 @@ public class WmsInboundExecutionController {
 	@Operation(summary = "上架(分配库位写批次)")
 	@PostMapping("/putaway")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
-	public ApiResult<Void> putaway(@Validated @RequestBody InboundPutawayDTO dto) {
-		inboundExecutionService.putaway(dto);
-		return ApiResult.ok();
+	public ApiResult<List<PalletSummaryVO>> putaway(@Validated @RequestBody InboundPutawayDTO dto) {
+		return ApiResult.ok(inboundExecutionService.putaway(dto));
 	}
 
 }

@@ -69,6 +69,12 @@ public class WmsPhysicalInventory {
 	@Schema(title = "库位编码(发生地)")
 	private String locationCode;
 
+	@Schema(title = "Pallet ID")
+	private Long palletId;
+
+	@Schema(title = "Three-level slot ID")
+	private Long slotId;
+
 	@Schema(title = "分区ID")
 	private Long zoneId;
 

@@ -22,6 +22,9 @@ import com.erp.admin.wms.model.enums.SourceType;
 import com.erp.admin.wms.model.enums.StockBucket;
 import com.erp.admin.wms.model.enums.StockDirection;
 import com.erp.admin.wms.model.vo.AvailableLocationVO;
+import com.erp.admin.wms.model.vo.InboundPutawayPlanVO;
+import com.erp.admin.wms.model.vo.PalletSlotVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.core.exception.BusinessException;
@@ -38,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.math.BigDecimal;
 
 /**
  * 平台收货 / 上架执行服务（D2，方案②落地，同一张入库单状态流转）。
@@ -84,6 +88,10 @@ public class WmsInboundExecutionService {
 	private final WmsRackAssignmentService wmsRackAssignmentService;
 
 	private final TenantIdentityService tenantIdentityService;
+
+	private final InboundPalletPlanningService inboundPalletPlanningService;
+
+	private final WmsPalletService palletService;
 
 	// ==================== 收货 ====================
 
@@ -174,8 +182,121 @@ public class WmsInboundExecutionService {
 
 	// ==================== 上架 ====================
 
+	/**
+	 * Pallet-aware putaway. The legacy quantity and inventory write path remains intact,
+	 * while a three-level slot and pallet are atomically claimed before batch creation.
+	 */
 	@Transactional(rollbackFor = Exception.class)
-	public void putaway(InboundPutawayDTO dto) {
+	public List<PalletSummaryVO> putaway(InboundPutawayDTO dto) {
+		assertPlatform();
+		PurchaseInboundOrder order = purchaseInboundMapper.selectById(dto.getInboundOrderId());
+		Assert.notNull(order, "入库单不存在");
+		Assert.isTrue(PurchaseInboundStatus.RECEIVED.name().equals(order.getOrderStatus()),
+				"只有已收货的入库单可以上架");
+
+		int claimed = purchaseInboundMapper.casOrderStatus(order.getId(),
+				PurchaseInboundStatus.RECEIVED.name(), PurchaseInboundStatus.COMPLETED.name());
+		if (claimed != 1) {
+			throw new BusinessException(409, "该入库单已上架或正在处理，请勿重复操作");
+		}
+
+		List<PurchaseInboundOrderItem> items = purchaseInboundItemMapper.selectByInboundOrderId(order.getId());
+		Map<String, Integer> receivedBySku = items.stream()
+				.filter(item -> item.getActualQuantity() != null && item.getActualQuantity() > 0)
+				.collect(Collectors.toMap(PurchaseInboundOrderItem::getSkuCode,
+						PurchaseInboundOrderItem::getActualQuantity, Integer::sum));
+		Map<String, Integer> submittedBySku = dto.getLines().stream()
+				.collect(Collectors.toMap(InboundPutawayDTO.PutawayLine::getSkuCode,
+						InboundPutawayDTO.PutawayLine::getQuantity, Integer::sum));
+		if (!receivedBySku.equals(submittedBySku)) {
+			throw new BusinessException(WmsResultCode.PUTAWAY_QUANTITY_MISMATCH.getCode(),
+					WmsResultCode.PUTAWAY_QUANTITY_MISMATCH.getMessage());
+		}
+		Map<String, Long> itemIdBySku = items.stream().collect(Collectors.toMap(
+				PurchaseInboundOrderItem::getSkuCode, PurchaseInboundOrderItem::getId, (a, b) -> a));
+		Long erpTenantId = order.getErpTenantId() == null ? 1L : order.getErpTenantId();
+		Set<String> allowedRacks = resolveAllowedRacks(order);
+		Map<String, PalletSlotVO> slotByCode = palletService.listSlots(order.getWarehouseId()).stream()
+				.collect(Collectors.toMap(PalletSlotVO::getSlotCode, value -> value, (a, b) -> a));
+
+		Map<String, List<InboundPutawayDTO.PutawayLine>> groups = dto.getLines().stream()
+				.collect(Collectors.groupingBy(this::palletGroupKey, LinkedHashMap::new, Collectors.toList()));
+		Map<String, com.erp.admin.wms.model.entity.WmsPallet> assigned = new LinkedHashMap<>();
+		Set<String> newSlots = new HashSet<>();
+		for (Map.Entry<String, List<InboundPutawayDTO.PutawayLine>> entry : groups.entrySet()) {
+			List<InboundPutawayDTO.PutawayLine> lines = entry.getValue();
+			InboundPutawayDTO.PutawayLine first = lines.get(0);
+			Assert.isTrue(lines.stream().allMatch(line -> first.getSlotCode().equals(line.getSlotCode())),
+					"同一托盘的所有货物必须放在同一层位");
+			PalletSlotVO slot = slotByCode.get(first.getSlotCode());
+			Assert.notNull(slot, "层位不存在：" + first.getSlotCode());
+			Assert.isTrue(allowedRacks.contains(slot.getRackNo()),
+					"该层位所在货架未分配给本货主服务商：" + first.getSlotCode());
+			String quality = normalizeQuality(first.getQuality());
+			Assert.isTrue(lines.stream().allMatch(line -> quality.equals(normalizeQuality(line.getQuality()))),
+					"同一托盘不能混放不同品质状态");
+			Assert.isTrue(zoneTypeForQuality(quality).equals(slot.getZoneType()),
+					"层位分区与货物品质不匹配：" + first.getSlotCode());
+
+			com.erp.admin.wms.model.entity.WmsPallet pallet;
+			if (first.getPalletId() != null) {
+				Assert.isTrue(first.getPalletId().equals(slot.getPalletId()),
+						"托盘已经不在所选层位，请刷新上架计划");
+				pallet = palletService.lockExistingForPutaway(first.getPalletId(), erpTenantId, lines);
+			}
+			else {
+				Assert.isTrue(newSlots.add(first.getSlotCode()),
+						"同一层位不能创建两个托盘：" + first.getSlotCode());
+				pallet = palletService.createForPutaway(order.getWarehouseId(), erpTenantId,
+						first.getSlotCode(), lines);
+			}
+			assigned.put(entry.getKey(), pallet);
+		}
+
+		for (InboundPutawayDTO.PutawayLine line : dto.getLines()) {
+			PalletSlotVO slot = slotByCode.get(line.getSlotCode());
+			com.erp.admin.wms.model.entity.WmsPallet pallet = assigned.get(palletGroupKey(line));
+			PutawayDTO put = new PutawayDTO();
+			put.setWmsTenantId(0L);
+			put.setErpTenantId(erpTenantId);
+			put.setWarehouseId(order.getWarehouseId());
+			put.setSkuCode(line.getSkuCode());
+			put.setInboundItemId(itemIdBySku.getOrDefault(line.getSkuCode(), 0L));
+			put.setQuantity(line.getQuantity());
+			put.setQuality(normalizeQuality(line.getQuality()));
+			put.setLocationCode(slot.getLocationCode());
+			put.setPalletId(pallet.getId());
+			put.setSlotId(slot.getSlotId());
+			put.setZoneId(slot.getZoneId());
+			put.setAllocatable(GOOD.equals(put.getQuality()) ? 1 : 0);
+			physicalInventoryService.putaway(put);
+		}
+		assigned.values().forEach(pallet -> palletService.refreshAfterInventoryChange(pallet.getId()));
+		log.info("Pallet putaway completed, inboundOrderId={}, palletCount={}", order.getId(), assigned.size());
+		return palletService.summaries(assigned.values().stream()
+				.map(com.erp.admin.wms.model.entity.WmsPallet::getId).collect(Collectors.toSet()));
+	}
+
+	public InboundPutawayPlanVO planPutaway(Long inboundOrderId) {
+		assertPlatform();
+		PurchaseInboundOrder order = purchaseInboundMapper.selectById(inboundOrderId);
+		Assert.notNull(order, "入库单不存在");
+		Assert.isTrue(PurchaseInboundStatus.RECEIVED.name().equals(order.getOrderStatus()),
+				"只有已收货的入库单可以生成上架计划");
+		return inboundPalletPlanningService.plan(order,
+				purchaseInboundItemMapper.selectByInboundOrderId(order.getId()), resolveAllowedRacks(order));
+	}
+
+	private String palletGroupKey(InboundPutawayDTO.PutawayLine line) {
+		if (line.getPalletId() != null) {
+			return "EXISTING-" + line.getPalletId();
+		}
+		Assert.hasText(line.getPalletKey(), "新托盘分组标识不能为空");
+		return line.getPalletKey();
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	private void putawayLegacy(InboundPutawayDTO dto) {
 		assertPlatform();
 		PurchaseInboundOrder order = purchaseInboundMapper.selectById(dto.getInboundOrderId());
 		Assert.notNull(order, "入库单不存在");

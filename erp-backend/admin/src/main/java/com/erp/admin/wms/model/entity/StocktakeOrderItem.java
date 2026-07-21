@@ -33,6 +33,10 @@ public class StocktakeOrderItem {
 	@Schema(title = "物理库存批次ID，账外新增为空")
 	private Long physicalInventoryId;
 
+	private Long palletId;
+
+	private Long slotId;
+
 	@Schema(title = "货主（货物归属），仓库级库存按货主隔离；全量盘点由库存行自动带入，追加SKU时指定")
 	private Long erpTenantId;
 
@@ -45,6 +49,8 @@ public class StocktakeOrderItem {
 	private Long zoneId;
 
 	private String locationCode;
+
+	private String slotCode;
 
 	private String quality;
 

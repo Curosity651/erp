@@ -31,6 +31,8 @@ public class SkuLookupVO {
 	@Schema(title = "单重")
 	private BigDecimal weight;
 
+	private String weightUnit;
+
 	@Schema(title = "包装长")
 	private BigDecimal packageLength;
 
@@ -39,5 +41,9 @@ public class SkuLookupVO {
 
 	@Schema(title = "包装高")
 	private BigDecimal packageHeight;
+
+	private String packageUnit;
+
+	private Integer quantityPerPallet;
 
 }

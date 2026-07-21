@@ -12,6 +12,9 @@ import com.erp.admin.wms.mapper.InventoryMapper;
 import com.erp.admin.wms.mapper.StockFlowMapper;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.model.dto.PutawayDTO;
+import com.erp.admin.wms.model.dto.InboundPutawayDTO;
+import com.erp.admin.wms.model.entity.WmsPallet;
+import com.erp.admin.wms.model.vo.PalletSlotVO;
 import com.erp.admin.wms.model.entity.Inventory;
 import com.erp.admin.wms.model.entity.StockFlow;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
@@ -48,6 +51,8 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 	private final StockFlowMapper stockFlowMapper;
 
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
+
+	private final WmsPalletService palletService;
 
 	/**
 	 * Returns the stock that automatic outbound picking can actually allocate.
@@ -89,6 +94,27 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		LocalDate inboundDate = dto.getInboundDate() == null ? LocalDate.now(ZoneOffset.UTC) : dto.getInboundDate();
 		long inboundItemId = dto.getInboundItemId() == null ? 0L : dto.getInboundItemId();
 
+		WmsPallet autoPallet = null;
+		if (dto.getPalletId() == null && dto.getLocationCode() != null) {
+			PalletSlotVO slot = palletService.listSlots(dto.getWarehouseId()).stream()
+					.filter(value -> dto.getLocationCode().equals(value.getLocationCode()))
+					.filter(value -> WmsPalletService.EMPTY.equals(value.getSlotStatus()))
+					.sorted(java.util.Comparator.comparing(PalletSlotVO::getLevelNo))
+					.findFirst().orElseThrow(() -> new BusinessException(409,
+							"库位三个托盘层位均已占用：" + dto.getLocationCode()));
+			InboundPutawayDTO.PutawayLine line = new InboundPutawayDTO.PutawayLine();
+			line.setSkuCode(dto.getSkuCode());
+			line.setQuantity(dto.getQuantity());
+			line.setQuality(quality);
+			line.setSlotCode(slot.getSlotCode());
+			line.setPalletKey("AUTO-" + java.util.UUID.randomUUID());
+			line.setCapacitySource("MANUAL_REQUIRED");
+			autoPallet = palletService.createForPutaway(dto.getWarehouseId(), dto.getErpTenantId(),
+					slot.getSlotCode(), java.util.Collections.singletonList(line));
+			dto.setPalletId(autoPallet.getId());
+			dto.setSlotId(autoPallet.getCurrentSlotId());
+		}
+
 		// 同日 FIFO 次序
 		int pickOrder = physicalInventoryMapper().countSameDay(wmsTenantId, dto.getErpTenantId(), dto.getWarehouseId(),
 				dto.getSkuCode(), inboundDate) + 1;
@@ -111,11 +137,16 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		batch.setReservedQty(0);
 		batch.setQuality(quality);
 		batch.setLocationCode(dto.getLocationCode());
+		batch.setPalletId(dto.getPalletId());
+		batch.setSlotId(dto.getSlotId());
 		batch.setZoneId(dto.getZoneId());
 		batch.setAllocatable(allocatable);
 		batch.setCreateBy(uid);
 		batch.setUpdateBy(uid);
 		this.baseMapper.insert(batch);
+		if (autoPallet != null) {
+			palletService.refreshAfterInventoryChange(autoPallet.getId());
+		}
 
 		// 同事务聚合刷新快照
 		WmsInventoryAggregator.Buckets buckets = aggregator.refreshSnapshot(wmsTenantId, dto.getErpTenantId(),

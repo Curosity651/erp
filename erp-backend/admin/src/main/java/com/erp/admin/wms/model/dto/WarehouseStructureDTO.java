@@ -33,4 +33,19 @@ public class WarehouseStructureDTO {
 	@Schema(title = "默认库位类型 BIG/SMALL")
 	private String defaultLocationType;
 
+	@Schema(title = "每个二维库位的托盘层数，当前固定为3")
+	private Integer palletLevels;
+
+	@Schema(title = "单托最多不同货物种类")
+	private Integer maxSkuKindsPerPallet;
+
+	@Schema(title = "是否允许跨货主混托")
+	private Integer allowCrossOwnerMix;
+
+	private Integer defaultPalletLengthMm;
+	private Integer defaultPalletWidthMm;
+	private Integer defaultPalletHeightMm;
+	private java.math.BigDecimal defaultPalletMaxWeightKg;
+	private java.math.BigDecimal defaultPalletUtilization;
+
 }

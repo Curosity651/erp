@@ -81,6 +81,17 @@
               </a-space>
             </a-col>
           </a-row>
+          <a-divider orientation="left" plain>托盘规则</a-divider>
+          <a-row :gutter="16">
+            <a-col :span="6"><a-form-item label="层数"><a-input-number v-model:value="form.palletLevels" :min="3" :max="3" disabled style="width: 100%" /></a-form-item></a-col>
+            <a-col :span="6"><a-form-item label="最多品种"><a-input-number v-model:value="form.maxSkuKindsPerPallet" :min="1" :max="4" style="width: 100%" /></a-form-item></a-col>
+            <a-col :span="6"><a-form-item label="跨货主混托"><a-switch v-model:checked="allowCrossOwnerMix" /></a-form-item></a-col>
+            <a-col :span="6"><a-form-item label="利用率"><a-input-number v-model:value="form.defaultPalletUtilization" :min="0.1" :max="1" :step="0.05" :precision="2" style="width: 100%" /></a-form-item></a-col>
+            <a-col :span="6"><a-form-item label="长(mm)"><a-input-number v-model:value="form.defaultPalletLengthMm" :min="1" style="width: 100%" /></a-form-item></a-col>
+            <a-col :span="6"><a-form-item label="宽(mm)"><a-input-number v-model:value="form.defaultPalletWidthMm" :min="1" style="width: 100%" /></a-form-item></a-col>
+            <a-col :span="6"><a-form-item label="高(mm)"><a-input-number v-model:value="form.defaultPalletHeightMm" :min="1" style="width: 100%" /></a-form-item></a-col>
+            <a-col :span="6"><a-form-item label="承重(kg)"><a-input-number v-model:value="form.defaultPalletMaxWeightKg" :min="1" style="width: 100%" /></a-form-item></a-col>
+          </a-row>
         </a-form>
         <div class="hint">
           预计生成库位：<b>{{ expectedCount }}</b> 个（{{ form.rackRows || 0 }} 排 ×
@@ -188,7 +199,16 @@
                           :style="{ background: zoneCellColor(zoneTypeOf(cellMap[`${rn}|${c}`])) }"
                           @mousedown="onCellDown(ri, c, $event)"
                           @mouseenter="onCellEnter(ri, c)"
-                        />
+                        >
+                          <strong>{{ cellMap[`${rn}|${c}`].locationCode }}</strong>
+                          <span
+                            v-for="slot in slotsFor(cellMap[`${rn}|${c}`].id)"
+                            :key="slot.slotId"
+                            :class="{ occupied: slot.palletId }"
+                          >
+                            L{{ slot.levelNo }} {{ slot.palletId ? `${Math.round(slot.capacityPercent || 0)}%` : '空' }}
+                          </span>
+                        </div>
                       </a-tooltip>
                       <div v-else class="cell empty" />
                     </td>
@@ -274,6 +294,8 @@ import {
 } from '@/api/wms/location-mgmt'
 import type { WarehouseStructure, WmsZone, WmsLocation } from '@/api/wms/location-mgmt/types'
 import { useAuthorize } from '@/hooks/permission'
+import { listPalletSlots } from '@/api/wms/pallet'
+import type { PalletSlotVO } from '@/api/wms/inbound-execution'
 
 const emits = defineEmits<{ (e: 'success'): void }>()
 
@@ -316,6 +338,7 @@ const open = ref(false)
 const current = ref<WarehouseStructure | undefined>(undefined)
 const zones = ref<WmsZone[]>([])
 const locations = ref<WmsLocation[]>([])
+const palletSlots = ref<PalletSlotVO[]>([])
 const viewMode = ref<'grid' | 'list'>('grid')
 
 const savingStructure = ref(false)
@@ -333,7 +356,19 @@ const form = reactive({
   rackRows: 0,
   rackColumns: 0,
   rackNoPrefix: '',
-  codePadWidth: 2
+  codePadWidth: 2,
+  palletLevels: 3,
+  maxSkuKindsPerPallet: 4,
+  allowCrossOwnerMix: 1,
+  defaultPalletLengthMm: 1200,
+  defaultPalletWidthMm: 1000,
+  defaultPalletHeightMm: 1600,
+  defaultPalletMaxWeightKg: 1000,
+  defaultPalletUtilization: 0.85
+})
+const allowCrossOwnerMix = computed({
+  get: () => form.allowCrossOwnerMix === 1,
+  set: value => { form.allowCrossOwnerMix = value ? 1 : 0 }
 })
 
 const drawerTitle = computed(() =>
@@ -400,6 +435,11 @@ function cellTip(loc: WmsLocation): string {
   return settingMode.value && occupiedCodes.value.has(loc.locationCode)
     ? `${base}（该库位有货，不能改分区）`
     : base
+}
+function slotsFor(locationId: number) {
+  return palletSlots.value
+    .filter(slot => slot.locationId === locationId)
+    .sort((a, b) => b.levelNo - a.levelNo)
 }
 
 /** 选中一个库位（有货占用的库位锁定，不可选） */
@@ -516,6 +556,14 @@ function fillForm(w?: WarehouseStructure) {
   form.rackColumns = w?.rackColumns ?? 0
   form.rackNoPrefix = w?.rackNoPrefix ?? ''
   form.codePadWidth = w?.codePadWidth ?? 2
+  form.palletLevels = 3
+  form.maxSkuKindsPerPallet = w?.maxSkuKindsPerPallet ?? 4
+  form.allowCrossOwnerMix = w?.allowCrossOwnerMix ?? 1
+  form.defaultPalletLengthMm = w?.defaultPalletLengthMm ?? 1200
+  form.defaultPalletWidthMm = w?.defaultPalletWidthMm ?? 1000
+  form.defaultPalletHeightMm = w?.defaultPalletHeightMm ?? 1600
+  form.defaultPalletMaxWeightKg = w?.defaultPalletMaxWeightKg ?? 1000
+  form.defaultPalletUtilization = w?.defaultPalletUtilization ?? 0.85
 }
 
 async function loadZones() {
@@ -537,6 +585,8 @@ async function loadLocations() {
   try {
     const res = await listLocations(current.value.id)
     if (isSuccess(res)) locations.value = res.data || []
+    const slotRes = await listPalletSlots(current.value.id)
+    if (isSuccess(slotRes)) palletSlots.value = slotRes.data || []
   } finally {
     loadingLocations.value = false
   }
@@ -740,11 +790,25 @@ export default {
 }
 
 .cell {
-  width: 26px;
-  height: 26px;
+  width: 108px;
+  height: 78px;
   border-radius: 4px;
   box-sizing: border-box;
 }
+
+.cell.filled {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 18px repeat(3, 16px);
+  padding: 3px 6px;
+  text-align: left;
+  font-size: 10px;
+  overflow: hidden;
+}
+
+.cell.filled strong { font-size: 11px; }
+.cell.filled span { color: rgba(0, 0, 0, 0.55); line-height: 16px; }
+.cell.filled span.occupied { color: #135200; font-weight: 600; }
 
 .cell.filled {
   border: 1px solid rgba(0, 0, 0, 0.12);

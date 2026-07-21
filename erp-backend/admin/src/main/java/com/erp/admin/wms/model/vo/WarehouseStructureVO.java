@@ -44,6 +44,15 @@ public class WarehouseStructureVO {
 	@Schema(title = "库位已生成 1是/0否")
 	private Integer locationGenerated;
 
+	private Integer palletLevels;
+	private Integer maxSkuKindsPerPallet;
+	private Integer allowCrossOwnerMix;
+	private Integer defaultPalletLengthMm;
+	private Integer defaultPalletWidthMm;
+	private Integer defaultPalletHeightMm;
+	private java.math.BigDecimal defaultPalletMaxWeightKg;
+	private java.math.BigDecimal defaultPalletUtilization;
+
 	@Schema(title = "结构是否锁定（有货占用或已分配服务商 → 禁改结构/重新生成）")
 	private Boolean structureLocked;
 

@@ -23,10 +23,14 @@ public class StocktakeExtraItemDTO {
 	@Min(value = 1, message = "实盘数量必须大于0")
 	private Integer actualQuantity;
 
+	@NotBlank(message = "盘点账外货物必须选择 L1/L2/L3 层位")
+	private String slotCode;
+
+	private Long palletId;
+
 	private String quality = "GOOD";
 
 	private LocalDate inboundDate;
 
 	private String remark;
 }
-

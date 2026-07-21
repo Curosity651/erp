@@ -1,255 +1,284 @@
 <template>
-  <a-drawer
-    v-model:open="open"
-    :title="drawerTitle"
-    :width="820"
-    destroy-on-close
-    placement="right"
-  >
-    <a-alert
-      type="info"
-      show-icon
-      style="margin-bottom: 12px"
-      message="为每个 SKU 分配库位：仅可选「该货主的服务商在本仓租用货架」上的空闲库位；库位独占，良品入标准区、次品入不良品区；每个 SKU 的分配数量之和须等于实收数量，可拆分到多个库位。若下拉无库位，多为该服务商在本仓未租货架或对应分区无空位。"
-    />
+  <a-drawer v-model:open="open" :title="`入库上架 · ${currentNo}`" :width="980" destroy-on-close>
+    <a-steps :current="loading ? 0 : 1" size="small" class="steps">
+      <a-step title="读取实收商品" />
+      <a-step title="分托与层位确认" />
+      <a-step title="写入库存" />
+    </a-steps>
+
     <a-spin :spinning="loading">
-      <div v-for="group in groups" :key="group.skuCode" class="sku-block">
-        <div class="sku-head">
-          <div class="sku-title">
-            <span class="sku-code">{{ group.skuCode }}</span>
-            <span class="sku-recv">实收 {{ group.actualQuantity }}</span>
-            <a-tag :color="groupOk(group) ? 'success' : 'error'">
-              已分配 {{ allocated(group) }} / {{ group.actualQuantity }}
-            </a-tag>
+      <a-alert
+        v-for="warning in plan?.warnings || []"
+        :key="warning"
+        type="warning"
+        show-icon
+        :message="warning"
+        class="warning"
+      />
+
+      <section v-if="sourceItems.length" class="source-band">
+        <div class="section-title">待上架商品</div>
+        <div class="source-list">
+          <span v-for="item in sourceItems" :key="item.skuCode" class="source-item">
+            <strong>{{ item.skuCode }}</strong>
+            <span>{{ item.quantity }} 件</span>
+          </span>
+        </div>
+      </section>
+
+      <section v-if="pallets.length" class="plan-section">
+        <div class="plan-header">
+          <div>
+            <div class="section-title">系统分托结果</div>
+            <div class="subtle">共 {{ pallets.length }} 托，满托优先 L3，半托与混托优先 L1</div>
           </div>
-          <a-button size="small" type="link" @click="addRow(group)">+ 添加库位</a-button>
+          <a-tag color="blue">每层 1 托 · 每库位 3 层</a-tag>
         </div>
 
-        <div v-for="(row, idx) in group.rows" :key="idx" class="alloc-row">
-          <a-select v-model:value="row.quality" class="col-quality" @change="onQualityChange(row)">
-            <a-select-option value="GOOD">良品</a-select-option>
-            <a-select-option value="DAMAGED">次品</a-select-option>
-          </a-select>
+        <div v-for="(pallet, index) in pallets" :key="pallet.palletKey" class="pallet-card">
+          <div class="pallet-head">
+            <div class="pallet-name">
+              <span class="sequence">{{ index + 1 }}</span>
+              <strong>{{ pallet.palletNo || `新托盘 ${index + 1}` }}</strong>
+              <a-tag :color="typeColor(pallet.palletType)">{{ typeText(pallet.palletType) }}</a-tag>
+              <a-tag v-if="pallet.existingPallet" color="cyan">合并现有托盘</a-tag>
+            </div>
+            <span class="capacity-text">{{ capacityText(pallet) }}</span>
+          </div>
 
-          <a-select
-            v-model:value="row.locationCode"
-            class="col-location"
-            show-search
-            allow-clear
-            :placeholder="locLoading[row.quality] ? '加载库位中…' : '选择库位（空闲）'"
-            :options="optionsFor(row)"
-            :filter-option="filterOption"
-            :not-found-content="
-              locLoading[row.quality] ? undefined : '该服务商租用货架上暂无匹配空闲库位'
-            "
-            @change="(v: any) => onLocationChange(row, v)"
+          <div class="pallet-body">
+            <div class="goods-column">
+              <div v-for="item in pallet.items" :key="item.skuCode" class="goods-row">
+                <span class="sku">{{ item.skuCode }}</span>
+                <span>{{ item.quantity }} 件</span>
+                <span v-if="item.quantityPerPallet" class="subtle">标准 {{ item.quantityPerPallet }} 件/托</span>
+              </div>
+            </div>
+
+            <div class="control-grid">
+              <label>
+                <span>品质</span>
+                <a-select
+                  v-model:value="pallet.quality"
+                  :disabled="pallet.existingPallet"
+                  :options="qualityOptions"
+                  @change="changeQuality(pallet)"
+                />
+              </label>
+              <label>
+                <span>层位</span>
+                <a-select
+                  v-model:value="pallet.slotCode"
+                  show-search
+                  :disabled="pallet.existingPallet"
+                  :options="slotOptions(pallet)"
+                  :filter-option="filterOption"
+                  @change="value => applySlot(pallet, value as string)"
+                />
+              </label>
+              <label>
+                <span>容量</span>
+                <a-input-number
+                  v-model:value="pallet.capacityPercent"
+                  :min="1"
+                  :max="100"
+                  :precision="0"
+                  addon-after="%"
+                />
+              </label>
+              <label>
+                <span>实际重量</span>
+                <a-input-number
+                  v-model:value="pallet.actualWeightKg"
+                  :min="0"
+                  :precision="2"
+                  addon-after="kg"
+                  placeholder="选填"
+                />
+              </label>
+              <label class="full-toggle">
+                <span>人工满托</span>
+                <a-switch v-model:checked="pallet.manualFull" />
+              </label>
+            </div>
+          </div>
+
+          <a-progress
+            :percent="Math.min(pallet.capacityPercent || 0, 100)"
+            :status="pallet.capacityPercent ? 'normal' : 'exception'"
+            size="small"
+            :show-info="false"
           />
-
-          <a-input-number
-            v-model:value="row.quantity"
-            class="col-qty"
-            :min="1"
-            :max="rowMax(group, row)"
-            :precision="0"
-            placeholder="数量"
-          />
-
-          <a-button
-            type="text"
-            danger
-            class="col-del"
-            :disabled="group.rows.length <= 1"
-            @click="removeRow(group, idx)"
-          >
-            删除
-          </a-button>
+          <div v-if="!pallet.capacityPercent" class="capacity-required">
+            当前 SKU 缺少可计算容量的数据，请仓库人员按现场托盘占用情况填写。
+          </div>
         </div>
-      </div>
+      </section>
 
-      <a-empty v-if="!loading && groups.length === 0" description="无可上架明细" />
+      <a-empty v-if="!loading && !pallets.length" description="没有可上架的实收商品" />
     </a-spin>
 
     <template #footer>
-      <div style="display: flex; justify-content: space-between; align-items: center">
-        <span :style="{ color: allOk ? '#52c41a' : '#ff4d4f' }">
-          {{ allOk ? '分配已就绪' : '请完成全部 SKU 的库位分配（数量需与实收一致）' }}
+      <div class="footer-row">
+        <span :class="allValid ? 'ready' : 'not-ready'">
+          {{ allValid ? '分托和层位已确认' : '请补齐层位及托盘容量' }}
         </span>
-        <div style="display: flex; gap: 8px">
+        <a-space>
           <a-button @click="open = false">取消</a-button>
-          <a-button type="primary" :loading="submitting" :disabled="!allOk" @click="submit">
+          <a-button type="primary" :loading="submitting" :disabled="!allValid" @click="submit">
             确认上架
           </a-button>
-        </div>
+        </a-space>
       </div>
     </template>
   </a-drawer>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import { doRequest } from '@/utils/axios/request'
-import {
-  getInboundOpsDetail,
-  putawayInbound,
-  listPutawayLocations
+import { getPutawayPlan, putawayInbound } from '@/api/wms/inbound-execution'
+import type {
+  InboundPutawayPlanVO,
+  PalletPlan,
+  PalletSlotVO,
+  PutawayLine
 } from '@/api/wms/inbound-execution'
-import type { AvailableLocationVO } from '@/api/wms/inbound-execution'
 import type { PurchaseInboundPageVO } from '@/api/wms/purchase-inbound/types'
+import type { PalletSummaryVO } from '@/api/wms/pallet'
 
 const emits = defineEmits<{ (e: 'success'): void }>()
-
-type Quality = 'GOOD' | 'DAMAGED'
-
-interface AllocRow {
-  quality: Quality
-  locationCode?: string
-  zoneId?: number
-  quantity: number
-}
-interface SkuGroup {
-  skuCode: string
-  actualQuantity: number
-  rows: AllocRow[]
-}
 
 const open = ref(false)
 const loading = ref(false)
 const submitting = ref(false)
 const currentId = ref<number>()
 const currentNo = ref('')
-const warehouseId = ref<number>()
-const groups = ref<SkuGroup[]>([])
+const plan = ref<InboundPutawayPlanVO>()
 
-// 按品质缓存该仓可用（空闲）库位
-const locCache = reactive<Record<Quality, AvailableLocationVO[]>>({ GOOD: [], DAMAGED: [] })
-const locLoaded = reactive<Record<Quality, boolean>>({ GOOD: false, DAMAGED: false })
-const locLoading = reactive<Record<Quality, boolean>>({ GOOD: false, DAMAGED: false })
+const pallets = computed(() => plan.value?.pallets || [])
+const sourceItems = computed(() => {
+  const totals = new Map<string, number>()
+  pallets.value.forEach(pallet =>
+    pallet.items.forEach(item => totals.set(item.skuCode, (totals.get(item.skuCode) || 0) + item.quantity))
+  )
+  return Array.from(totals.entries()).map(([skuCode, quantity]) => ({ skuCode, quantity }))
+})
 
-const drawerTitle = computed(() => `上架作业 · ${currentNo.value}`)
+const chosenSlots = computed(() => {
+  const values = new Set<string>()
+  pallets.value.forEach(pallet => pallet.slotCode && values.add(pallet.slotCode))
+  return values
+})
 
-async function loadLocations(quality: Quality) {
-  if (!currentId.value || locLoaded[quality] || locLoading[quality]) return
-  locLoading[quality] = true
-  try {
-    const res = await listPutawayLocations(currentId.value, quality)
-    if (isSuccess(res) && res.data) {
-      locCache[quality] = res.data
-      locLoaded[quality] = true
-    }
-  } finally {
-    locLoading[quality] = false
-  }
-}
+const qualityOptions = [
+  { value: 'GOOD', label: '良品' },
+  { value: 'DAMAGED', label: '残次品' }
+]
+
+const allValid = computed(
+  () =>
+    pallets.value.length > 0 &&
+    pallets.value.every(
+      pallet => !!pallet.slotCode && !!pallet.capacityPercent && pallet.capacityPercent > 0 && pallet.capacityPercent <= 100
+    )
+)
 
 async function openPutaway(record: PurchaseInboundPageVO) {
   currentId.value = record.id
   currentNo.value = record.inboundNo
-  warehouseId.value = record.warehouseId
+  plan.value = undefined
   open.value = true
   loading.value = true
-  groups.value = []
-  locCache.GOOD = []
-  locCache.DAMAGED = []
-  locLoaded.GOOD = false
-  locLoaded.DAMAGED = false
   try {
-    const res = await getInboundOpsDetail(record.id)
-    if (isSuccess(res) && res.data) {
-      groups.value = (res.data.items || [])
-        .filter(i => (i.actualQuantity || 0) > 0)
-        .map(i => ({
-          skuCode: i.skuCode,
-          actualQuantity: i.actualQuantity,
-          rows: [{ quality: 'GOOD' as Quality, quantity: i.actualQuantity }]
-        }))
+    const response = await getPutawayPlan(record.id)
+    if (isSuccess(response) && response.data) {
+      plan.value = response.data
+      plan.value.pallets.forEach(pallet => {
+        pallet.actualWeightKg = pallet.estimatedWeightKg
+        pallet.manualFull = pallet.palletType === 'SINGLE_FULL'
+      })
     }
-    await loadLocations('GOOD')
   } finally {
     loading.value = false
   }
 }
 
-// 全表已选库位码（用于库位独占过滤）
-const chosenCodes = computed(() => {
-  const s = new Set<string>()
-  groups.value.forEach(g => g.rows.forEach(r => r.locationCode && s.add(r.locationCode)))
-  return s
-})
-
-// 某行的可选库位：该品质分区内的空库位，排除其它行已选（本行当前值保留）
-function optionsFor(row: AllocRow) {
-  const list = locCache[row.quality] || []
-  return list
-    .filter(l => l.locationCode === row.locationCode || !chosenCodes.value.has(l.locationCode))
-    .map(l => ({
-      value: l.locationCode,
-      label: l.zoneName ? `${l.locationCode} · ${l.zoneName}` : l.locationCode,
-      zoneId: l.zoneId
+function slotOptions(pallet: PalletPlan) {
+  const candidates = plan.value?.slotCandidates || []
+  const zoneType = pallet.quality === 'DAMAGED' ? 'DEFECTIVE' : 'STANDARD'
+  return candidates
+    .filter(slot => slot.zoneType === zoneType)
+    .filter(slot => slot.slotCode === pallet.slotCode || !chosenSlots.value.has(slot.slotCode))
+    .map(slot => ({
+      value: slot.slotCode,
+      label: `${slot.slotCode} · ${slot.zoneName || '标准区'}`
     }))
+}
+
+function changeQuality(pallet: PalletPlan) {
+  const options = slotOptions(pallet)
+  const currentValid = options.some(option => option.value === pallet.slotCode)
+  if (!currentValid) {
+    pallet.slotCode = options[0]?.value || ''
+  }
+  if (pallet.slotCode) applySlot(pallet, pallet.slotCode)
+}
+
+function applySlot(pallet: PalletPlan, slotCode: string) {
+  const slot = (plan.value?.slotCandidates || []).find(candidate => candidate.slotCode === slotCode)
+  if (!slot) return
+  pallet.locationCode = slot.locationCode
+  pallet.levelNo = slot.levelNo
 }
 
 const filterOption = (input: string, option: { value: string }) =>
   option.value.toLowerCase().includes(input.toLowerCase())
 
-function onQualityChange(row: AllocRow) {
-  row.locationCode = undefined
-  row.zoneId = undefined
-  loadLocations(row.quality)
+function typeText(type: PalletPlan['palletType']) {
+  return { SINGLE_FULL: '单品满托', SINGLE_PARTIAL: '单品半托', MIXED: '混托' }[type]
 }
 
-function onLocationChange(row: AllocRow, code?: string) {
-  const hit = (locCache[row.quality] || []).find(l => l.locationCode === code)
-  row.zoneId = hit?.zoneId
+function typeColor(type: PalletPlan['palletType']) {
+  return { SINGLE_FULL: 'green', SINGLE_PARTIAL: 'blue', MIXED: 'orange' }[type]
 }
 
-function addRow(group: SkuGroup) {
-  const remaining = group.actualQuantity - allocated(group)
-  if (remaining <= 0) {
-    message.warning('该 SKU 已按实收数量分配完，无法再加库位')
-    return
-  }
-  group.rows.push({ quality: 'GOOD', quantity: remaining })
-  loadLocations('GOOD')
-}
-function removeRow(group: SkuGroup, idx: number) {
-  if (group.rows.length > 1) group.rows.splice(idx, 1)
+function capacityText(pallet: PalletPlan) {
+  if (!pallet.capacityPercent) return '待人工确认容量'
+  return `预计占用 ${Math.round(pallet.capacityPercent)}%`
 }
 
-const allocated = (group: SkuGroup) => group.rows.reduce((sum, r) => sum + (r.quantity || 0), 0)
-const groupOk = (group: SkuGroup) => allocated(group) === group.actualQuantity
-
-// 该行数量上限 = 实收数量 - 本组其它行已分配，保证各 SKU 上架总量不超过实收数量
-function rowMax(group: SkuGroup, row: AllocRow): number {
-  const others = group.rows.reduce((sum, r) => sum + (r === row ? 0 : r.quantity || 0), 0)
-  return Math.max(group.actualQuantity - others, 0)
-}
-
-const allOk = computed(
-  () =>
-    groups.value.length > 0 &&
-    groups.value.every(g => groupOk(g) && g.rows.every(r => !!r.locationCode && r.quantity > 0))
-)
-
-function submit() {
-  if (!allOk.value) {
-    message.warning('请完成全部 SKU 的库位分配，且分配数量与实收一致')
-    return
-  }
-  const lines = groups.value.flatMap(g =>
-    g.rows.map(r => ({
-      skuCode: g.skuCode,
-      locationCode: r.locationCode as string,
-      quantity: r.quantity,
-      quality: r.quality,
-      zoneId: r.zoneId
+function buildLines(): PutawayLine[] {
+  return pallets.value.flatMap(pallet =>
+    pallet.items.map(item => ({
+      skuCode: item.skuCode,
+      locationCode: pallet.locationCode,
+      palletKey: pallet.palletKey,
+      palletId: pallet.palletId,
+      slotCode: pallet.slotCode,
+      quantity: item.quantity,
+      quality: pallet.quality,
+      capacityPercent: pallet.capacityPercent,
+      capacitySource: pallet.capacitySource,
+      actualWeightKg: pallet.actualWeightKg,
+      manualFull: pallet.manualFull
     }))
   )
+}
+
+function submit() {
+  if (!allValid.value || !currentId.value) {
+    message.warning('请先确认全部托盘的层位和容量')
+    return
+  }
   submitting.value = true
-  doRequest(putawayInbound({ inboundOrderId: currentId.value!, lines }), {
-    successMessage: '上架成功，库存已增加',
-    onSuccess: () => {
+  doRequest(putawayInbound({ inboundOrderId: currentId.value, lines: buildLines() }), {
+    successMessage: '上架成功，托盘与库存已同步',
+    onSuccess: response => {
+      const created = (response.data || []) as PalletSummaryVO[]
+      if (created.length) printLabels(created)
       open.value = false
       emits('success')
     },
@@ -259,58 +288,56 @@ function submit() {
   })
 }
 
+function printLabels(created: PalletSummaryVO[]) {
+  const printable = window.open('', '_blank', 'width=760,height=680')
+  if (!printable) return
+  printable.document.write(`<!doctype html><html><head><title>托盘标签</title><style>
+    body{font-family:Arial,"Microsoft YaHei",sans-serif;margin:24px}.label{width:420px;height:250px;border:2px solid #111;padding:20px;margin:0 0 24px;page-break-after:always;box-sizing:border-box}
+    h1{font-size:30px;margin:0 0 18px;letter-spacing:0}.slot{font-size:26px;font-weight:700}.meta{margin-top:16px;font-size:16px;line-height:1.8}.barcode{font-family:monospace;font-size:24px;letter-spacing:2px;margin-top:12px}
+  </style></head><body>${created
+    .map(
+      pallet => `<div class="label"><h1>${pallet.palletNo}</h1><div class="slot">${pallet.slotCode || ''}</div><div class="meta">${pallet.items
+        .map(item => `${item.skuCode} × ${item.quantity}`)
+        .join('<br>')}</div><div class="barcode">*${pallet.palletNo}*</div></div>`
+    )
+    .join('')}</body></html>`)
+  printable.document.close()
+  printable.focus()
+  printable.print()
+}
+
 defineExpose({ open: openPutaway })
 </script>
 
 <script lang="ts">
-export default {
-  name: 'PutawayDrawer'
-}
+export default { name: 'PutawayDrawer' }
 </script>
 
 <style scoped>
-.sku-block {
-  border: 1px solid #f0f0f0;
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-.sku-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.sku-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.sku-code {
-  font-weight: 600;
-}
-.sku-recv {
-  color: rgba(0, 0, 0, 0.45);
-  font-size: 12px;
-}
-.alloc-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.col-quality {
-  width: 96px;
-  flex: none;
-}
-.col-location {
-  flex: 1 1 auto;
-}
-.col-qty {
-  width: 120px;
-  flex: none;
-}
-.col-del {
-  flex: none;
-}
+.steps { margin-bottom: 20px; }
+.warning { margin-bottom: 10px; }
+.source-band { padding: 14px 0 18px; border-bottom: 1px solid #f0f0f0; }
+.section-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.source-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.source-item { display: inline-flex; gap: 12px; padding: 6px 10px; background: #f5f5f5; border-radius: 4px; }
+.plan-section { padding-top: 18px; }
+.plan-header, .pallet-head, .pallet-body, .footer-row { display: flex; justify-content: space-between; align-items: center; }
+.plan-header { margin-bottom: 12px; }
+.subtle { color: rgba(0,0,0,.45); font-size: 12px; }
+.pallet-card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; margin-bottom: 10px; }
+.pallet-head { margin-bottom: 12px; }
+.pallet-name { display: flex; align-items: center; gap: 8px; }
+.sequence { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: #1677ff; color: #fff; }
+.capacity-text { color: rgba(0,0,0,.65); }
+.pallet-body { align-items: flex-start; gap: 20px; }
+.goods-column { flex: 1; min-width: 240px; }
+.goods-row { display: grid; grid-template-columns: minmax(110px,1fr) 70px 120px; gap: 8px; min-height: 30px; align-items: center; }
+.sku { font-weight: 600; overflow-wrap: anywhere; }
+.control-grid { flex: 0 0 480px; display: grid; grid-template-columns: 1.45fr 1fr 1fr 76px; gap: 10px; }
+.control-grid label { display: grid; gap: 5px; font-size: 12px; color: rgba(0,0,0,.65); }
+.control-grid :deep(.ant-input-number), .control-grid :deep(.ant-select) { width: 100%; }
+.full-toggle { justify-items: center; }
+.capacity-required { color: #d46b08; font-size: 12px; margin-top: 4px; }
+.ready { color: #389e0d; }
+.not-ready { color: #cf1322; }
 </style>

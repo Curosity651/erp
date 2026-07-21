@@ -42,6 +42,28 @@ public class InboundPutawayDTO {
 		@Schema(title = "库位编码")
 		private String locationCode;
 
+		@Schema(title = "Client-side pallet grouping key")
+		private String palletKey;
+
+		@Schema(title = "Existing pallet ID when merging")
+		private Long palletId;
+
+		@NotBlank(message = "slot code cannot be blank")
+		@Schema(title = "Three-level slot code, for example A1-03-L3")
+		private String slotCode;
+
+		@Schema(title = "Operator-confirmed capacity percentage")
+		private java.math.BigDecimal capacityPercent;
+
+		@Schema(title = "Capacity source")
+		private String capacitySource;
+
+		@Schema(title = "Actual pallet weight in kilograms")
+		private java.math.BigDecimal actualWeightKg;
+
+		@Schema(title = "Operator explicitly marks this pallet full")
+		private Boolean manualFull;
+
 		@NotNull(message = "上架数量不能为空")
 		@Min(value = 1, message = "上架数量必须大于0")
 		@Schema(title = "上架数量")

@@ -80,6 +80,8 @@ public class OutboundShippingService {
 
     private final TenantIdentityService tenantIdentityService;
 
+    private final WmsPalletService palletService;
+
     // ==================== 查询 ====================
 
     public PageResult<PackShipOrderVO> page(PageParam pageParam, PackShipQO qo) {
@@ -168,6 +170,7 @@ public class OutboundShippingService {
         List<WmsOutboundPickAllocation> allocs = pickAllocationMapper.selectByOutboundOrderId(order.getId());
         Assert.notEmpty(allocs, "该出库单无拣货分配记录，无法签出");
         Set<String> touchedSku = new LinkedHashSet<>();
+        Set<Long> touchedPallets = new LinkedHashSet<>();
         for (WmsOutboundPickAllocation a : allocs) {
             WmsPhysicalInventory batch = physicalInventoryMapper.selectById(a.getPhysicalInventoryId());
             Assert.notNull(batch, "批次不存在: " + a.getPhysicalInventoryId());
@@ -184,10 +187,16 @@ public class OutboundShippingService {
                 throw new BusinessException(409, "批次库存版本冲突，签出失败，请重试: " + batch.getId());
             }
             touchedSku.add(a.getSkuCode());
+            if (batch.getPalletId() != null) {
+                touchedPallets.add(batch.getPalletId());
+            }
         }
         // 同事务聚合刷新受影响 SKU 的仓库级快照
         for (String sku : touchedSku) {
             inventoryAggregator.refreshSnapshot(0L, order.getErpTenantId(), order.getWarehouseId(), sku);
+        }
+        for (Long palletId : touchedPallets) {
+            palletService.refreshAfterOutbound(palletId);
         }
 
         // 链路二物流费：出库单关联物流产品(货主建单时选) → 按产品统一单价每次使用计一笔（幂等 biz_id），

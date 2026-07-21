@@ -74,6 +74,14 @@ public class WmsLocationManageController {
 			vo.setCodePadWidth(w.getCodePadWidth());
 			vo.setDefaultLocationType(w.getDefaultLocationType());
 			vo.setLocationGenerated(w.getLocationGenerated());
+			vo.setPalletLevels(w.getPalletLevels());
+			vo.setMaxSkuKindsPerPallet(w.getMaxSkuKindsPerPallet());
+			vo.setAllowCrossOwnerMix(w.getAllowCrossOwnerMix());
+			vo.setDefaultPalletLengthMm(w.getDefaultPalletLengthMm());
+			vo.setDefaultPalletWidthMm(w.getDefaultPalletWidthMm());
+			vo.setDefaultPalletHeightMm(w.getDefaultPalletHeightMm());
+			vo.setDefaultPalletMaxWeightKg(w.getDefaultPalletMaxWeightKg());
+			vo.setDefaultPalletUtilization(w.getDefaultPalletUtilization());
 			// 结构锁定状态（有货占用 / 已分配服务商 → 前端置灰保存结构·重新生成）
 			WmsStructureLockService.LockInfo lock = wmsStructureLockService.compute(w.getId());
 			vo.setStructureLocked(lock.isLocked());
@@ -100,6 +108,14 @@ public class WmsLocationManageController {
 		wh.setRackNoPrefix(dto.getRackNoPrefix() == null ? "" : dto.getRackNoPrefix());
 		wh.setCodePadWidth(dto.getCodePadWidth());
 		wh.setDefaultLocationType(dto.getDefaultLocationType());
+		wh.setPalletLevels(dto.getPalletLevels() == null ? 3 : dto.getPalletLevels());
+		wh.setMaxSkuKindsPerPallet(dto.getMaxSkuKindsPerPallet() == null ? 4 : dto.getMaxSkuKindsPerPallet());
+		wh.setAllowCrossOwnerMix(dto.getAllowCrossOwnerMix() == null ? 1 : dto.getAllowCrossOwnerMix());
+		wh.setDefaultPalletLengthMm(dto.getDefaultPalletLengthMm());
+		wh.setDefaultPalletWidthMm(dto.getDefaultPalletWidthMm());
+		wh.setDefaultPalletHeightMm(dto.getDefaultPalletHeightMm());
+		wh.setDefaultPalletMaxWeightKg(dto.getDefaultPalletMaxWeightKg());
+		wh.setDefaultPalletUtilization(dto.getDefaultPalletUtilization());
 		warehouseService.updateById(wh);
 		return ApiResult.ok();
 	}

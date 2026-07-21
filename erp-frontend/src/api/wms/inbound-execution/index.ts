@@ -22,9 +22,16 @@ export interface InboundReceiveDTO {
 export interface PutawayLine {
   skuCode: string
   locationCode: string
+  palletKey?: string
+  palletId?: number
+  slotCode: string
   quantity: number
   quality?: string
   zoneId?: number
+  capacityPercent?: number
+  capacitySource?: string
+  actualWeightKg?: number
+  manualFull?: boolean
 }
 
 /** 上架 DTO */
@@ -42,6 +49,62 @@ export interface AvailableLocationVO {
   zoneType?: string
   rackNo?: string
   columnNo?: number
+}
+
+export interface PalletSlotVO {
+  slotId: number
+  locationId: number
+  locationCode: string
+  slotCode: string
+  rackNo?: string
+  columnNo?: number
+  levelNo: number
+  zoneId?: number
+  zoneName?: string
+  zoneType?: string
+  slotStatus: string
+  maxWeightKg?: number
+  palletId?: number
+  palletNo?: string
+  palletType?: string
+  palletStatus?: string
+  capacityPercent?: number
+  skuKindCount?: number
+}
+
+export interface PalletPlanItem {
+  erpTenantId: number
+  skuCode: string
+  skuName?: string
+  quantity: number
+  quantityPerPallet?: number
+}
+
+export interface PalletPlan {
+  palletKey: string
+  palletId?: number
+  palletNo?: string
+  existingPallet: boolean
+  palletType: 'SINGLE_FULL' | 'SINGLE_PARTIAL' | 'MIXED'
+  quality: 'GOOD' | 'DAMAGED'
+  slotCode: string
+  locationCode: string
+  levelNo: number
+  capacityPercent?: number
+  capacitySource: string
+  estimatedWeightKg?: number
+  actualWeightKg?: number
+  wholePalletEligible: boolean
+  manualFull?: boolean
+  items: PalletPlanItem[]
+}
+
+export interface InboundPutawayPlanVO {
+  inboundOrderId: number
+  warehouseId: number
+  pallets: PalletPlan[]
+  slotCandidates: PalletSlotVO[]
+  warnings: string[]
 }
 
 /** 平台待作业入库单分页（采购 + 自定义全来源，平台看全部） */
@@ -66,7 +129,13 @@ export function receiveInbound(dto: InboundReceiveDTO) {
 
 /** 平台上架（分配库位写批次） */
 export function putawayInbound(dto: InboundPutawayDTO) {
-  return httpClient.post<ApiResult<void>>('/wms/inbound-execution/putaway', dto)
+  return httpClient.post<ApiResult<unknown[]>>('/wms/inbound-execution/putaway', dto)
+}
+
+export function getPutawayPlan(inboundOrderId: number) {
+  return httpClient.get<ApiResult<InboundPutawayPlanVO>>('/wms/inbound-execution/putaway-plan', {
+    params: { inboundOrderId }
+  })
 }
 
 /** 上架可选库位（本货主服务商租用货架上、空闲 + 分区匹配品质；quality: GOOD/DAMAGED） */

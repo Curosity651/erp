@@ -164,6 +164,8 @@ export interface StocktakeItemVO {
   id: number
   locationTaskId?: number
   physicalInventoryId?: number
+  palletId?: number
+  slotId?: number
   // 货主ID（同一skuCode在不同货主下可重名，须以货主+skuCode区分）
   erpTenantId?: number
   // 货主名称
@@ -173,6 +175,7 @@ export interface StocktakeItemVO {
   skuCode: string
   zoneId?: number
   locationCode?: string
+  slotCode?: string
   quality?: string
   allocatable?: number
   inboundDate?: string
@@ -217,6 +220,8 @@ export interface StocktakeExtraItemDTO {
   erpTenantId: number
   skuCode: string
   actualQuantity: number
+  slotCode: string
+  palletId?: number
   quality?: string
   inboundDate?: string
   remark?: string

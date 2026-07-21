@@ -7,11 +7,13 @@ import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
 import com.erp.admin.wms.mapper.WmsOutboundPickAllocationMapper;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsPalletMapper;
 import com.erp.admin.wms.model.dto.PickDTO;
 import com.erp.admin.wms.model.entity.SalesOutboundOrder;
 import com.erp.admin.wms.model.entity.SalesOutboundOrderItem;
 import com.erp.admin.wms.model.entity.WmsOutboundPickAllocation;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import com.erp.admin.wms.model.entity.WmsPallet;
 import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.model.qo.OutboundPickingQO;
 import com.erp.admin.wms.model.vo.OutboundOrderItemVO;
@@ -76,6 +78,10 @@ public class OutboundPickingService {
 
     private final TenantIdentityService tenantIdentityService;
 
+    private final WmsPalletMapper palletMapper;
+
+    private final WmsPalletService palletService;
+
     // ==================== 查询 ====================
 
     public PageResult<OutboundOrderVO> page(PageParam pageParam, OutboundPickingQO qo) {
@@ -114,6 +120,7 @@ public class OutboundPickingService {
         for (Map.Entry<String, Integer> e : required.entrySet()) {
             List<WmsPhysicalInventory> batches = physicalInventoryMapper
                     .selectFifoAllocatable(0L, vo.getErpTenantId(), vo.getWarehouseId(), e.getKey());
+            preferLoosePallets(batches);
             AllocPlan plan = planAllocation(batches, e.getValue());
             for (Take t : plan.takes) {
                 result.add(toAllocationVO(e.getKey(), t.batch, t.take));
@@ -219,6 +226,7 @@ public class OutboundPickingService {
         for (Map.Entry<String, Integer> e : required.entrySet()) {
             List<WmsPhysicalInventory> batches = physicalInventoryMapper
                     .selectFifoAllocatableForUpdate(0L, order.getErpTenantId(), order.getWarehouseId(), e.getKey());
+            preferLoosePallets(batches);
             AllocPlan plan = planAllocation(batches, e.getValue());
             if (plan.shortage > 0) {
                 StockShortageVO s = new StockShortageVO();
@@ -237,6 +245,7 @@ public class OutboundPickingService {
             return shortages;
         }
         java.util.Set<String> touchedSku = new java.util.LinkedHashSet<>();
+        java.util.Set<Long> touchedPallets = new java.util.LinkedHashSet<>();
         for (Take t : planned) {
             WmsPhysicalInventory b = t.batch;
             b.setReservedQty((b.getReservedQty() == null ? 0 : b.getReservedQty()) + t.take);
@@ -252,11 +261,34 @@ public class OutboundPickingService {
             alloc.setTakeQty(t.take);
             pickAllocationMapper.insert(alloc);
             touchedSku.add(b.getSkuCode());
+            if (b.getPalletId() != null) {
+                touchedPallets.add(b.getPalletId());
+            }
         }
         for (String sku : touchedSku) {
             inventoryAggregator.refreshSnapshot(0L, order.getErpTenantId(), order.getWarehouseId(), sku);
         }
+        for (Long palletId : touchedPallets) {
+            palletService.refreshAfterInventoryChange(palletId);
+        }
         return java.util.Collections.emptyList();
+    }
+
+    /** Partial and mixed pallets are consumed before homogeneous full pallets, then FIFO is preserved. */
+    private void preferLoosePallets(List<WmsPhysicalInventory> batches) {
+        java.util.Set<Long> palletIds = batches.stream().map(WmsPhysicalInventory::getPalletId)
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        java.util.Map<Long, WmsPallet> pallets = palletIds.isEmpty() ? java.util.Collections.emptyMap()
+                : palletMapper.selectBatchIds(palletIds).stream()
+                .collect(java.util.stream.Collectors.toMap(WmsPallet::getId, value -> value));
+        java.util.Comparator<WmsPhysicalInventory> fifo = java.util.Comparator
+                .comparing(WmsPhysicalInventory::getInboundDate, java.util.Comparator.nullsLast(java.time.LocalDate::compareTo))
+                .thenComparing(WmsPhysicalInventory::getPickOrder, java.util.Comparator.nullsLast(Integer::compareTo))
+                .thenComparing(WmsPhysicalInventory::getId);
+        batches.sort(java.util.Comparator.comparingInt((WmsPhysicalInventory batch) -> {
+            WmsPallet pallet = pallets.get(batch.getPalletId());
+            return pallet != null && Integer.valueOf(1).equals(pallet.getWholePalletEligible()) ? 1 : 0;
+        }).thenComparing(fifo));
     }
 
     /**

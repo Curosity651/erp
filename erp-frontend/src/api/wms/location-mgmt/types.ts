@@ -10,6 +10,14 @@ export interface WarehouseStructure {
   codePadWidth?: number
   defaultLocationType?: string
   locationGenerated?: number
+  palletLevels?: number
+  maxSkuKindsPerPallet?: number
+  allowCrossOwnerMix?: number
+  defaultPalletLengthMm?: number
+  defaultPalletWidthMm?: number
+  defaultPalletHeightMm?: number
+  defaultPalletMaxWeightKg?: number
+  defaultPalletUtilization?: number
   /** 结构是否锁定（有货占用或已分配服务商 → 禁改结构/重新生成） */
   structureLocked?: boolean
   /** 有货物占用 */
@@ -32,6 +40,14 @@ export interface WarehouseStructureUpdate {
   rackNoPrefix?: string
   codePadWidth?: number
   defaultLocationType?: string
+  palletLevels?: number
+  maxSkuKindsPerPallet?: number
+  allowCrossOwnerMix?: number
+  defaultPalletLengthMm?: number
+  defaultPalletWidthMm?: number
+  defaultPalletHeightMm?: number
+  defaultPalletMaxWeightKg?: number
+  defaultPalletUtilization?: number
 }
 
 /** 品质分区 */

@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 /**
  * 仓库实体
@@ -79,6 +80,25 @@ public class Warehouse {
 
 	@Schema(title = "库位已生成幂等标记 1是/0否")
 	private Integer locationGenerated;
+
+	@Schema(title = "Pallet levels for each two-dimensional location")
+	private Integer palletLevels;
+
+	@Schema(title = "Maximum distinct owner and SKU combinations per pallet")
+	private Integer maxSkuKindsPerPallet;
+
+	@Schema(title = "Whether different owners may share a mixed pallet")
+	private Integer allowCrossOwnerMix;
+
+	private Integer defaultPalletLengthMm;
+
+	private Integer defaultPalletWidthMm;
+
+	private Integer defaultPalletHeightMm;
+
+	private BigDecimal defaultPalletMaxWeightKg;
+
+	private BigDecimal defaultPalletUtilization;
 
 	@Schema(title = "创建人")
 	private Long createBy;

@@ -22,7 +22,7 @@ import org.apache.ibatis.annotations.Select;
 public interface WmsSkuLookupMapper {
 
 	String COLS = "sku_code, tenant_id AS erp_tenant_id, chinese_name, russian_name, "
-			+ "weight, package_length, package_width, package_height";
+			+ "weight, weight_unit, package_length, package_width, package_height, package_unit, quantity_per_pallet";
 
 	/**
 	 * 跨全部货主按 SKU 编码查（平台超管作业用）。
@@ -38,5 +38,9 @@ public interface WmsSkuLookupMapper {
 			+ "</script>")
 	List<SkuLookupVO> findBySkuCodeInTenants(@Param("skuCode") String skuCode,
 			@Param("tenantIds") Collection<Long> tenantIds);
+
+	@Select("SELECT " + COLS + " FROM sku WHERE deleted = 0 AND tenant_id = #{erpTenantId} "
+			+ "AND sku_code = #{skuCode} LIMIT 1")
+	SkuLookupVO findByTenantAndSku(@Param("erpTenantId") Long erpTenantId, @Param("skuCode") String skuCode);
 
 }

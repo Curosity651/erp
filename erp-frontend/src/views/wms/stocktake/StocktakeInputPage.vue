@@ -52,6 +52,7 @@
           <div>
             <span class="eyebrow">当前库位</span>
             <h2>{{ currentTask.locationCode }}</h2>
+            <a-segmented v-model:value="selectedLevel" :options="levelOptions" size="small" />
           </div>
           <div class="location-actions">
             <a-input
@@ -110,7 +111,7 @@
             </template>
             <template v-else-if="column.key === 'batch'">
               <span>{{ record.inboundDate || '-' }}</span>
-              <small class="muted">{{ qualityText(record.quality) }}</small>
+              <small class="muted">{{ record.slotCode || `${record.locationCode}-L1` }} · {{ qualityText(record.quality) }}</small>
             </template>
             <template v-else-if="column.key === 'systemQuantity'">
               <span v-if="detail?.blindCount !== 1">{{ record.systemQuantity }}</span>
@@ -188,6 +189,16 @@
         </a-row>
         <a-row :gutter="12">
           <a-col :span="12">
+            <a-form-item label="托盘层位" required>
+              <a-select
+                v-model:value="extra.slotCode"
+                :options="extraSlotOptions"
+                placeholder="选择 L1/L2/L3"
+                @change="onExtraSlotChange"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
             <a-form-item label="品质">
               <a-select v-model:value="extra.quality">
                 <a-select-option value="GOOD">良品</a-select-option>
@@ -236,6 +247,8 @@ import type {
   StocktakeLocationTaskVO
 } from '@/api/wms/stocktake/types'
 import { isSuccess } from '@/api'
+import { listPalletSlots } from '@/api/wms/pallet'
+import type { PalletSlotVO } from '@/api/wms/inbound-execution'
 
 defineOptions({ name: 'StocktakeInput' })
 const route = useRoute()
@@ -256,6 +269,8 @@ const extraVisible = ref(false)
 const addingExtra = ref(false)
 const eligibleOwnersLoading = ref(false)
 const eligibleOwnerIds = ref<number[]>([])
+const currentSlots = ref<PalletSlotVO[]>([])
+const selectedLevel = ref(1)
 const extra = reactive<Partial<StocktakeExtraItemDTO>>({ quality: 'GOOD', actualQuantity: 1 })
 
 const completedCount = computed(() => tasks.value.filter(t => t.taskStatus === 'COMPLETED').length)
@@ -264,12 +279,21 @@ const taskProgress = computed(() => tasks.value.length ? Math.round(completedCou
 const filteredTasks = computed(() => tasks.value.filter(t => t.locationCode.toLowerCase().includes(taskKeyword.value.toLowerCase())))
 const filteredItems = computed(() => {
   const keyword = itemKeyword.value.trim().toLowerCase()
-  if (!keyword) return items.value
-  return items.value.filter(item =>
+  const levelItems = items.value.filter(item => slotLevel(item.slotCode) === selectedLevel.value)
+  if (!keyword) return levelItems
+  return levelItems.filter(item =>
     item.skuCode.toLowerCase().includes(keyword) ||
     (item.ownerName || '').toLowerCase().includes(keyword)
   )
 })
+const levelOptions = computed(() => [1, 2, 3].map(level => ({
+  label: `L${level} (${items.value.filter(item => slotLevel(item.slotCode) === level).length})`,
+  value: level
+})))
+const extraSlotOptions = computed(() => currentSlots.value.map(slot => ({
+  value: slot.slotCode,
+  label: `${slot.slotCode} · ${slot.palletId ? `${slot.palletNo || '已有托盘'} ${Math.round(slot.capacityPercent || 0)}%` : '空层位'}`
+})))
 
 const columns = [
   { title: 'SKU', key: 'sku', width: 210 },
@@ -311,12 +335,20 @@ async function selectTask(task: StocktakeLocationTaskVO, force = false) {
   eligibleOwnerIds.value = []
   extra.erpTenantId = undefined
   try {
-    const [itemResult, ownerResult] = await Promise.all([
+    const [itemResult, ownerResult, slotResult] = await Promise.all([
       getStocktakeTaskItems(task.id),
-      getStocktakeEligibleOwnerIds(task.id)
+      getStocktakeEligibleOwnerIds(task.id),
+      listPalletSlots(task.warehouseId)
     ])
     if (isSuccess(itemResult)) items.value = itemResult.data || []
     if (isSuccess(ownerResult)) eligibleOwnerIds.value = ownerResult.data || []
+    currentSlots.value = isSuccess(slotResult)
+      ? (slotResult.data || []).filter(slot => slot.locationId === task.locationId)
+      : []
+    selectedLevel.value = 1
+    const defaultSlot = currentSlots.value.find(slot => slot.levelNo === selectedLevel.value)
+    extra.slotCode = defaultSlot?.slotCode
+    extra.palletId = defaultSlot?.palletId
     dirty.value = false
   } finally {
     itemsLoading.value = false
@@ -363,8 +395,8 @@ async function handleCompleteTask() {
 }
 
 async function handleAddExtra() {
-  if (!currentTask.value || !extra.erpTenantId || !extra.skuCode || !extra.actualQuantity) {
-    message.warning('请填写货主、SKU 和实盘数量')
+  if (!currentTask.value || !extra.erpTenantId || !extra.skuCode || !extra.actualQuantity || !extra.slotCode) {
+    message.warning('请填写货主、SKU、实盘数量和托盘层位')
     return
   }
   addingExtra.value = true
@@ -374,18 +406,31 @@ async function handleAddExtra() {
       erpTenantId: extra.erpTenantId,
       skuCode: extra.skuCode.trim(),
       actualQuantity: extra.actualQuantity,
+      slotCode: extra.slotCode,
+      palletId: extra.palletId,
       quality: extra.quality,
       inboundDate: extra.inboundDate
     })
     if (isSuccess(result) && result.data) {
       items.value.push(result.data)
       extraVisible.value = false
-      Object.assign(extra, { erpTenantId: undefined, skuCode: '', actualQuantity: 1, quality: 'GOOD', inboundDate: undefined })
+      Object.assign(extra, { erpTenantId: undefined, skuCode: '', actualQuantity: 1, quality: 'GOOD', inboundDate: undefined, slotCode: undefined, palletId: undefined })
       message.success('账外货物已登记到当前库位')
     }
   } finally {
     addingExtra.value = false
   }
+}
+
+function slotLevel(slotCode?: string) {
+  const match = slotCode?.match(/-L([123])$/)
+  return match ? Number(match[1]) : 1
+}
+
+function onExtraSlotChange(slotCode: string) {
+  const slot = currentSlots.value.find(item => item.slotCode === slotCode)
+  extra.palletId = slot?.palletId
+  if (slot) selectedLevel.value = slot.levelNo
 }
 
 function handleSubmitReview() {

@@ -20,6 +20,10 @@ public class StocktakeItemVO {
 
 	private Long physicalInventoryId;
 
+	private Long palletId;
+
+	private Long slotId;
+
 	@Schema(title = "货主ID（货物归属；同一skuCode在不同货主下可重名，须以货主+skuCode区分）")
 	private Long erpTenantId;
 
@@ -34,6 +38,8 @@ public class StocktakeItemVO {
 	private Long zoneId;
 
 	private String locationCode;
+
+	private String slotCode;
 
 	private String quality;
 

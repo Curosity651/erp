@@ -16,6 +16,7 @@ import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.service.OutboundShippingService;
 import com.erp.admin.wms.service.WmsInventoryAggregator;
+import com.erp.admin.wms.service.WmsPalletService;
 import org.ballcat.common.core.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,7 @@ class OutboundShippingServiceTest {
     private com.erp.admin.wms.service.WmsLogisticsProductService logisticsProductService;
     private com.erp.admin.tenant.mapper.SysTenantMapper sysTenantMapper;
     private TenantIdentityService tis;
+    private WmsPalletService palletService;
     private OutboundShippingService service;
 
     @BeforeEach
@@ -67,11 +69,12 @@ class OutboundShippingServiceTest {
         logisticsProductService = mock(com.erp.admin.wms.service.WmsLogisticsProductService.class);
         sysTenantMapper = mock(com.erp.admin.tenant.mapper.SysTenantMapper.class);
         tis = mock(TenantIdentityService.class);
+        palletService = mock(WmsPalletService.class);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
         service = new OutboundShippingService(shippingMapper, orderMapper, itemMapper, physMapper, allocMapper,
-                billingMapper, aggregator, logisticsProductService, sysTenantMapper, tis);
+                billingMapper, aggregator, logisticsProductService, sysTenantMapper, tis, palletService);
     }
 
     private SalesOutboundOrder order(long id, String status) {

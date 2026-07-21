@@ -35,6 +35,8 @@ public class WmsLocationGenerator {
 
 	private final WmsStructureLockService wmsStructureLockService;
 
+	private final WmsPalletService palletService;
+
 	/**
 	 * 为仓库批量生成（或按新结构重新生成）库位。
 	 * @param warehouseId 仓库ID
@@ -85,6 +87,7 @@ public class WmsLocationGenerator {
 			}
 		}
 		wmsLocationService.saveBatch(list);
+		palletService.ensureSlots(warehouseId);
 
 		// 置幂等标记（重新生成时已为1，重复置无副作用）
 		Warehouse mark = new Warehouse();

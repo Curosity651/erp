@@ -41,6 +41,12 @@ public class PutawayDTO {
 	@Schema(title = "库位编码", requiredMode = Schema.RequiredMode.REQUIRED)
 	private String locationCode;
 
+	@Schema(title = "Existing or newly created pallet ID")
+	private Long palletId;
+
+	@Schema(title = "Three-level slot ID")
+	private Long slotId;
+
 	@Schema(title = "分区ID")
 	private Long zoneId;
 

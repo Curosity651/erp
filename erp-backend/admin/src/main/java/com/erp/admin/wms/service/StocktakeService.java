@@ -12,6 +12,7 @@ import com.erp.admin.wms.converter.StocktakeConverter;
 import com.erp.admin.wms.mapper.StocktakeMapper;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.model.dto.StocktakeExtraItemDTO;
+import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.StocktakeAddSkuDTO;
 import com.erp.admin.wms.model.dto.StocktakeDTO;
 import com.erp.admin.wms.model.dto.StocktakeItemInputDTO;
@@ -116,6 +117,8 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
 
 	private final TenantIdentityService tenantIdentityService;
+
+	private final WmsPalletService palletService;
 
 	/**
 	 * 分页查询
@@ -357,11 +360,18 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		item.setStocktakeOrderId(stocktakeId);
 		item.setLocationTaskId(task.getId());
 		item.setPhysicalInventoryId(batch.getId());
+		item.setPalletId(batch.getPalletId());
+		item.setSlotId(batch.getSlotId());
 		item.setErpTenantId(batch.getErpTenantId());
 		item.setWmsTenantId(batch.getWmsTenantId() == null ? 0L : batch.getWmsTenantId());
 		item.setSkuCode(batch.getSkuCode());
 		item.setZoneId(batch.getZoneId());
 		item.setLocationCode(batch.getLocationCode());
+		if (batch.getSlotId() != null) {
+			item.setSlotCode(palletService.listSlots(batch.getWarehouseId()).stream()
+					.filter(slot -> batch.getSlotId().equals(slot.getSlotId()))
+					.map(com.erp.admin.wms.model.vo.PalletSlotVO::getSlotCode).findFirst().orElse(null));
+		}
 		item.setQuality(batch.getQuality());
 		item.setAllocatable(batch.getAllocatable());
 		item.setInboundDate(batch.getInboundDate());
@@ -512,6 +522,17 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		item.setSkuCode(dto.getSkuCode());
 		item.setZoneId(task.getZoneId());
 		item.setLocationCode(task.getLocationCode());
+		com.erp.admin.wms.model.vo.PalletSlotVO selectedSlot = palletService.listSlots(task.getWarehouseId()).stream()
+				.filter(slot -> dto.getSlotCode().equals(slot.getSlotCode()))
+				.findFirst().orElse(null);
+		Assert.notNull(selectedSlot, "所选层位不存在：" + dto.getSlotCode());
+		Assert.isTrue(task.getLocationId().equals(selectedSlot.getLocationId()), "所选层位不属于当前盘点库位");
+		Assert.isTrue("EMPTY".equals(selectedSlot.getSlotStatus())
+				|| (dto.getPalletId() != null && dto.getPalletId().equals(selectedSlot.getPalletId())),
+				"所选层位已有其他托盘，请刷新后重试");
+		item.setSlotCode(dto.getSlotCode());
+		item.setSlotId(selectedSlot.getSlotId());
+		item.setPalletId(dto.getPalletId());
 		item.setQuality(dto.getQuality() == null ? "GOOD" : dto.getQuality());
 		WmsZone zone = task.getZoneId() == null ? null : wmsZoneService.getById(task.getZoneId());
 		item.setAllocatable("GOOD".equalsIgnoreCase(item.getQuality()) && zone != null
@@ -699,6 +720,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 						"实盘数量不能小于已预留数量，SKU=" + item.getSkuCode());
 				batch.setQuantity(item.getActualQuantity());
 				Assert.isTrue(physicalInventoryMapper.updateById(batch) == 1, "物理库存并发更新失败，请重试");
+				palletService.refreshAfterInventoryChange(batch.getPalletId());
 			}
 			else {
 				insertStocktakeBatch(order, item);
@@ -766,6 +788,19 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	private void insertStocktakeBatch(StocktakeOrder order, StocktakeOrderItem item) {
 		Assert.isTrue(item.getActualQuantity() != null && item.getActualQuantity() > 0, "账外商品实盘数量必须大于0");
 		WmsZone zone = item.getZoneId() == null ? null : wmsZoneService.getById(item.getZoneId());
+		InboundPutawayDTO.PutawayLine palletLine = new InboundPutawayDTO.PutawayLine();
+		palletLine.setSkuCode(item.getSkuCode());
+		palletLine.setQuantity(item.getActualQuantity());
+		palletLine.setQuality(item.getQuality());
+		palletLine.setSlotCode(item.getSlotCode());
+		palletLine.setPalletId(item.getPalletId());
+		palletLine.setPalletKey("STOCKTAKE-" + item.getId());
+		palletLine.setCapacitySource("MANUAL_REQUIRED");
+		com.erp.admin.wms.model.entity.WmsPallet pallet = item.getPalletId() == null
+				? palletService.createForPutaway(order.getWarehouseId(), item.getErpTenantId(), item.getSlotCode(),
+						Collections.singletonList(palletLine))
+				: palletService.lockExistingForPutaway(item.getPalletId(), item.getErpTenantId(),
+						Collections.singletonList(palletLine));
 		WmsPhysicalInventory batch = new WmsPhysicalInventory();
 		batch.setWmsTenantId(0L);
 		batch.setErpTenantId(item.getErpTenantId());
@@ -780,6 +815,8 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		batch.setReservedQty(0);
 		batch.setQuality(item.getQuality() == null ? "GOOD" : item.getQuality());
 		batch.setLocationCode(item.getLocationCode());
+		batch.setPalletId(pallet.getId());
+		batch.setSlotId(pallet.getCurrentSlotId());
 		batch.setZoneId(item.getZoneId());
 		batch.setAllocatable("GOOD".equalsIgnoreCase(batch.getQuality()) && zone != null
 				&& Integer.valueOf(1).equals(zone.getAllocatable()) ? 1 : 0);
@@ -787,8 +824,11 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		batch.setVersion(0);
 		physicalInventoryMapper.insert(batch);
 		item.setPhysicalInventoryId(batch.getId());
+		item.setPalletId(pallet.getId());
+		item.setSlotId(pallet.getCurrentSlotId());
 		item.setPickOrder(batch.getPickOrder());
 		stocktakeItemService.updateById(item);
+		palletService.refreshAfterInventoryChange(pallet.getId());
 	}
 
 	private List<StockPostingItemDTO> buildPostingItems(StocktakeOrder order, List<StocktakeOrderItem> items) {
