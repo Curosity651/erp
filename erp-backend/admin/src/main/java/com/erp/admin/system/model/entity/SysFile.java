@@ -27,6 +27,9 @@ public class SysFile {
 	@Schema(title = "OSS桶名称")
 	private String bucketName;
 
+	@Schema(title = "OSS桶别名")
+	private String bucketKey;
+
 	@Schema(title = "OSS对象键")
 	private String objectKey;
 

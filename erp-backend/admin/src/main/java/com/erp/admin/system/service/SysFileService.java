@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.erp.admin.system.config.BucketConfig;
+import com.erp.admin.system.config.OssBucketKeys;
 import com.erp.admin.system.converter.SysFileConverter;
 import com.erp.admin.system.mapper.SysFileMapper;
 import com.erp.admin.system.model.dto.SysFileUploadDTO;
@@ -98,8 +99,7 @@ public class SysFileService extends ExtendServiceImpl<SysFileMapper, SysFile> {
 
 		SysFileVO vo = SysFileConverter.INSTANCE.entityToVo(sysFile);
 
-		// 设置访问URL（通过 bucketName 反向查找配置）
-		vo.setUrl(ossService.getDownloadUrlByBucketName(sysFile.getBucketName(), sysFile.getObjectKey()));
+		vo.setUrl(ossService.getDownloadUrl(resolveBucketKey(sysFile), sysFile.getObjectKey()));
 
 		return vo;
 	}
@@ -113,8 +113,7 @@ public class SysFileService extends ExtendServiceImpl<SysFileMapper, SysFile> {
 		SysFile sysFile = this.getById(fileId);
 		Assert.notNull(sysFile, "文件不存在");
 
-		// 通过 bucketName 反向查找配置
-		return ossService.getDownloadUrlByBucketName(sysFile.getBucketName(), sysFile.getObjectKey());
+		return ossService.getDownloadUrl(resolveBucketKey(sysFile), sysFile.getObjectKey());
 	}
 
 	/**
@@ -152,8 +151,7 @@ public class SysFileService extends ExtendServiceImpl<SysFileMapper, SysFile> {
 		List<SysFile> files = this.listByIds(fileIds);
 		return files.stream().map(file -> {
 			SysFileVO vo = SysFileConverter.INSTANCE.entityToVo(file);
-			// 通过 bucketName 反向查找配置
-			vo.setUrl(ossService.getDownloadUrlByBucketName(file.getBucketName(), file.getObjectKey()));
+			vo.setUrl(ossService.getDownloadUrl(resolveBucketKey(file), file.getObjectKey()));
 			return vo;
 		}).collect(Collectors.toList());
 	}
@@ -172,8 +170,7 @@ public class SysFileService extends ExtendServiceImpl<SysFileMapper, SysFile> {
 		Map<Long, String> result = new HashMap<>();
 
 		for (SysFile file : files) {
-			// 通过 bucketName 反向查找配置
-			String url = ossService.getDownloadUrlByBucketName(file.getBucketName(), file.getObjectKey());
+			String url = ossService.getDownloadUrl(resolveBucketKey(file), file.getObjectKey());
 			result.put(file.getId(), url);
 		}
 
@@ -184,5 +181,13 @@ public class SysFileService extends ExtendServiceImpl<SysFileMapper, SysFile> {
 	/** 当前登录用户ID(取不到返回 null)。 */
 	private Long currentUserId() {
 		try { return principalAttributeAccessor.getUserId(); } catch (Exception ignore) { return null; }
+	}
+
+	private String resolveBucketKey(SysFile file) {
+		if (file.getBucketKey() != null && !file.getBucketKey().trim().isEmpty()) {
+			return file.getBucketKey();
+		}
+		return file.getObjectKey() != null && file.getObjectKey().startsWith("uploads/private/")
+				? OssBucketKeys.PRIVATE_FILES : OssBucketKeys.PUBLIC_FILES;
 	}
 }

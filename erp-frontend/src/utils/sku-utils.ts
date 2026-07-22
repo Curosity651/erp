@@ -1,5 +1,6 @@
 export interface SkuFileItem {
   objectKey?: string
+  fileUrl?: string
   url?: string
 }
 export interface SkuFilesMap {
@@ -64,8 +65,12 @@ export function getSkuMainImage(files?: SkuFilesMap, ossDomain?: string): string
 
     const first = arr[0]
 
-    // 优先使用 objectKey + ossDomain 拼接
-    if (first.objectKey && ossDomain) {
+    // 私有 OSS 必须优先使用后端生成的限时签名 URL。
+    if (first.fileUrl) {
+      return first.fileUrl
+    } else if (first.url) {
+      return encodeUrlPath(first.url)
+    } else if (first.objectKey && ossDomain) {
       // 只对 objectKey 进行编码（域名部分不需要编码）
       const encodedObjectKey = first.objectKey
         .split('/')
@@ -73,11 +78,6 @@ export function getSkuMainImage(files?: SkuFilesMap, ossDomain?: string): string
         .join('/')
       return `${ossDomain}/${encodedObjectKey}`
     }
-    // 其次使用 url 字段（完整 URL，需要对路径部分编码）
-    else if (first.url) {
-      return encodeUrlPath(first.url)
-    }
-
     return undefined
   }
 

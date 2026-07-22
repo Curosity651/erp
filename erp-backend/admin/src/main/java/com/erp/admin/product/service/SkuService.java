@@ -34,7 +34,9 @@ import com.erp.admin.product.model.qo.SkuQO;
 import com.erp.admin.product.model.qo.SkuSelectQO;
 import com.erp.admin.product.model.vo.*;
 import com.erp.admin.system.config.OssImageStyles;
+import com.erp.admin.system.config.OssBucketKeys;
 import com.erp.admin.system.model.entity.ProjectGroup;
+import com.erp.admin.system.service.OssService;
 import com.erp.admin.system.service.ProjectGroupService;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import lombok.RequiredArgsConstructor;
@@ -75,6 +77,8 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 	private final SkuMappingMapper skuMappingMapper;
 
 	private final TenantIdentityService tenantIdentityService;
+
+	private final OssService ossService;
 
 	/**
 	 * 根据QueryObeject查询分页数据
@@ -970,8 +974,7 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 		vo.setFileType(skuFiles.getFileType());
 		vo.setObjectKey(skuFiles.getObjectKey());
 		vo.setSortOrder(skuFiles.getSortOrder());
-		// 这里可以根据objectKey构建fileUrl，或者由前端处理
-		// vo.setFileUrl(buildFileUrl(skuFiles.getObjectKey()));
+		vo.setFileUrl(ossService.getUrl(OssBucketKeys.PUBLIC_FILES, skuFiles.getObjectKey()));
 		return vo;
 	}
 

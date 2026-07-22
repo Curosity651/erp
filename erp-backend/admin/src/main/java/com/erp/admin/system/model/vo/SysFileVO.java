@@ -17,6 +17,9 @@ public class SysFileVO {
 	@Schema(title = "主键ID")
 	private Long id;
 
+	@Schema(title = "OSS桶别名")
+	private String bucketKey;
+
 	@Schema(title = "OSS对象键")
 	private String objectKey;
 
