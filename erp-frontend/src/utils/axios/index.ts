@@ -12,6 +12,25 @@ import { useI18nStore } from '@/stores/i18n-store'
 import { useAdminI18n } from '@/hooks/i18n'
 
 const { rawI18nText } = useAdminI18n()
+let redirectingToLogin = false
+
+const redirectToLogin = () => {
+  const currentRoute = router.currentRoute.value
+  useUserStore().clean()
+  if (currentRoute.path === loginPath || redirectingToLogin) return
+
+  redirectingToLogin = true
+  Modal.destroyAll()
+  message.warning(rawI18nText('user.login.expired', '登录状态已过期，请重新登录'))
+  void router
+    .replace({
+      path: loginPath,
+      query: { redirect: currentRoute.fullPath }
+    })
+    .finally(() => {
+      redirectingToLogin = false
+    })
+}
 
 const onRequestFulfilled = (requestConfig: InternalAxiosRequestConfig) => {
   const headers = requestConfig.headers || {}
@@ -65,22 +84,7 @@ const onResponseRejected = (error: AxiosError) => {
         break
       case 401:
         error.resolved = true
-        useUserStore().clean()
-        if (router.currentRoute.value.path !== loginPath) {
-          // 防止重复弹出 TODO 这里拦截所有其他的 axios 的请求
-          Modal.destroyAll()
-          Modal.info({
-            title: rawI18nText('system.tip.title', '系统提示'),
-            content: rawI18nText('user.login.expired', '登录状态已过期!'),
-            okText: rawI18nText('user.login.submit.retry', '重新登陆'),
-            onOk: () => {
-              router.push({
-                path: loginPath,
-                query: { redirect: router.currentRoute.value.fullPath }
-              })
-            }
-          })
-        }
+        redirectToLogin()
         break
       case 403:
         error.resolved = true
