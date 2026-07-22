@@ -69,7 +69,6 @@ public class ReturnQcService {
             ReturnQcStatus.CLOSED.name());
 
     private static final String ZONE_RETURN = "RETURN";
-    private static final String ZONE_STANDARD = "STANDARD";
     private static final String ZONE_DEFECTIVE = "DEFECTIVE";
     private static final String PASS = "PASS";
     private static final String FAIL = "FAIL";
@@ -258,8 +257,7 @@ public class ReturnQcService {
 
             if (qualifiedQty > 0) {
                 String zone = line.getQualifiedZone();
-                Assert.isTrue(ZONE_RETURN.equals(zone) || ZONE_STANDARD.equals(zone),
-                        "良品分区须为退货区或标准区");
+                Assert.isTrue(ZONE_RETURN.equals(zone), "退货质检良品只能上架到退货区");
                 Long zoneId = zoneIdByType.get(zone);
                 if (hasText(line.getQualifiedSlotCode())) {
                     qualifiedPlacement = putawayOnPallet(order, line.getSkuCode(), qualifiedQty, "GOOD",
@@ -491,8 +489,8 @@ public class ReturnQcService {
         assertPlatform();
         ReturnInboundOrder order = returnInboundMapper.selectById(returnOrderId);
         Assert.notNull(order, "退货单不存在");
-        Assert.isTrue(ZONE_RETURN.equals(zoneType) || ZONE_STANDARD.equals(zoneType)
-                || ZONE_DEFECTIVE.equals(zoneType), "不支持的回库分区");
+        Assert.isTrue(ZONE_RETURN.equals(zoneType) || ZONE_DEFECTIVE.equals(zoneType),
+                "退货质检只支持退货区或不良品区");
         validateAuthorizedWarehouse(order.getErpTenantId(), warehouseId);
 
         Set<String> allowedRacks = resolveAllowedRacks(order.getErpTenantId(), warehouseId);

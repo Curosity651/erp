@@ -65,14 +65,7 @@
         <a-table-column title="良品分区" :width="115">
           <template #default="{ record }">
             <span v-if="readonly">{{ zoneText(record.qualifiedZone) }}</span>
-            <a-select
-              v-else
-              v-model:value="record.qualifiedZone"
-              :options="qualifiedZoneOptions"
-              :disabled="record.qualifiedQty <= 0"
-              class="full-width"
-              @change="resetPlacement(record, 'qualified')"
-            />
+            <span v-else>退货区</span>
           </template>
         </a-table-column>
         <a-table-column title="良品层位 / 托盘容量" :width="240">
@@ -225,11 +218,7 @@ interface QcLine {
 const PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
 const MAX_PHOTOS = 6
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024
-const ZONES: ReturnZone[] = ['RETURN', 'STANDARD', 'DEFECTIVE']
-const qualifiedZoneOptions = [
-  { label: '退货区', value: 'RETURN' },
-  { label: '标准区', value: 'STANDARD' }
-]
+const ZONES: ReturnZone[] = ['RETURN', 'DEFECTIVE']
 
 const props = defineProps<{ open: boolean; orderId?: number; readonly?: boolean }>()
 const emit = defineEmits<{
@@ -274,7 +263,7 @@ async function loadData(id: number) {
       receivedQty: item.receivedQty ?? item.expectedQty,
       qualifiedQty: item.qualifiedQty ?? item.receivedQty ?? item.expectedQty,
       damagedQty: item.damagedQty ?? 0,
-      qualifiedZone: item.qualifiedZone ?? 'RETURN',
+      qualifiedZone: props.readonly ? item.qualifiedZone ?? 'RETURN' : 'RETURN',
       qualifiedLocationCode: item.qualifiedLocationCode,
       qualifiedSlotCode: item.qualifiedSlotCode,
       qualifiedPalletId: item.qualifiedPalletId,

@@ -175,7 +175,7 @@ class ReturnQcServiceTest {
     }
 
     @Test
-    void qc_good_quantity_with_defective_zone_is_rejected() {
+    void qc_good_quantity_with_standard_zone_is_rejected() {
         when(returnInboundMapper.selectById(1L)).thenReturn(order(ReturnQcStatus.QC_PENDING.name()));
         when(returnInboundMapper.casReturnStatus(1L, ReturnQcStatus.QC_PENDING.name(),
                 ReturnQcStatus.COMPLETED.name())).thenReturn(1);
@@ -186,7 +186,7 @@ class ReturnQcServiceTest {
         line.setSkuCode("SKU1");
         line.setQualifiedQty(5);
         line.setDamagedQty(0);
-        line.setQualifiedZone("DEFECTIVE");
+        line.setQualifiedZone("STANDARD");
         line.setQualifiedLocationCode("A1-01");
         ReturnQcDTO dto = new ReturnQcDTO();
         dto.setReturnOrderId(1L);
