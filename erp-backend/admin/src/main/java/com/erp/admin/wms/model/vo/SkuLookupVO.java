@@ -46,4 +46,7 @@ public class SkuLookupVO {
 
 	private Integer quantityPerPallet;
 
+	@Schema(title = "是否为需通电的电子类商品")
+	private Boolean needsPower;
+
 }

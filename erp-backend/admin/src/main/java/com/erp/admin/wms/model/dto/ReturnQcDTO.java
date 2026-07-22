@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import javax.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -18,6 +19,10 @@ public class ReturnQcDTO {
     @NotNull(message = "退货单ID不能为空")
     @Schema(title = "退货单ID")
     private Long returnOrderId;
+
+    @NotNull(message = "退货仓库不能为空")
+    @Schema(title = "实际退货入库仓库ID")
+    private Long warehouseId;
 
     @NotNull(message = "质检明细不能为空")
     @Schema(title = "质检明细")
@@ -42,8 +47,26 @@ public class ReturnQcDTO {
         @Schema(title = "良品回库库位")
         private String qualifiedLocationCode;
 
+        @Schema(title = "良品托盘层位编码")
+        private String qualifiedSlotCode;
+
+        @Schema(title = "良品合并的现有托盘ID；新托盘为空")
+        private Long qualifiedPalletId;
+
+        @Schema(title = "良品托盘入库后的容量百分比")
+        private BigDecimal qualifiedCapacityPercent;
+
         @Schema(title = "残次品回库库位")
         private String damagedLocationCode;
+
+        @Schema(title = "残次品托盘层位编码")
+        private String damagedSlotCode;
+
+        @Schema(title = "残次品合并的现有托盘ID；新托盘为空")
+        private Long damagedPalletId;
+
+        @Schema(title = "残次品托盘入库后的容量百分比")
+        private BigDecimal damagedCapacityPercent;
 
         @Schema(title = "质检备注")
         private String qcRemark;

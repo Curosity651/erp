@@ -2,21 +2,31 @@ package com.erp.admin.wms.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.erp.admin.common.tenant.TenantContext;
+import com.erp.admin.system.model.entity.SysFile;
+import com.erp.admin.system.service.SysFileService;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.wms.mapper.ReturnInboundMapper;
 import com.erp.admin.wms.mapper.ReturnQcMapper;
 import com.erp.admin.wms.mapper.WmsReturnQcItemMapper;
+import com.erp.admin.wms.mapper.WmsSkuLookupMapper;
+import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.PutawayDTO;
 import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
 import com.erp.admin.wms.model.entity.ReturnInboundOrder;
+import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsPallet;
 import com.erp.admin.wms.model.entity.WmsReturnQcItem;
 import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.enums.ReturnQcStatus;
 import com.erp.admin.wms.model.qo.ReturnQO;
 import com.erp.admin.wms.model.vo.ReturnOrderItemVO;
 import com.erp.admin.wms.model.vo.ReturnOrderVO;
+import com.erp.admin.wms.model.vo.PalletSlotVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
+import com.erp.admin.wms.model.vo.SkuLookupVO;
+import com.erp.admin.wms.model.vo.WarehouseOptionVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.core.exception.BusinessException;
@@ -29,6 +39,8 @@ import org.springframework.util.Assert;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -61,6 +73,8 @@ public class ReturnQcService {
     private static final String ZONE_DEFECTIVE = "DEFECTIVE";
     private static final String PASS = "PASS";
     private static final String FAIL = "FAIL";
+    private static final Set<String> QC_PHOTO_TYPES = new HashSet<>(Arrays.asList(
+            "image/jpeg", "image/jpg", "image/png"));
 
     private final ReturnQcMapper returnQcMapper;
 
@@ -83,6 +97,14 @@ public class ReturnQcService {
     private final com.erp.admin.tenant.mapper.SysTenantMapper sysTenantMapper;
 
     private final WmsRackAssignmentService wmsRackAssignmentService;
+
+    private final WarehouseService warehouseService;
+
+    private final WmsPalletService palletService;
+
+    private final WmsSkuLookupMapper skuLookupMapper;
+
+    private final SysFileService sysFileService;
 
     // ==================== 查询 ====================
 
@@ -148,7 +170,8 @@ public class ReturnQcService {
             WmsReturnQcItem item = new WmsReturnQcItem();
             item.setReturnOrderId(order.getId());
             item.setSkuCode(line.getSkuCode());
-            item.setElectronic(0);
+            SkuLookupVO sku = skuLookupMapper.findByTenantAndSku(order.getErpTenantId(), line.getSkuCode());
+            item.setElectronic(sku != null && Boolean.TRUE.equals(sku.getNeedsPower()) ? 1 : 0);
             item.setExpectedQty(expectedQty);
             item.setReceivedQty(received);
             returnQcItemMapper.insert(item);
@@ -181,6 +204,10 @@ public class ReturnQcService {
         }
         Assert.notEmpty(dto.getLines(), "质检明细不能为空");
 
+        Long targetWarehouseId = dto.getWarehouseId() == null ? order.getWarehouseId() : dto.getWarehouseId();
+        validateAuthorizedWarehouse(order.getErpTenantId(), targetWarehouseId);
+        order.setWarehouseId(targetWarehouseId);
+
         // 状态 CAS 抢占：QC_PENDING→COMPLETED 原子推进，并发/双击质检只有一个赢家（消灭 TOCTOU，防同一退货双份上架翻倍）。
         // 落败者在此即被挡下、不执行后续 putaway；本事务后续任何异常回滚也会一并撤销该状态推进。
         int claimed = returnInboundMapper.casReturnStatus(order.getId(),
@@ -195,17 +222,18 @@ public class ReturnQcService {
         }
         // 分区类型 → zoneId
         Map<String, Long> zoneIdByType = new HashMap<>();
-        for (WmsZone z : wmsZoneService.listByWarehouse(order.getWarehouseId())) {
+        for (WmsZone z : wmsZoneService.listByWarehouse(targetWarehouseId)) {
             zoneIdByType.putIfAbsent(z.getZoneType(), z.getId());
         }
         // 回库库位校验用：本仓库位表 + 已占用集合 + 本次提交去重（复用入库上架同一套独占口径，防幽灵批次/一库位多批次）
-        Map<String, WmsLocation> locByCode = wmsLocationService.listByWarehouse(order.getWarehouseId()).stream()
+        Map<String, WmsLocation> locByCode = wmsLocationService.listByWarehouse(targetWarehouseId).stream()
                 .filter(l -> l.getLocationCode() != null)
                 .collect(Collectors.toMap(WmsLocation::getLocationCode, l -> l, (a, b) -> a));
-        Set<String> occupied = new HashSet<>(physicalInventoryService.occupiedLocationCodes(order.getWarehouseId()));
+        Set<String> occupied = new HashSet<>(physicalInventoryService.occupiedLocationCodes(targetWarehouseId));
         Set<String> usedInThisSubmit = new HashSet<>();
+        Set<String> usedSlots = new HashSet<>();
         // 货架归属：只能上到本货主父服务商在本仓当前有效租用的货架排（与前端库位下拉同口径，防绕过直接提交）
-        Set<String> allowedRacks = resolveAllowedRacks(order.getErpTenantId(), order.getWarehouseId());
+        Set<String> allowedRacks = resolveAllowedRacks(order.getErpTenantId(), targetWarehouseId);
 
         int qualified = 0;
         int unqualified = 0;
@@ -223,29 +251,54 @@ public class ReturnQcService {
             Assert.isTrue(qualifiedQty + damagedQty == receivedQty,
                     "良品数量与残次品数量之和必须等于实收数量: " + line.getSkuCode());
 
+            validateQcPhotos(item, damagedQty, line.getPhotoFileIds());
+
+            PalletPlacement qualifiedPlacement = null;
+            PalletPlacement damagedPlacement = null;
+
             if (qualifiedQty > 0) {
                 String zone = line.getQualifiedZone();
                 Assert.isTrue(ZONE_RETURN.equals(zone) || ZONE_STANDARD.equals(zone),
                         "良品分区须为退货区或标准区");
                 Long zoneId = zoneIdByType.get(zone);
-                validateLocation(line.getQualifiedLocationCode(), zone, zoneId, locByCode,
-                        occupied, usedInThisSubmit, allowedRacks);
-                putaway(order, line.getSkuCode(), qualifiedQty, "GOOD",
-                        line.getQualifiedLocationCode(), zoneId, 1);
+                if (hasText(line.getQualifiedSlotCode())) {
+                    qualifiedPlacement = putawayOnPallet(order, line.getSkuCode(), qualifiedQty, "GOOD",
+                            zone, zoneId, line.getQualifiedSlotCode(), line.getQualifiedPalletId(),
+                            line.getQualifiedCapacityPercent(), 1, allowedRacks, usedSlots);
+                    line.setQualifiedLocationCode(qualifiedPlacement.locationCode);
+                } else {
+                    validateLocation(line.getQualifiedLocationCode(), zone, zoneId, locByCode,
+                            occupied, usedInThisSubmit, allowedRacks);
+                    putaway(order, line.getSkuCode(), qualifiedQty, "GOOD",
+                            line.getQualifiedLocationCode(), zoneId, 1);
+                }
             }
             if (damagedQty > 0) {
                 Long zoneId = zoneIdByType.get(ZONE_DEFECTIVE);
-                validateLocation(line.getDamagedLocationCode(), ZONE_DEFECTIVE, zoneId, locByCode,
-                        occupied, usedInThisSubmit, allowedRacks);
-                putaway(order, line.getSkuCode(), damagedQty, "DAMAGED",
-                        line.getDamagedLocationCode(), zoneId, 0);
+                if (hasText(line.getDamagedSlotCode())) {
+                    damagedPlacement = putawayOnPallet(order, line.getSkuCode(), damagedQty, "DAMAGED",
+                            ZONE_DEFECTIVE, zoneId, line.getDamagedSlotCode(), line.getDamagedPalletId(),
+                            line.getDamagedCapacityPercent(), 0, allowedRacks, usedSlots);
+                    line.setDamagedLocationCode(damagedPlacement.locationCode);
+                } else {
+                    validateLocation(line.getDamagedLocationCode(), ZONE_DEFECTIVE, zoneId, locByCode,
+                            occupied, usedInThisSubmit, allowedRacks);
+                    putaway(order, line.getSkuCode(), damagedQty, "DAMAGED",
+                            line.getDamagedLocationCode(), zoneId, 0);
+                }
             }
 
             item.setQualifiedQty(qualifiedQty);
             item.setDamagedQty(damagedQty);
             item.setQualifiedZone(qualifiedQty > 0 ? line.getQualifiedZone() : null);
             item.setQualifiedLocationCode(qualifiedQty > 0 ? line.getQualifiedLocationCode() : null);
+            item.setQualifiedPalletId(qualifiedPlacement == null ? null : qualifiedPlacement.palletId);
+            item.setQualifiedSlotId(qualifiedPlacement == null ? null : qualifiedPlacement.slotId);
+            item.setQualifiedSlotCode(qualifiedPlacement == null ? null : qualifiedPlacement.slotCode);
             item.setDamagedLocationCode(damagedQty > 0 ? line.getDamagedLocationCode() : null);
+            item.setDamagedPalletId(damagedPlacement == null ? null : damagedPlacement.palletId);
+            item.setDamagedSlotId(damagedPlacement == null ? null : damagedPlacement.slotId);
+            item.setDamagedSlotCode(damagedPlacement == null ? null : damagedPlacement.slotCode);
             item.setQcResult(qualifiedQty > 0 && damagedQty > 0 ? "MIXED" : qualifiedQty > 0 ? PASS : FAIL);
             item.setZone(qualifiedQty > 0 && damagedQty == 0 ? line.getQualifiedZone()
                     : damagedQty > 0 && qualifiedQty == 0 ? ZONE_DEFECTIVE : null);
@@ -292,6 +345,86 @@ public class ReturnQcService {
                 order.getId(), qualified, unqualified, received);
     }
 
+    private void validateQcPhotos(WmsReturnQcItem item, int damagedQty, List<Long> fileIds) {
+        List<Long> ids = fileIds == null ? Collections.emptyList() : fileIds.stream()
+                .filter(id -> id != null).distinct().collect(Collectors.toList());
+        Assert.isTrue(ids.size() <= 6, "每个 SKU 最多上传6张质检照片");
+        if (damagedQty > 0 && Integer.valueOf(1).equals(item.getElectronic())) {
+            Assert.notEmpty(ids, "电子类商品存在残次品时必须上传质检照片: " + item.getSkuCode());
+        }
+        for (Long fileId : ids) {
+            SysFile file = sysFileService.getById(fileId);
+            Assert.notNull(file, "质检照片不存在: " + fileId);
+            Assert.isTrue(file.getContentType() != null
+                            && QC_PHOTO_TYPES.contains(file.getContentType().toLowerCase()),
+                    "质检照片仅支持 JPG、JPEG、PNG 格式");
+        }
+    }
+
+    private PalletPlacement putawayOnPallet(ReturnInboundOrder order, String skuCode, int quantity,
+            String quality, String zoneType, Long zoneId, String slotCode, Long requestedPalletId,
+            java.math.BigDecimal capacityPercent, int allocatable, Set<String> allowedRacks,
+            Set<String> usedSlots) {
+        Assert.notNull(zoneId, "该仓库无对应分区: " + zoneType);
+        Assert.notNull(capacityPercent, "请填写托盘容量");
+        Assert.isTrue(capacityPercent.compareTo(java.math.BigDecimal.ZERO) > 0
+                        && capacityPercent.compareTo(new java.math.BigDecimal("100")) <= 0,
+                "托盘容量必须在1%到100%之间");
+        Assert.isTrue(usedSlots.add(slotCode), "同一次质检不能重复选择同一层位: " + slotCode);
+
+        PalletSlotVO slot = palletService.listSlots(order.getWarehouseId()).stream()
+                .filter(value -> slotCode.equals(value.getSlotCode())).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("托盘层位不存在: " + slotCode));
+        Assert.isTrue(allowedRacks.contains(slot.getRackNo()), "托盘层位不在本货主可用货架排: " + slotCode);
+        Assert.isTrue(zoneType.equals(slot.getZoneType()), "托盘层位不属于所选分区: " + slotCode);
+
+        InboundPutawayDTO.PutawayLine palletLine = new InboundPutawayDTO.PutawayLine();
+        palletLine.setSkuCode(skuCode);
+        palletLine.setLocationCode(slot.getLocationCode());
+        palletLine.setQuantity(quantity);
+        palletLine.setQuality(quality);
+        palletLine.setSlotCode(slotCode);
+        palletLine.setPalletId(requestedPalletId);
+        palletLine.setPalletKey("RETURN-" + order.getId() + "-" + quality + "-" + skuCode);
+        palletLine.setCapacityPercent(capacityPercent);
+        palletLine.setCapacitySource("MANUAL");
+        palletLine.setManualFull(capacityPercent.compareTo(new java.math.BigDecimal("100")) >= 0);
+
+        WmsPallet pallet;
+        if (requestedPalletId == null) {
+            Assert.isTrue(WmsPalletService.EMPTY.equals(slot.getSlotStatus()), "所选层位已被占用: " + slotCode);
+            pallet = palletService.createForPutaway(order.getWarehouseId(), order.getErpTenantId(),
+                    slotCode, Collections.singletonList(palletLine));
+        } else {
+            Assert.isTrue(requestedPalletId.equals(slot.getPalletId()), "所选托盘已不在该层位，请刷新后重试");
+            Assert.isTrue(slot.getCapacityPercent() == null
+                            || capacityPercent.compareTo(slot.getCapacityPercent()) >= 0,
+                    "合并后的托盘容量不能小于当前容量");
+            PalletSummaryVO current = palletService.getDetail(requestedPalletId);
+            Assert.isTrue(current.getItems().stream().allMatch(value -> quality.equals(value.getQuality())),
+                    "不同品质的货物不能混放在同一托盘");
+            pallet = palletService.lockExistingForPutaway(requestedPalletId, order.getErpTenantId(),
+                    Collections.singletonList(palletLine));
+        }
+
+        PutawayDTO put = new PutawayDTO();
+        put.setWmsTenantId(0L);
+        put.setErpTenantId(order.getErpTenantId());
+        put.setWarehouseId(order.getWarehouseId());
+        put.setSkuCode(skuCode);
+        put.setInboundItemId(0L);
+        put.setQuantity(quantity);
+        put.setQuality(quality);
+        put.setLocationCode(slot.getLocationCode());
+        put.setPalletId(pallet.getId());
+        put.setSlotId(slot.getSlotId());
+        put.setZoneId(zoneId);
+        put.setAllocatable(allocatable);
+        physicalInventoryService.putaway(put);
+        palletService.refreshAfterInventoryChange(pallet.getId());
+        return new PalletPlacement(pallet.getId(), slot.getSlotId(), slot.getSlotCode(), slot.getLocationCode());
+    }
+
     private void validateLocation(String locationCode, String zone, Long zoneId,
                                   Map<String, WmsLocation> locByCode, Set<String> occupied,
                                   Set<String> usedInThisSubmit, Set<String> allowedRacks) {
@@ -324,7 +457,105 @@ public class ReturnQcService {
         physicalInventoryService.putaway(put);
     }
 
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private static class PalletPlacement {
+        private final Long palletId;
+        private final Long slotId;
+        private final String slotCode;
+        private final String locationCode;
+
+        private PalletPlacement(Long palletId, Long slotId, String slotCode, String locationCode) {
+            this.palletId = palletId;
+            this.slotId = slotId;
+            this.slotCode = slotCode;
+            this.locationCode = locationCode;
+        }
+    }
+
     // ==================== 可用库位 ====================
+
+    public List<WarehouseOptionVO> listAuthorizedWarehouses(Long returnOrderId) {
+        assertPlatform();
+        ReturnInboundOrder order = returnInboundMapper.selectById(returnOrderId);
+        Assert.notNull(order, "退货单不存在");
+        return warehouseService.getWarehouseOptions().stream()
+                .filter(option -> "OWN".equals(option.getWarehouseType()))
+                .filter(option -> !resolveAllowedRacks(order.getErpTenantId(), option.getId()).isEmpty())
+                .collect(Collectors.toList());
+    }
+
+    public List<PalletSlotVO> listAvailableSlots(Long returnOrderId, Long warehouseId, String zoneType) {
+        assertPlatform();
+        ReturnInboundOrder order = returnInboundMapper.selectById(returnOrderId);
+        Assert.notNull(order, "退货单不存在");
+        Assert.isTrue(ZONE_RETURN.equals(zoneType) || ZONE_STANDARD.equals(zoneType)
+                || ZONE_DEFECTIVE.equals(zoneType), "不支持的回库分区");
+        validateAuthorizedWarehouse(order.getErpTenantId(), warehouseId);
+
+        Set<String> allowedRacks = resolveAllowedRacks(order.getErpTenantId(), warehouseId);
+        Warehouse warehouse = warehouseService.getById(warehouseId);
+        String quality = ZONE_DEFECTIVE.equals(zoneType) ? "DAMAGED" : "GOOD";
+        Map<Long, PalletSummaryVO> partialPallets = palletService
+                .listPallets(warehouseId, null, null, WmsPalletService.PARTIAL).stream()
+                .collect(Collectors.toMap(PalletSummaryVO::getId, value -> value, (a, b) -> a));
+
+        List<PalletSlotVO> result = palletService.listSlots(warehouseId).stream()
+                .filter(slot -> zoneType.equals(slot.getZoneType()))
+                .filter(slot -> allowedRacks.contains(slot.getRackNo()))
+                .filter(slot -> WmsPalletService.EMPTY.equals(slot.getSlotStatus())
+                        || canMergeReturn(slot, partialPallets.get(slot.getPalletId()), warehouse,
+                                order.getErpTenantId(), order.getSkuCode(), quality))
+                .collect(Collectors.toList());
+        result.sort(Comparator
+                .comparingInt((PalletSlotVO slot) -> returnSlotRank(slot,
+                        partialPallets.get(slot.getPalletId()), order.getErpTenantId(), order.getSkuCode()))
+                .thenComparing(PalletSlotVO::getLevelNo)
+                .thenComparing(PalletSlotVO::getSlotCode));
+        return result;
+    }
+
+    private boolean canMergeReturn(PalletSlotVO slot, PalletSummaryVO pallet, Warehouse warehouse,
+            Long ownerId, String skuCode, String quality) {
+        if (pallet == null || !WmsPalletService.PARTIAL.equals(slot.getPalletStatus())
+                || slot.getCapacityPercent() == null
+                || slot.getCapacityPercent().compareTo(new java.math.BigDecimal("100")) >= 0
+                || pallet.getItems() == null || pallet.getItems().isEmpty()
+                || pallet.getItems().stream().anyMatch(item -> !quality.equals(item.getQuality()))) {
+            return false;
+        }
+        boolean crossOwner = warehouse.getAllowCrossOwnerMix() == null
+                || Integer.valueOf(1).equals(warehouse.getAllowCrossOwnerMix());
+        if (!crossOwner && pallet.getItems().stream().anyMatch(item -> !ownerId.equals(item.getErpTenantId()))) {
+            return false;
+        }
+        Set<String> kinds = pallet.getItems().stream()
+                .map(item -> item.getErpTenantId() + "|" + item.getSkuCode())
+                .collect(Collectors.toSet());
+        kinds.add(ownerId + "|" + skuCode);
+        int maxKinds = warehouse.getMaxSkuKindsPerPallet() == null ? 4 : warehouse.getMaxSkuKindsPerPallet();
+        return kinds.size() <= maxKinds;
+    }
+
+    private int returnSlotRank(PalletSlotVO slot, PalletSummaryVO pallet, Long ownerId, String skuCode) {
+        if (pallet != null && pallet.getItems() != null && pallet.getItems().stream()
+                .allMatch(item -> ownerId.equals(item.getErpTenantId()) && skuCode.equals(item.getSkuCode()))) {
+            return 0;
+        }
+        return pallet == null ? 2 : 1;
+    }
+
+    private void validateAuthorizedWarehouse(Long erpTenantId, Long warehouseId) {
+        Assert.notNull(warehouseId, "请选择退货仓库");
+        Warehouse warehouse = warehouseService.getById(warehouseId);
+        Assert.notNull(warehouse, "退货仓库不存在");
+        Assert.isTrue(Integer.valueOf(1).equals(warehouse.getStatus()), "退货仓库未启用");
+        Assert.isTrue("OWN".equals(warehouse.getWarehouseType()), "退货质检只能进入自有仓");
+        Assert.isTrue(!resolveAllowedRacks(erpTenantId, warehouseId).isEmpty(),
+                "当前货主无权使用所选退货仓库");
+    }
 
     /**
      * 按「退货单所属仓库」+分区列出「未被占用」的可选库位（供质检上架下拉）。
@@ -390,18 +621,30 @@ public class ReturnQcService {
     private List<ReturnOrderItemVO> buildItems(Long orderId) {
         List<WmsReturnQcItem> items = returnQcItemMapper.selectByReturnOrderId(orderId);
         List<ReturnOrderItemVO> result = new ArrayList<>();
+        ReturnInboundOrder order = returnInboundMapper.selectById(orderId);
         if (!items.isEmpty()) {
             for (WmsReturnQcItem it : items) {
                 ReturnOrderItemVO vo = new ReturnOrderItemVO();
                 vo.setSkuCode(it.getSkuCode());
-                vo.setElectronic(it.getElectronic() != null && it.getElectronic() == 1);
+                SkuLookupVO sku = skuLookupMapper.findByTenantAndSku(
+                        order == null ? null : order.getErpTenantId(), it.getSkuCode());
+                vo.setElectronic(it.getElectronic() != null && it.getElectronic() == 1
+                        || sku != null && Boolean.TRUE.equals(sku.getNeedsPower()));
+                vo.setQuantityPerPallet(sku == null ? null : sku.getQuantityPerPallet());
+                vo.setSkuName(sku == null ? null : sku.getChineseName());
                 vo.setExpectedQty(it.getExpectedQty());
                 vo.setReceivedQty(it.getReceivedQty());
                 vo.setQualifiedQty(it.getQualifiedQty());
                 vo.setDamagedQty(it.getDamagedQty());
                 vo.setQualifiedZone(it.getQualifiedZone());
                 vo.setQualifiedLocationCode(it.getQualifiedLocationCode());
+                vo.setQualifiedPalletId(it.getQualifiedPalletId());
+                vo.setQualifiedSlotId(it.getQualifiedSlotId());
+                vo.setQualifiedSlotCode(it.getQualifiedSlotCode());
                 vo.setDamagedLocationCode(it.getDamagedLocationCode());
+                vo.setDamagedPalletId(it.getDamagedPalletId());
+                vo.setDamagedSlotId(it.getDamagedSlotId());
+                vo.setDamagedSlotCode(it.getDamagedSlotCode());
                 vo.setQcResult(it.getQcResult());
                 vo.setZone(it.getZone());
                 vo.setQuality(it.getQuality());
@@ -413,11 +656,13 @@ public class ReturnQcService {
             return result;
         }
         // 尚未收货：由退货单头合成单一明细（单SKU扁平结构）
-        ReturnInboundOrder order = returnInboundMapper.selectById(orderId);
         if (order != null && order.getSkuCode() != null) {
             ReturnOrderItemVO vo = new ReturnOrderItemVO();
             vo.setSkuCode(order.getSkuCode());
-            vo.setElectronic(false);
+            SkuLookupVO sku = skuLookupMapper.findByTenantAndSku(order.getErpTenantId(), order.getSkuCode());
+            vo.setElectronic(sku != null && Boolean.TRUE.equals(sku.getNeedsPower()));
+            vo.setQuantityPerPallet(sku == null ? null : sku.getQuantityPerPallet());
+            vo.setSkuName(sku == null ? null : sku.getChineseName());
             vo.setExpectedQty(order.getTotalQuantity());
             result.add(vo);
         }

@@ -2,6 +2,7 @@ package com.erp.admin.wms;
 
 import com.erp.admin.order.mapper.ErpOrderItemMapper;
 import com.erp.admin.order.mapper.ErpOrderMapper;
+import com.erp.admin.system.service.SysFileService;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
@@ -10,6 +11,7 @@ import com.erp.admin.wms.service.WmsRackAssignmentService;
 import com.erp.admin.wms.mapper.ReturnInboundMapper;
 import com.erp.admin.wms.mapper.ReturnQcMapper;
 import com.erp.admin.wms.mapper.WmsReturnQcItemMapper;
+import com.erp.admin.wms.mapper.WmsSkuLookupMapper;
 import com.erp.admin.wms.model.dto.PutawayDTO;
 import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
@@ -17,9 +19,12 @@ import com.erp.admin.wms.model.entity.ReturnInboundOrder;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsReturnQcItem;
 import com.erp.admin.wms.model.entity.WmsZone;
+import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.enums.ReturnQcStatus;
 import com.erp.admin.wms.service.ReturnQcService;
+import com.erp.admin.wms.service.WarehouseService;
 import com.erp.admin.wms.service.WmsLocationService;
+import com.erp.admin.wms.service.WmsPalletService;
 import com.erp.admin.wms.service.WmsPhysicalInventoryService;
 import com.erp.admin.wms.service.WmsZoneService;
 import org.ballcat.common.core.exception.BusinessException;
@@ -58,6 +63,10 @@ class ReturnQcServiceTest {
     private ErpOrderMapper erpOrderMapper;
     private SysTenantMapper sysTenantMapper;
     private WmsRackAssignmentService wmsRackAssignmentService;
+    private WarehouseService warehouseService;
+    private WmsPalletService palletService;
+    private WmsSkuLookupMapper skuLookupMapper;
+    private SysFileService sysFileService;
     private ReturnQcService service;
 
     @BeforeEach
@@ -73,6 +82,10 @@ class ReturnQcServiceTest {
         erpOrderMapper = mock(ErpOrderMapper.class);
         sysTenantMapper = mock(SysTenantMapper.class);
         wmsRackAssignmentService = mock(WmsRackAssignmentService.class);
+        warehouseService = mock(WarehouseService.class);
+        palletService = mock(WmsPalletService.class);
+        skuLookupMapper = mock(WmsSkuLookupMapper.class);
+        sysFileService = mock(SysFileService.class);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
@@ -82,9 +95,15 @@ class ReturnQcServiceTest {
         when(sysTenantMapper.selectById(any())).thenReturn(owner);
         when(wmsRackAssignmentService.activeRackNos(any(), any()))
                 .thenReturn(new java.util.HashSet<>(Arrays.asList("A1", "D1")));
+        Warehouse warehouse = new Warehouse();
+        warehouse.setId(1L);
+        warehouse.setWarehouseType("OWN");
+        warehouse.setStatus(1);
+        when(warehouseService.getById(1L)).thenReturn(warehouse);
         service = new ReturnQcService(returnQcMapper, returnInboundMapper, itemMapper, physicalInventoryService,
                 locationService, zoneService, tis, erpOrderItemMapper, erpOrderMapper,
-                sysTenantMapper, wmsRackAssignmentService);
+                sysTenantMapper, wmsRackAssignmentService, warehouseService, palletService,
+                skuLookupMapper, sysFileService);
     }
 
     private ReturnInboundOrder order(String status) {
@@ -239,6 +258,29 @@ class ReturnQcServiceTest {
         verify(physicalInventoryService, times(2)).putaway(batches.capture());
         assertThat(batches.getAllValues()).extracting(PutawayDTO::getQuantity).containsExactly(3, 2);
         assertThat(batches.getAllValues()).extracting(PutawayDTO::getQuality).containsExactly("GOOD", "DAMAGED");
+    }
+
+    @Test
+    void qc_rejects_electronic_damaged_goods_without_photo() {
+        when(returnInboundMapper.selectById(1L)).thenReturn(order(ReturnQcStatus.QC_PENDING.name()));
+        when(returnInboundMapper.casReturnStatus(1L, ReturnQcStatus.QC_PENDING.name(),
+                ReturnQcStatus.COMPLETED.name())).thenReturn(1);
+        WmsReturnQcItem electronicItem = item("SKU1", 5);
+        electronicItem.setElectronic(1);
+        when(itemMapper.selectByReturnOrderId(1L)).thenReturn(Collections.singletonList(electronicItem));
+        when(zoneService.listByWarehouse(1L)).thenReturn(Collections.singletonList(zone(9, "DEFECTIVE")));
+
+        ReturnQcDTO.ReturnQcLineDTO line = new ReturnQcDTO.ReturnQcLineDTO();
+        line.setSkuCode("SKU1");
+        line.setQualifiedQty(0);
+        line.setDamagedQty(5);
+        line.setDamagedLocationCode("D1-01");
+        line.setPhotoFileIds(Collections.emptyList());
+        ReturnQcDTO dto = new ReturnQcDTO();
+        dto.setReturnOrderId(1L);
+        dto.setLines(Collections.singletonList(line));
+
+        assertThatThrownBy(() -> service.qc(dto)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

@@ -30,6 +30,7 @@ export interface ReturnOrderItemVO {
   skuName?: string
   // 电子类（影响 QC_FAIL 是否强制拍照）
   electronic: boolean
+  quantityPerPallet?: number
   // 应退数
   expectedQty: number
   // 实收数（收货后回填）
@@ -38,7 +39,13 @@ export interface ReturnOrderItemVO {
   damagedQty?: number
   qualifiedZone?: ReturnZone
   qualifiedLocationCode?: string
+  qualifiedPalletId?: number
+  qualifiedSlotId?: number
+  qualifiedSlotCode?: string
   damagedLocationCode?: string
+  damagedPalletId?: number
+  damagedSlotId?: number
+  damagedSlotCode?: string
   // 质检结果（质检后回填）
   qcResult?: QcResult
   zone?: ReturnZone
@@ -95,7 +102,13 @@ export interface ReturnQcLineDTO {
   damagedQty: number
   qualifiedZone?: ReturnZone
   qualifiedLocationCode?: string
+  qualifiedSlotCode?: string
+  qualifiedPalletId?: number
+  qualifiedCapacityPercent?: number
   damagedLocationCode?: string
+  damagedSlotCode?: string
+  damagedPalletId?: number
+  damagedCapacityPercent?: number
   qcRemark?: string
   photoFileIds?: number[]
 }
@@ -103,5 +116,6 @@ export interface ReturnQcLineDTO {
 /** 质检 + 上架入参（QC_PENDING → COMPLETED） */
 export interface ReturnQcDTO {
   returnOrderId: number
+  warehouseId: number
   lines: ReturnQcLineDTO[]
 }

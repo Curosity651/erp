@@ -21,6 +21,9 @@ public class ReturnOrderItemVO {
     @Schema(title = "电子类 → FAIL 是否强制拍照")
     private Boolean electronic;
 
+    @Schema(title = "SKU标准每托数量")
+    private Integer quantityPerPallet;
+
     @Schema(title = "应退数")
     private Integer expectedQty;
 
@@ -35,7 +38,19 @@ public class ReturnOrderItemVO {
 
     private String qualifiedLocationCode;
 
+    private Long qualifiedPalletId;
+
+    private Long qualifiedSlotId;
+
+    private String qualifiedSlotCode;
+
     private String damagedLocationCode;
+
+    private Long damagedPalletId;
+
+    private Long damagedSlotId;
+
+    private String damagedSlotCode;
 
     @Schema(title = "质检结果 PASS/FAIL")
     private String qcResult;

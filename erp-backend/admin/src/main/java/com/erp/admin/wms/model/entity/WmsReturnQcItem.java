@@ -51,8 +51,20 @@ public class WmsReturnQcItem {
     @Schema(title = "良品回库库位")
     private String qualifiedLocationCode;
 
+    private Long qualifiedPalletId;
+
+    private Long qualifiedSlotId;
+
+    private String qualifiedSlotCode;
+
     @Schema(title = "残次品回库库位")
     private String damagedLocationCode;
+
+    private Long damagedPalletId;
+
+    private Long damagedSlotId;
+
+    private String damagedSlotCode;
 
     @Schema(title = "质检结果 PASS/FAIL")
     private String qcResult;

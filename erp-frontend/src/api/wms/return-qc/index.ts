@@ -1,6 +1,8 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult, PageParam, PageResult } from '@/api/types'
 import type { ReturnOrderVO, ReturnQO, ReturnReceiveDTO, ReturnQcDTO } from './types'
+import type { PalletSlotVO } from '@/api/wms/inbound-execution'
+import type { WarehouseOptionVO } from '@/api/wms/warehouse/types'
 import { mockPage, mockDetail, mockReceive, mockQc } from './mock'
 
 /**
@@ -70,6 +72,20 @@ export async function submitQc(dto: ReturnQcDTO): Promise<ApiResult<void>> {
     return r.ok ? ok(undefined as any) : { code: 500, data: null as any, message: r.message }
   }
   return httpClient.post(`${BASE}/qc`, dto)
+}
+
+/** 当前退货单货主有权使用的自有仓 */
+export function getAuthorizedWarehouses(returnOrderId: number) {
+  return httpClient.get<ApiResult<WarehouseOptionVO[]>>(`${BASE}/warehouses`, {
+    params: { returnOrderId }
+  })
+}
+
+/** 指定仓库、分区下可用于退货质检的空层位或可合并托盘 */
+export function getAvailableSlots(returnOrderId: number, warehouseId: number, zone: string) {
+  return httpClient.get<ApiResult<PalletSlotVO[]>>(`${BASE}/slots`, {
+    params: { returnOrderId, warehouseId, zone }
+  })
 }
 
 /** 按退货单所属仓库+分区查可用(未占用)库位，供质检上架库位下拉 */

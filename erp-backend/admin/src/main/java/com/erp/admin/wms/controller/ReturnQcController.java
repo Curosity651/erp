@@ -3,7 +3,9 @@ package com.erp.admin.wms.controller;
 import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
 import com.erp.admin.wms.model.qo.ReturnQO;
+import com.erp.admin.wms.model.vo.PalletSlotVO;
 import com.erp.admin.wms.model.vo.ReturnOrderVO;
+import com.erp.admin.wms.model.vo.WarehouseOptionVO;
 import com.erp.admin.wms.service.ReturnQcService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 海外仓平台出库作业·退货质检控制器（业务需求 1.4）。仅平台身份（service 内二次校验）。
@@ -46,6 +50,24 @@ public class ReturnQcController {
     @PreAuthorize("hasAuthority('wms:return-qc:oper')")
     public ApiResult<ReturnOrderVO> detail(@PathVariable("id") Long id) {
         return ApiResult.ok(returnQcService.getDetail(id));
+    }
+
+    @Operation(summary = "查询本退货单货主可使用的退货仓库")
+    @GetMapping("/warehouses")
+    @PreAuthorize("hasAuthority('wms:return-qc:oper')")
+    public ApiResult<List<WarehouseOptionVO>> warehouses(
+            @RequestParam("returnOrderId") Long returnOrderId) {
+        return ApiResult.ok(returnQcService.listAuthorizedWarehouses(returnOrderId));
+    }
+
+    @Operation(summary = "查询退货质检可用的三层托盘层位")
+    @GetMapping("/slots")
+    @PreAuthorize("hasAuthority('wms:return-qc:oper')")
+    public ApiResult<List<PalletSlotVO>> slots(
+            @RequestParam("returnOrderId") Long returnOrderId,
+            @RequestParam("warehouseId") Long warehouseId,
+            @RequestParam("zone") String zone) {
+        return ApiResult.ok(returnQcService.listAvailableSlots(returnOrderId, warehouseId, zone));
     }
 
     @Operation(summary = "退货收货 RETURN_PENDING→QC_PENDING")
