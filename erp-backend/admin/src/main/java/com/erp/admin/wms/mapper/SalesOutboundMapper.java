@@ -6,6 +6,7 @@ import com.erp.admin.wms.model.vo.SalesOutboundDetailVO;
 import com.erp.admin.wms.model.vo.SalesOutboundExportVO;
 import com.erp.admin.wms.model.vo.SalesOutboundPageVO;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
@@ -18,6 +19,9 @@ import java.util.List;
  * @author erp
  */
 public interface SalesOutboundMapper extends ExtendMapper<SalesOutboundOrder> {
+
+    @Select("SELECT * FROM wms_sales_outbound_order WHERE id = #{id} FOR UPDATE")
+    SalesOutboundOrder selectByIdForUpdate(@Param("id") Long id);
 
     /**
      * 分页查询

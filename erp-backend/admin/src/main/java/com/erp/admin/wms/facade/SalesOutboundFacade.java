@@ -11,6 +11,7 @@ import com.erp.admin.wms.service.WmsPhysicalInventoryService;
 import com.erp.admin.wms.service.OutboundPickingService;
 import com.erp.admin.wms.service.SalesOutboundItemService;
 import com.erp.admin.wms.service.SalesOutboundService;
+import com.erp.admin.wms.service.WarehouseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -42,6 +43,7 @@ public class SalesOutboundFacade {
     private final WmsPhysicalInventoryService physicalInventoryService;
     private final ErpOrderService erpOrderService;
     private final OutboundPickingService outboundPickingService;
+    private final WarehouseService warehouseService;
 
     /**
      * 创建出库单
@@ -54,6 +56,7 @@ public class SalesOutboundFacade {
      */
     @Transactional(rollbackFor = Exception.class)
     public Long create(SalesOutboundDTO dto) {
+        warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
         // 1. 校验订单（使用乐观锁）
         validateAndAllocateOrders(dto);
 
@@ -74,6 +77,7 @@ public class SalesOutboundFacade {
      */
     @Transactional(rollbackFor = Exception.class)
     public void update(SalesOutboundDTO dto) {
+        warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
         SalesOutboundOrder order = salesOutboundService.getByIdOrThrow(dto.getId());
         Assert.isTrue(OutboundOrderStatus.DRAFT.name().equals(order.getOrderStatus()),
                 "只有草稿状态的出库单可以编辑");
@@ -137,7 +141,7 @@ public class SalesOutboundFacade {
      */
     @Transactional(rollbackFor = Exception.class)
     public void cancel(Long id) {
-        SalesOutboundOrder order = salesOutboundService.getByIdOrThrow(id);
+        SalesOutboundOrder order = salesOutboundService.getByIdForUpdate(id);
         String status = order.getOrderStatus();
         // 方案A：允许 草稿(DRAFT) 或 已确认待下架(CONFIRMED) 取消；平台一旦下架(PICKING)及之后拒绝取消
         Assert.isTrue(OutboundOrderStatus.DRAFT.name().equals(status)
@@ -179,7 +183,7 @@ public class SalesOutboundFacade {
      */
     @Transactional(rollbackFor = Exception.class)
     public List<StockShortageVO> confirm(Long id) {
-        SalesOutboundOrder order = salesOutboundService.getByIdOrThrow(id);
+        SalesOutboundOrder order = salesOutboundService.getByIdForUpdate(id);
         Assert.isTrue(OutboundOrderStatus.DRAFT.name().equals(order.getOrderStatus()),
                 "只有草稿状态的出库单可以确认");
 

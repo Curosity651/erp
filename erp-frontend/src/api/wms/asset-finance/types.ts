@@ -21,6 +21,16 @@ export interface AssetFinanceOverviewVO {
   assets: AssetCurrencyVO[]
   supplierPayable: PayableCurrencyVO[]
   providerPayable: PayableCurrencyVO
+  unvaluedSkuCount: number
+  unvaluedQuantity: number
+  totalHeldQuantity: number
+  holdingPositions: HoldingPositionVO[]
+}
+
+export interface HoldingPositionVO {
+  code: string
+  name: string
+  quantity: number
 }
 
 /** 采购成本明细行（SKU × 币种） */

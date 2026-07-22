@@ -8,12 +8,12 @@
     <select id="queryPage" resultType="com.erp.admin.wms.model.entity.Inventory">
         SELECT i.*
         FROM wms_inventory i
-        <if test="qo.warehouseType != null and qo.warehouseType != ''">
-            INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
-        </if>
+        INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
         <where>
             <!-- 数据级可见性：按货主作用域（货主=自己；平台-1/服务商运营商id→0行） -->
             AND i.erp_tenant_id = #{qo.erpTenantId}
+            AND w.warehouse_type = 'OWN'
+            AND w.deleted = 0
             <if test="qo.warehouseId != null">
                 AND i.warehouse_id = #{qo.warehouseId}
             </if>
@@ -22,9 +22,6 @@
             </if>
             <if test="qo.regionId != null">
                 AND i.warehouse_id IN (SELECT id FROM wms_warehouse WHERE region_id = #{qo.regionId})
-            </if>
-            <if test="qo.warehouseType != null and qo.warehouseType != ''">
-                AND w.warehouse_type = #{qo.warehouseType}
             </if>
             <if test="qo.hasDamaged != null and qo.hasDamaged">
                 AND i.damaged_quantity &gt; 0
@@ -54,7 +51,7 @@
             COALESCE(SUM(i.reserved_quantity), 0) AS reservedQuantity,
             COALESCE(SUM(i.in_transit_quantity), 0) AS inTransitQuantity,
             COALESCE(SUM(i.damaged_quantity), 0) AS damagedQuantity,
-            (SELECT COUNT(*) FROM wms_warehouse WHERE deleted = 0 AND status = 1) AS warehouseCount,
+            (SELECT COUNT(*) FROM wms_warehouse WHERE deleted = 0 AND status = 1 AND warehouse_type = 'OWN') AS warehouseCount,
             ROUND(COALESCE(SUM(
                 CASE
                     WHEN s.package_length IS NOT NULL AND s.package_width IS NOT NULL AND s.package_height IS NOT NULL
@@ -72,14 +69,18 @@
             ), 0), 2) AS totalVolume,
             (SELECT COUNT(DISTINCT i2.sku_code)
              FROM wms_inventory i2
+             INNER JOIN wms_warehouse w2 ON w2.id = i2.warehouse_id
              LEFT JOIN sku s2 ON i2.sku_code = s2.sku_code
              WHERE i2.erp_tenant_id = #{erpTenantId}
+                   AND w2.warehouse_type = 'OWN' AND w2.deleted = 0
                    AND (s2.package_length IS NULL OR s2.package_width IS NULL OR s2.package_height IS NULL
                    OR s2.package_length &lt;= 0 OR s2.package_width &lt;= 0 OR s2.package_height &lt;= 0)
             ) AS volumeMissingSkuCount
         FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON w.id = i.warehouse_id
         LEFT JOIN sku s ON i.sku_code = s.sku_code
         WHERE i.erp_tenant_id = #{erpTenantId}
+          AND w.warehouse_type = 'OWN' AND w.deleted = 0
     </select>
 
     <!-- 按仓库汇总（含体积） -->
@@ -109,46 +110,57 @@
         FROM wms_warehouse w
         LEFT JOIN wms_inventory i ON w.id = i.warehouse_id AND i.erp_tenant_id = #{erpTenantId}
         LEFT JOIN sku s ON i.sku_code = s.sku_code
-        WHERE w.deleted = 0 AND w.status = 1
-        <if test="warehouseType != null and warehouseType != ''">
-            AND w.warehouse_type = #{warehouseType}
-        </if>
+        WHERE w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
         GROUP BY w.id
         ORDER BY availableQuantity DESC
     </select>
 
     <!-- 按SKU汇总分页 -->
     <select id="selectSummaryBySku" resultType="com.erp.admin.wms.model.vo.SkuSummaryVO">
-        SELECT
-            i.sku_code AS skuCode,
-            COUNT(DISTINCT i.warehouse_id) AS warehouseCount,
-            COALESCE(SUM(i.available_quantity), 0) AS availableQuantity,
-            COALESCE(SUM(i.reserved_quantity), 0) AS reservedQuantity,
-            COALESCE(SUM(i.in_transit_quantity), 0) AS inTransitQuantity,
-            COALESCE(SUM(i.damaged_quantity), 0) AS damagedQuantity,
-            COALESCE(SUM(CASE WHEN w.warehouse_type = 'FBO'
-                THEN i.available_quantity + i.reserved_quantity ELSE 0 END), 0) AS fboWarehouseQuantity,
-            COALESCE(SUM(CASE WHEN w.warehouse_type = 'OWN'
-                THEN i.available_quantity + i.reserved_quantity ELSE 0 END), 0) AS ownWarehouseQuantity
-        FROM wms_inventory i
-        INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
+        SELECT x.sku_code AS skuCode,
+               MAX(x.warehouse_count) AS warehouseCount,
+               SUM(x.available_quantity) AS availableQuantity,
+               SUM(x.reserved_quantity) AS reservedQuantity,
+               SUM(x.in_transit_quantity) AS inTransitQuantity,
+               SUM(x.damaged_quantity) AS damagedQuantity,
+               SUM(x.fbo_quantity) AS fboWarehouseQuantity,
+               SUM(x.own_quantity) AS ownWarehouseQuantity
+        FROM (
+            SELECT i.sku_code,
+                   COUNT(DISTINCT i.warehouse_id) AS warehouse_count,
+                   SUM(i.available_quantity) AS available_quantity,
+                   SUM(i.reserved_quantity) AS reserved_quantity,
+                   SUM(i.in_transit_quantity) AS in_transit_quantity,
+                   SUM(i.damaged_quantity) AS damaged_quantity,
+                   0 AS fbo_quantity,
+                   SUM(i.available_quantity + i.reserved_quantity) AS own_quantity
+            FROM wms_inventory i
+            INNER JOIN wms_warehouse w ON i.warehouse_id = w.id
+            WHERE i.erp_tenant_id = #{erpTenantId}
+              AND w.warehouse_type = 'OWN' AND w.deleted = 0
+            GROUP BY i.sku_code
+            UNION ALL
+            SELECT f.sku_code, 0, 0, 0, 0, 0, SUM(f.quantity), 0
+            FROM wms_fbo_inventory_snapshot f
+            WHERE f.tenant_id = #{erpTenantId}
+            GROUP BY f.sku_code
+        ) x
         <where>
-            AND i.erp_tenant_id = #{erpTenantId}
             <if test="keyword != null and keyword != ''">
-                AND i.sku_code LIKE CONCAT('%', #{keyword}, '%')
+                AND x.sku_code LIKE CONCAT('%', #{keyword}, '%')
             </if>
         </where>
-        GROUP BY i.sku_code
+        GROUP BY x.sku_code
         <if test="stockStatus != null and stockStatus != ''">
             <choose>
                 <when test="stockStatus == 'HAS_STOCK'">
-                    HAVING (SUM(i.available_quantity) + SUM(i.reserved_quantity) + SUM(i.in_transit_quantity)) &gt; 0
+                    HAVING (SUM(x.available_quantity) + SUM(x.reserved_quantity) + SUM(x.in_transit_quantity) + SUM(x.fbo_quantity)) &gt; 0
                 </when>
                 <when test="stockStatus == 'ZERO_STOCK'">
-                    HAVING (SUM(i.available_quantity) + SUM(i.reserved_quantity) + SUM(i.in_transit_quantity)) = 0
+                    HAVING (SUM(x.available_quantity) + SUM(x.reserved_quantity) + SUM(x.in_transit_quantity) + SUM(x.fbo_quantity)) = 0
                 </when>
                 <when test="stockStatus == 'NEGATIVE_STOCK'">
-                    HAVING SUM(i.available_quantity) &lt; 0
+                    HAVING SUM(x.available_quantity) &lt; 0
                 </when>
             </choose>
         </if>

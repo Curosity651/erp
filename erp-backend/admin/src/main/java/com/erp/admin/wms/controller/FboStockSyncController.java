@@ -3,10 +3,14 @@ package com.erp.admin.wms.controller;
 import com.erp.admin.wms.facade.OzonFboStockSyncFacade;
 import com.erp.admin.wms.model.enums.FboSyncType;
 import com.erp.admin.wms.model.qo.FboSyncLogQO;
+import com.erp.admin.wms.model.qo.FboInventoryQO;
+import com.erp.admin.wms.model.vo.FboInventoryPageVO;
+import com.erp.admin.wms.model.vo.FboInventorySummaryVO;
 import com.erp.admin.wms.model.vo.FboSyncLogDetailVO;
 import com.erp.admin.wms.model.vo.FboSyncLogPageVO;
 import com.erp.admin.wms.model.vo.FboSyncResultVO;
 import com.erp.admin.wms.service.FboSyncLogService;
+import com.erp.admin.wms.service.FboInventorySnapshotService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -32,24 +36,37 @@ public class FboStockSyncController {
 
     private final OzonFboStockSyncFacade ozonFboStockSyncFacade;
     private final FboSyncLogService fboSyncLogService;
+    private final FboInventorySnapshotService fboInventorySnapshotService;
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasAuthority('wms:fbo-inventory:read')")
+    public ApiResult<FboInventorySummaryVO> summary() {
+        return ApiResult.ok(fboInventorySnapshotService.getSummary());
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("hasAuthority('wms:fbo-inventory:read')")
+    public ApiResult<PageResult<FboInventoryPageVO>> page(PageParam pageParam, FboInventoryQO qo) {
+        return ApiResult.ok(fboInventorySnapshotService.queryPage(pageParam, qo));
+    }
 
     @PostMapping("/sync")
     @Operation(summary = "手动触发 FBO 库存同步")
-    @PreAuthorize("hasAuthority('wms:warehouse:fbo-sync')")
+    @PreAuthorize("hasAuthority('wms:fbo-inventory:sync')")
     public ApiResult<List<FboSyncResultVO>> sync(@RequestParam(required = false) Long shopId) {
         List<FboSyncResultVO> results;
         if (shopId != null) {
             FboSyncResultVO result = ozonFboStockSyncFacade.syncByShopId(shopId);
             results = Collections.singletonList(result);
         } else {
-            results = ozonFboStockSyncFacade.syncAllShops(FboSyncType.MANUAL.getCode());
+            results = ozonFboStockSyncFacade.syncCurrentTenantShops(FboSyncType.MANUAL.getCode());
         }
         return ApiResult.ok(results);
     }
 
     @GetMapping("/sync-log")
     @Operation(summary = "查询 FBO 同步日志")
-    @PreAuthorize("hasAuthority('wms:warehouse:fbo-sync')")
+    @PreAuthorize("hasAuthority('wms:fbo-inventory:log')")
     public ApiResult<PageResult<FboSyncLogPageVO>> querySyncLog(PageParam pageParam, FboSyncLogQO qo) {
         PageResult<FboSyncLogPageVO> page = fboSyncLogService.queryPage(pageParam, qo);
         return ApiResult.ok(page);
@@ -57,7 +74,7 @@ public class FboStockSyncController {
 
     @GetMapping("/sync-log/detail")
     @Operation(summary = "查询 FBO 同步日志详情")
-    @PreAuthorize("hasAuthority('wms:warehouse:fbo-sync')")
+    @PreAuthorize("hasAuthority('wms:fbo-inventory:log')")
     public ApiResult<FboSyncLogDetailVO> getSyncLogDetail(@RequestParam Long id) {
         FboSyncLogDetailVO detail = fboSyncLogService.getDetail(id);
         return ApiResult.ok(detail);

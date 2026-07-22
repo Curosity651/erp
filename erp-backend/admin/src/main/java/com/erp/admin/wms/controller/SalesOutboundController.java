@@ -23,7 +23,6 @@ import com.erp.admin.shop.service.ShopService;
 import com.erp.admin.wms.enums.WmsResultCode;
 import com.erp.admin.wms.facade.SalesOutboundFacade;
 import com.erp.admin.wms.model.dto.SalesOutboundDTO;
-import com.erp.admin.wms.model.entity.Inventory;
 import com.erp.admin.wms.model.qo.SalesOutboundQO;
 import com.erp.admin.wms.model.vo.PendingOrderItemVO;
 import com.erp.admin.wms.model.vo.PendingOrderVO;
@@ -31,8 +30,8 @@ import com.erp.admin.wms.model.vo.SalesOutboundDetailVO;
 import com.erp.admin.wms.model.vo.SalesOutboundExportVO;
 import com.erp.admin.wms.model.vo.SalesOutboundPageVO;
 import com.erp.admin.wms.model.vo.StockShortageVO;
-import com.erp.admin.wms.service.InventoryService;
 import com.erp.admin.wms.service.SalesOutboundService;
+import com.erp.admin.wms.service.WmsPhysicalInventoryService;
 import com.erp.admin.wms.model.enums.StockStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -70,7 +69,7 @@ public class SalesOutboundController {
 
     private final SalesOutboundFacade salesOutboundFacade;
     private final SalesOutboundService salesOutboundService;
-    private final InventoryService inventoryService;
+    private final WmsPhysicalInventoryService physicalInventoryService;
     private final ErpOrderService erpOrderService;
     private final ShopService shopService;
     private final SkuBriefService skuBriefService;
@@ -249,7 +248,7 @@ public class SalesOutboundController {
 
         // 待发货列表为货主自身视角：按当前货主取库存，防多货主共享自有仓时跨货主串数（H-7）
         Long erpTenantId = com.erp.admin.common.tenant.TenantContext.getCurrentTenant();
-        Map<String, Inventory> stockMap = inventoryService.getStockMapByErpWarehouseAndSkuCodes(
+        Map<String, Integer> stockMap = physicalInventoryService.getAllocatableQuantityMap(
                 erpTenantId, warehouseId, new ArrayList<>(allSkuCodes));
 
         for (PendingOrderVO vo : voList) {
@@ -261,8 +260,7 @@ public class SalesOutboundController {
 
             for (PendingOrderItemVO item : vo.getItems()) {
                 String skuCode = item.getSkuCode();
-                Inventory inv = StringUtils.hasText(skuCode) ? stockMap.get(skuCode) : null;
-                int available = inv != null ? inv.getAvailableQuantity() : 0;
+                int available = StringUtils.hasText(skuCode) ? stockMap.getOrDefault(skuCode, 0) : 0;
                 int required = item.getQuantity() != null ? item.getQuantity() : 0;
 
                 item.setAvailableStock(available);

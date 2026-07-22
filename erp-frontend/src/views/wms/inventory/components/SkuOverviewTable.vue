@@ -47,8 +47,8 @@
             @click="handleViewDetail(record)"
           />
         </template>
-        <template v-else-if="column.key === 'warehouseQuantity'">
-          <span class="wms-quantity-cell">{{ record.warehouseQuantity?.toLocaleString() ?? 0 }}</span>
+        <template v-else-if="column.key === 'totalHeldQuantity'">
+          <span class="wms-quantity-cell">{{ record.totalHeldQuantity?.toLocaleString() ?? 0 }}</span>
         </template>
         <template v-else-if="column.key === 'fboWarehouseQuantity'">
           <span class="wms-quantity-cell">{{ record.fboWarehouseQuantity?.toLocaleString() ?? 0 }}</span>
@@ -120,7 +120,7 @@ const pagination = reactive<TablePaginationConfig>({
 const columns: TableColumnsType = [
   { title: 'SKU/商品名称', key: 'skuInfo', width: 260 },
   { title: '仓库数', dataIndex: 'warehouseCount', width: 80, align: 'right' },
-  { title: '仓内', key: 'warehouseQuantity', width: 100, align: 'right' },
+  { title: '持有总量', key: 'totalHeldQuantity', width: 100, align: 'right' },
   { title: 'FBO仓内', key: 'fboWarehouseQuantity', width: 100, align: 'right' },
   { title: '自有仓仓内', key: 'ownWarehouseQuantity', width: 110, align: 'right' },
   { title: '可用', key: 'availableQuantity', width: 100, align: 'right' },

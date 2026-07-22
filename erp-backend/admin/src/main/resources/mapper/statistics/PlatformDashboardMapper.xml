@@ -23,13 +23,15 @@
             COALESCE(SUM(available_quantity + reserved_quantity + damaged_quantity), 0) AS onHandQty,
             COUNT(DISTINCT sku_code) AS skuCount,
             COUNT(DISTINCT erp_tenant_id) AS ownerCount
-        FROM wms_inventory
+        FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON w.id = i.warehouse_id
         <where>
+            w.warehouse_type = 'OWN' AND w.deleted = 0
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                AND warehouse_id IN
+                AND i.warehouse_id IN
                 <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
             </if>
-            <include refid="operatorFilter"><property name="col" value=""/></include>
+            <include refid="operatorFilter"><property name="col" value="i."/></include>
         </where>
     </select>
 
@@ -132,7 +134,7 @@
             ) AS used
         FROM wms_warehouse w
         <where>
-            w.deleted = 0
+            w.deleted = 0 AND w.warehouse_type = 'OWN'
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
                 AND w.id IN
                 <foreach collection="qo.warehouseIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>
@@ -240,6 +242,7 @@
             op.tenant_name AS operatorName,
             COALESCE(SUM(i.available_quantity + i.reserved_quantity + i.damaged_quantity), 0) AS qty
         FROM wms_inventory i
+        JOIN wms_warehouse w ON w.id = i.warehouse_id AND w.warehouse_type = 'OWN' AND w.deleted = 0
         JOIN sys_tenant owner ON owner.id = i.erp_tenant_id AND owner.deleted = 0
         JOIN sys_tenant op ON op.id = owner.parent_wms_tenant_id AND op.deleted = 0
         <where>

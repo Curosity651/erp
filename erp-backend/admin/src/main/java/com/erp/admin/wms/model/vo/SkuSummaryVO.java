@@ -59,4 +59,11 @@ public class SkuSummaryVO {
         return available + reserved;
     }
 
+    @Schema(title = "货主持有总量（海外仓仓内 + FBO）")
+    public Integer getTotalHeldQuantity() {
+        int own = getWarehouseQuantity();
+        int fbo = this.fboWarehouseQuantity != null ? this.fboWarehouseQuantity : 0;
+        return own + fbo;
+    }
+
 }

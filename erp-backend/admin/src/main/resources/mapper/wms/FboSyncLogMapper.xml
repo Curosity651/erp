@@ -6,15 +6,19 @@
     <select id="queryPage" resultType="com.erp.admin.wms.model.vo.FboSyncLogPageVO">
         SELECT
             l.id,
+            l.tenant_id,
             l.log_no,
             l.platform,
             l.shop_id,
-            s.shop_name,
+            s.name AS shop_name,
             l.sync_type,
+            l.sync_batch_no,
             l.total_count,
+            l.source_count,
             l.success_count,
             l.fail_count,
             l.unmapped_count,
+            l.snapshot_quantity,
             l.sync_status,
             l.error_message,
             l.sync_time,
@@ -23,6 +27,7 @@
         FROM wms_fbo_sync_log l
         LEFT JOIN shop s ON l.shop_id = s.id
         <where>
+            AND l.tenant_id = #{tenantId}
             <if test="qo.platform != null and qo.platform != ''">
                 AND l.platform = #{qo.platform}
             </if>
@@ -54,15 +59,19 @@
     <select id="selectDetail" resultType="com.erp.admin.wms.model.vo.FboSyncLogDetailVO">
         SELECT
             l.id,
+            l.tenant_id,
             l.log_no,
             l.platform,
             l.shop_id,
-            s.shop_name,
+            s.name AS shop_name,
             l.sync_type,
+            l.sync_batch_no,
             l.total_count,
+            l.source_count,
             l.success_count,
             l.fail_count,
             l.unmapped_count,
+            l.snapshot_quantity,
             l.sync_status,
             l.error_message,
             l.sync_time,
@@ -73,7 +82,7 @@
             l.create_time
         FROM wms_fbo_sync_log l
         LEFT JOIN shop s ON l.shop_id = s.id
-        WHERE l.id = #{id}
+        WHERE l.id = #{id} AND l.tenant_id = #{tenantId}
     </select>
 
 </mapper>

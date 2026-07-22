@@ -358,6 +358,9 @@ public class PurchaseOrderService extends ExtendServiceImpl<PurchaseOrderMapper,
 
 		PurchaseOrderStatus status = PurchaseOrderStatus.valueOf(order.getOrderStatus());
 		Assert.isTrue(status.canDelete(), "仅草稿状态的采购单可以删除");
+		Assert.isTrue(!Integer.valueOf(1).equals(order.getPrepayStatus())
+				&& !Integer.valueOf(1).equals(order.getBalanceStatus()),
+				"已付款的采购单不允许删除，请先走退款或冲销流程");
 
 		// 删除明细
 		purchaseOrderItemService.deleteByPurchaseOrderId(id);
@@ -444,6 +447,9 @@ public class PurchaseOrderService extends ExtendServiceImpl<PurchaseOrderMapper,
 		PurchaseOrderStatus currentStatus = PurchaseOrderStatus.valueOf(order.getOrderStatus());
 		Assert.isTrue(currentStatus.canCancel(),
 				String.format("当前状态[%s]不允许取消", currentStatus.getDescription()));
+		Assert.isTrue(!Integer.valueOf(1).equals(order.getPrepayStatus())
+				&& !Integer.valueOf(1).equals(order.getBalanceStatus()),
+				"已付款的采购单不允许取消，请先走退款或冲销流程");
 
 		// TODO: 校验是否存在关联物流单，如有则不允许取消
 		// Assert.isTrue(!hasAssociatedLogisticsOrder(id), "存在关联物流单，无法取消");

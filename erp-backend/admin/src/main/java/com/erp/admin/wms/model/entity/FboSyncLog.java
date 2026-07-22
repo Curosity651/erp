@@ -26,6 +26,8 @@ public class FboSyncLog {
     @Schema(title = "主键ID")
     private Long id;
 
+    private Long tenantId;
+
     @Schema(title = "日志编号")
     private String logNo;
 
@@ -38,8 +40,12 @@ public class FboSyncLog {
     @Schema(title = "同步类型: SCHEDULED/MANUAL")
     private String syncType;
 
+    private String syncBatchNo;
+
     @Schema(title = "总数量")
     private Integer totalCount;
+
+    private Integer sourceCount;
 
     @Schema(title = "成功数量")
     private Integer successCount;
@@ -49,6 +55,8 @@ public class FboSyncLog {
 
     @Schema(title = "未映射数量")
     private Integer unmappedCount;
+
+    private Integer snapshotQuantity;
 
     @Schema(title = "同步状态: SUCCESS/PARTIAL/FAILED")
     private String syncStatus;

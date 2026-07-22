@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import com.erp.admin.wms.model.vo.PayableProviderVO;
 import com.erp.admin.wms.model.vo.PayableSupplierVO;
 import com.erp.admin.wms.service.RegionService;
 import com.erp.admin.wms.service.RegionStockDataProvider;
+import com.erp.admin.wms.service.FboInventorySnapshotService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -50,6 +52,7 @@ public class AssetFinanceFacade {
     private final ShipProdCalcMapper shipProdCalcMapper;
     private final AssetFinanceMapper assetFinanceMapper;
     private final SkuBriefService skuBriefService;
+    private final FboInventorySnapshotService fboInventorySnapshotService;
 
     // ============================================================ 总览
 
@@ -57,6 +60,16 @@ public class AssetFinanceFacade {
         HeldQty held = loadHeldQty();
         List<AssetProcurementRowVO> proc = computeProcurementRows(held);
         List<AssetLogisticsRowVO> logi = computeLogisticsRows(held);
+
+        Set<String> valuedSkus = new TreeSet<>();
+        for (PurchaseCostAggDTO row : assetFinanceMapper.selectPurchaseCostAgg()) {
+            if (nz(row.getQty()) > 0) valuedSkus.add(row.getSkuCode());
+        }
+        int unvaluedQuantity = held.universe.stream()
+                .filter(sku -> !valuedSkus.contains(sku))
+                .mapToInt(held::total).sum();
+        int unvaluedSkuCount = (int) held.universe.stream()
+                .filter(sku -> held.total(sku) > 0 && !valuedSkus.contains(sku)).count();
 
         // 采购成本按币种
         Map<String, BigDecimal> procByCur = new LinkedHashMap<>();
@@ -108,6 +121,9 @@ public class AssetFinanceFacade {
 
         return AssetFinanceOverviewVO.builder()
                 .assets(assets).supplierPayable(supplierPayable).providerPayable(providerPayable)
+                .unvaluedSkuCount(unvaluedSkuCount).unvaluedQuantity(unvaluedQuantity)
+                .totalHeldQuantity(held.total())
+                .holdingPositions(buildHoldingPositions(held))
                 .build();
     }
 
@@ -148,15 +164,23 @@ public class AssetFinanceFacade {
         if (!regionIds.isEmpty()) {
             for (RegionSkuStockDTO s : regionStockDataProvider.getRegionSkuStocks(regionIds, null)) {
                 h.available.merge(s.getSkuCode(), nz(s.getTotalAvailable()), Integer::sum);
+                h.reserved.merge(s.getSkuCode(), nz(s.getTotalReserved()), Integer::sum);
                 h.inTransit.merge(s.getSkuCode(), nz(s.getTotalInTransit()), Integer::sum);
+                h.damaged.merge(s.getSkuCode(), nz(s.getTotalDamaged()), Integer::sum);
             }
         }
         for (PurchaseUnshippedBatchDTO b : shipProdCalcMapper.selectPurchaseUnshippedBatches(null)) {
             h.unshipped.merge(b.getSkuCode(), nz(b.getQuantity()), Integer::sum);
         }
+        Map<String, Integer> fbo = fboInventorySnapshotService.sumQuantityBySku(
+                com.erp.admin.common.tenant.TenantContext.getCurrentTenant(), null);
+        h.fbo.putAll(fbo);
         h.universe.addAll(h.available.keySet());
+        h.universe.addAll(h.reserved.keySet());
         h.universe.addAll(h.inTransit.keySet());
+        h.universe.addAll(h.damaged.keySet());
         h.universe.addAll(h.unshipped.keySet());
+        h.universe.addAll(h.fbo.keySet());
         return h;
     }
 
@@ -180,14 +204,31 @@ public class AssetFinanceFacade {
             if (curMap == null || purchasedTotal <= 0) {
                 continue; // 无采购价，无法估值
             }
-            for (Map.Entry<String, PurchaseCostAggDTO> e : curMap.entrySet()) {
+            List<Map.Entry<String, PurchaseCostAggDTO>> entries = new ArrayList<>(curMap.entrySet());
+            entries.sort(Map.Entry.comparingByKey());
+            Map<String, Integer> allocation = new HashMap<>();
+            List<CurrencyRemainder> remainders = new ArrayList<>();
+            int allocated = 0;
+            for (Map.Entry<String, PurchaseCostAggDTO> e : entries) {
+                long numerator = (long) total * nz(e.getValue().getQty());
+                int qty = (int) (numerator / purchasedTotal);
+                allocation.put(e.getKey(), qty);
+                allocated += qty;
+                remainders.add(new CurrencyRemainder(e.getKey(), numerator % purchasedTotal));
+            }
+            remainders.sort(Comparator.comparingLong(CurrencyRemainder::getRemainder).reversed()
+                    .thenComparing(CurrencyRemainder::getCurrency));
+            for (int i = 0; i < total - allocated; i++) {
+                String currency = remainders.get(i % remainders.size()).getCurrency();
+                allocation.merge(currency, 1, Integer::sum);
+            }
+            for (Map.Entry<String, PurchaseCostAggDTO> e : entries) {
                 PurchaseCostAggDTO agg = e.getValue();
                 int aggQty = nz(agg.getQty());
                 if (aggQty <= 0) {
                     continue;
                 }
-                double share = (double) aggQty / purchasedTotal;
-                int heldInCur = (int) Math.round(total * share);
+                int heldInCur = allocation.getOrDefault(e.getKey(), 0);
                 if (heldInCur <= 0) {
                     continue;
                 }
@@ -345,17 +386,51 @@ public class AssetFinanceFacade {
     /** 持有量持有器：A+B / C / D+E。 */
     private static class HeldQty {
         final Map<String, Integer> available = new HashMap<>();
+        final Map<String, Integer> reserved = new HashMap<>();
         final Map<String, Integer> inTransit = new HashMap<>();
+        final Map<String, Integer> damaged = new HashMap<>();
         final Map<String, Integer> unshipped = new HashMap<>();
+        final Map<String, Integer> fbo = new HashMap<>();
         final Set<String> universe = new TreeSet<>();
 
         int total(String sku) {
-            return available.getOrDefault(sku, 0) + inTransit.getOrDefault(sku, 0) + unshipped.getOrDefault(sku, 0);
+            return available.getOrDefault(sku, 0) + reserved.getOrDefault(sku, 0)
+                    + inTransit.getOrDefault(sku, 0) + damaged.getOrDefault(sku, 0)
+                    + unshipped.getOrDefault(sku, 0) + fbo.getOrDefault(sku, 0);
         }
 
         int shipped(String sku) {
-            return available.getOrDefault(sku, 0) + inTransit.getOrDefault(sku, 0);
+            return available.getOrDefault(sku, 0) + reserved.getOrDefault(sku, 0)
+                    + inTransit.getOrDefault(sku, 0) + damaged.getOrDefault(sku, 0)
+                    + fbo.getOrDefault(sku, 0);
         }
+
+        int sum(Map<String, Integer> values) { return values.values().stream().mapToInt(Integer::intValue).sum(); }
+        int total() { return universe.stream().mapToInt(this::total).sum(); }
+    }
+
+    private List<AssetFinanceOverviewVO.HoldingPositionVO> buildHoldingPositions(HeldQty held) {
+        List<AssetFinanceOverviewVO.HoldingPositionVO> rows = new ArrayList<>();
+        rows.add(position("UNSHIPPED", "采购未发货", held.sum(held.unshipped)));
+        rows.add(position("IN_TRANSIT", "国内至海外仓在途", held.sum(held.inTransit)));
+        rows.add(position("OWN_AVAILABLE", "海外仓可用", held.sum(held.available)));
+        rows.add(position("OWN_RESERVED", "海外仓预占", held.sum(held.reserved)));
+        rows.add(position("OWN_DAMAGED", "海外仓残品", held.sum(held.damaged)));
+        rows.add(position("FBO_TRANSIT", "FBO在途（暂未跟踪）", 0));
+        rows.add(position("FBO", "FBO平台库存", held.sum(held.fbo)));
+        return rows;
+    }
+
+    private AssetFinanceOverviewVO.HoldingPositionVO position(String code, String name, int quantity) {
+        return AssetFinanceOverviewVO.HoldingPositionVO.builder().code(code).name(name).quantity(quantity).build();
+    }
+
+    private static class CurrencyRemainder {
+        private final String currency;
+        private final long remainder;
+        CurrencyRemainder(String currency, long remainder) { this.currency = currency; this.remainder = remainder; }
+        String getCurrency() { return currency; }
+        long getRemainder() { return remainder; }
     }
 
     private static int nz(Integer v) {

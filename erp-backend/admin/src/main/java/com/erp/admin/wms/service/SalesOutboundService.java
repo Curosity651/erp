@@ -52,6 +52,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SalesOutboundService extends ExtendServiceImpl<SalesOutboundMapper, SalesOutboundOrder> {
 
+    public SalesOutboundOrder getByIdForUpdate(Long id) {
+        SalesOutboundOrder order = baseMapper.selectByIdForUpdate(id);
+        Assert.notNull(order, "销售出库单不存在");
+        return order;
+    }
+
     private final SalesOutboundItemService salesOutboundItemService;
     private final WmsPhysicalInventoryService physicalInventoryService;
     private final StringRedisTemplate stringRedisTemplate;

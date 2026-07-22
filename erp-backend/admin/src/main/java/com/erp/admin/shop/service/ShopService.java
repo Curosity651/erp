@@ -26,6 +26,7 @@ import org.ballcat.common.model.domain.PageResult;
 import org.ballcat.common.util.JsonUtils;
 import org.ballcat.common.util.json.TypeReference;
 import org.ballcat.mybatisplus.service.impl.ExtendServiceImpl;
+import org.ballcat.mybatisplus.toolkit.WrappersX;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -46,6 +47,16 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 		// C2：取某平台【全部租户】启用店铺，是合法的平台级跨租户扫描（后台同步任务无租户上下文调用），
 		// 显式放行租户注入，否则 fail-closed 后 shop 表被注入 -999 → 0 行、同步拉不到店铺。
 		return TenantContext.runAsPlatformScan(() -> this.baseMapper.listEnabledByPlatform(platform));
+	}
+
+	/** Returns enabled shops in the current owner tenant only. */
+	public List<Shop> listCurrentTenantEnabledByPlatform(String platform) {
+		if (!StringUtils.hasText(platform)) {
+			return Collections.emptyList();
+		}
+		return this.baseMapper.selectList(WrappersX.lambdaQueryX(Shop.class)
+				.eq(Shop::getPlatform, platform)
+				.eq(Shop::getStatus, ShopStatusEnum.ENABLED.getCode()));
 	}
 
 	public Shop getFirstEnabledShopByPlatform(String platform) {

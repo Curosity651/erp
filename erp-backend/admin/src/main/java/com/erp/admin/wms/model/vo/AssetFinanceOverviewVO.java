@@ -24,6 +24,20 @@ public class AssetFinanceOverviewVO {
     /** 应付物流商（USD 单一币种） */
     private PayableCurrencyVO providerPayable;
 
+    /** Quantity that is owned but has no traceable purchase cost. */
+    private Integer unvaluedSkuCount;
+    private Integer unvaluedQuantity;
+    private Integer totalHeldQuantity;
+    private List<HoldingPositionVO> holdingPositions;
+
+    @Data
+    @Builder
+    public static class HoldingPositionVO {
+        private String code;
+        private String name;
+        private Integer quantity;
+    }
+
     @Data
     @Builder
     public static class AssetCurrencyVO {

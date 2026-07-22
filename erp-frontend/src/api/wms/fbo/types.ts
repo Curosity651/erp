@@ -1,4 +1,37 @@
 import type { PageParam } from '@/api/types'
+import type { SkuBriefVO } from '@/api/common/sku-types'
+
+export interface FboInventoryQO {
+  platform?: string
+  shopId?: number
+  skuCode?: string
+  platformWarehouseName?: string
+}
+
+export type FboInventoryPageParam = FboInventoryQO & PageParam
+
+export interface FboInventoryPageVO {
+  id: number
+  platform: string
+  shopId: number
+  shopName: string
+  platformWarehouseId: string
+  platformWarehouseName: string
+  platformItemId: string
+  skuCode: string
+  skuBrief?: SkuBriefVO
+  quantity: number
+  syncedAt: string
+  stale: boolean
+}
+
+export interface FboInventorySummaryVO {
+  skuCount: number
+  shopCount: number
+  totalQuantity: number
+  lastSyncedAt?: string
+  stale: boolean
+}
 
 /** 同步结果 */
 export interface FboSyncResultVO {

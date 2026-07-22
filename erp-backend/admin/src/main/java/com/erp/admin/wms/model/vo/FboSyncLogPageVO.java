@@ -17,6 +17,8 @@ public class FboSyncLogPageVO {
     @Schema(title = "日志ID")
     private Long id;
 
+    private Long tenantId;
+
     @Schema(title = "日志编号")
     private String logNo;
 
@@ -32,8 +34,12 @@ public class FboSyncLogPageVO {
     @Schema(title = "同步类型")
     private String syncType;
 
+    private String syncBatchNo;
+
     @Schema(title = "总数量")
     private Integer totalCount;
+
+    private Integer sourceCount;
 
     @Schema(title = "成功数量")
     private Integer successCount;
@@ -43,6 +49,8 @@ public class FboSyncLogPageVO {
 
     @Schema(title = "未映射数量")
     private Integer unmappedCount;
+
+    private Integer snapshotQuantity;
 
     @Schema(title = "同步状态")
     private String syncStatus;

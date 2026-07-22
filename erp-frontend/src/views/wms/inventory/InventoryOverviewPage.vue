@@ -8,7 +8,7 @@
       <a-card :bordered="false" :body-style="{ padding: '12px 24px' }">
         <a-tabs v-model:activeKey="activeTab">
           <template #rightExtra>
-            <a-button type="primary" @click="handleSyncFbo">
+            <a-button v-if="activeTab === 'fbo'" type="primary" @click="handleSyncFbo">
               <sync-outlined />
               同步FBO库存
             </a-button>
@@ -47,7 +47,7 @@
             <template #tab>
               <span class="tab-label">
                 SKU维度
-                <span class="tab-count">{{ summary?.totalSkuCount ?? 0 }}</span>
+                <span class="tab-count">OWN + FBO</span>
               </span>
             </template>
             <sku-overview-table
@@ -55,6 +55,10 @@
               @view-detail="handleSkuDetail"
               @refresh="handleSkuRefresh"
             />
+          </a-tab-pane>
+          <a-tab-pane key="fbo">
+            <template #tab><span class="tab-label">FBO 库存</span></template>
+            <fbo-inventory-table ref="fboTableRef" />
           </a-tab-pane>
         </a-tabs>
       </a-card>
@@ -79,6 +83,7 @@ import SkuOverviewTable from './components/SkuOverviewTable.vue'
 import RegionOverviewTable from './components/RegionOverviewTable.vue'
 import FboStockSyncModal from './components/FboStockSyncModal.vue'
 import FboSyncLogDrawer from './components/FboSyncLogDrawer.vue'
+import FboInventoryTable from './components/FboInventoryTable.vue'
 
 defineOptions({ name: 'InventoryOverviewPage' })
 
@@ -86,7 +91,7 @@ const route = useRoute()
 const router = useRouter()
 
 // 有效的 tab key 列表
-const validTabs = ['region', 'warehouse', 'sku'] as const
+const validTabs = ['region', 'warehouse', 'sku', 'fbo'] as const
 type TabKey = typeof validTabs[number]
 
 // 从 URL 读取初始 tab，默认 region
@@ -120,6 +125,7 @@ const warehouseLoading = ref(false)
 
 // SKU 表格引用
 const skuTableRef = ref<InstanceType<typeof SkuOverviewTable>>()
+const fboTableRef = ref<InstanceType<typeof FboInventoryTable>>()
 
 // FBO 同步相关
 const syncModalRef = ref<InstanceType<typeof FboStockSyncModal>>()
@@ -181,6 +187,7 @@ async function loadRegionData() {
 // 刷新 SKU 表格
 function handleSkuRefresh() {
   skuTableRef.value?.reload()
+  fboTableRef.value?.reload()
 }
 
 // 跳转仓库明细

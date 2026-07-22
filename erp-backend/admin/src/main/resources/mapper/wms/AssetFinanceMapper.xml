@@ -34,7 +34,8 @@
         FROM wms_purchase_order po
         LEFT JOIN supplier s ON s.id = po.supplier_id
         WHERE po.deleted = 0
-          AND po.order_status IN ('CONFIRMED', 'IN_PRODUCTION', 'COMPLETED')
+          AND (po.order_status IN ('CONFIRMED', 'IN_PRODUCTION', 'COMPLETED')
+               OR po.prepay_status = 1 OR po.balance_status = 1)
     </select>
 
     <!-- 物流成本原始行（物流单 × 明细）：仅已发运（非 PENDING） -->

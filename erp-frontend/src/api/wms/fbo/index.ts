@@ -4,8 +4,19 @@ import type {
   FboSyncResultVO,
   FboSyncLogPageParam,
   FboSyncLogPageVO,
-  FboSyncLogDetailVO
+  FboSyncLogDetailVO,
+  FboInventoryPageParam,
+  FboInventoryPageVO,
+  FboInventorySummaryVO
 } from './types'
+
+export function getFboInventorySummary() {
+  return httpClient.get<ApiResult<FboInventorySummaryVO>>('/wms/fbo/summary')
+}
+
+export function getFboInventoryPage(params: FboInventoryPageParam) {
+  return httpClient.get<ApiResult<PageResult<FboInventoryPageVO>>>('/wms/fbo/page', { params })
+}
 
 /** 触发 FBO 库存同步 */
 export function syncFboStock(shopId?: number) {

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.FboInventorySnapshotMapper">
+    <select id="queryPage" resultType="com.erp.admin.wms.model.vo.FboInventoryPageVO">
+        SELECT f.id, f.platform, f.shop_id, s.name AS shop_name,
+               f.platform_warehouse_id, f.platform_warehouse_name,
+               f.platform_item_id, f.sku_code, f.quantity, f.synced_at
+        FROM wms_fbo_inventory_snapshot f
+        LEFT JOIN shop s ON s.id = f.shop_id
+        WHERE f.tenant_id = #{tenantId}
+        <if test="qo.platform != null and qo.platform != ''">
+            AND f.platform = #{qo.platform}
+        </if>
+        <if test="qo.shopId != null">
+            AND f.shop_id = #{qo.shopId}
+        </if>
+        <if test="qo.skuCode != null and qo.skuCode != ''">
+            AND f.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')
+        </if>
+        <if test="qo.platformWarehouseName != null and qo.platformWarehouseName != ''">
+            AND f.platform_warehouse_name LIKE CONCAT('%', #{qo.platformWarehouseName}, '%')
+        </if>
+        ORDER BY f.quantity DESC, f.sku_code, f.platform_warehouse_name
+    </select>
+
+    <select id="selectSummary" resultType="com.erp.admin.wms.model.vo.FboInventorySummaryVO">
+        SELECT COUNT(DISTINCT sku_code) AS sku_count,
+               COUNT(DISTINCT shop_id) AS shop_count,
+               COALESCE(SUM(quantity), 0) AS total_quantity,
+               MAX(synced_at) AS last_synced_at
+        FROM wms_fbo_inventory_snapshot
+        WHERE tenant_id = #{tenantId}
+    </select>
+
+    <select id="sumQuantityBySku" resultType="com.erp.admin.wms.model.dto.SkuQuantityDTO">
+        SELECT sku_code AS skuCode, COALESCE(SUM(quantity), 0) AS quantity
+        FROM wms_fbo_inventory_snapshot
+        WHERE tenant_id = #{tenantId}
+        <if test="skuCodes != null and skuCodes.size() > 0">
+            AND sku_code IN
+            <foreach collection="skuCodes" item="sku" open="(" separator="," close=")">#{sku}</foreach>
+        </if>
+        GROUP BY sku_code
+    </select>
+</mapper>

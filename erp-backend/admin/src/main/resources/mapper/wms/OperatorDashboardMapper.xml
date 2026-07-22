@@ -108,6 +108,8 @@
     <select id="sumOwnerOnHand" resultType="long">
         SELECT COALESCE(SUM(i.available_quantity + i.reserved_quantity + i.damaged_quantity), 0)
         FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON w.id = i.warehouse_id
+            AND w.warehouse_type = 'OWN' AND w.deleted = 0
         INNER JOIN sys_tenant t ON t.id = i.erp_tenant_id AND t.parent_wms_tenant_id = #{wmsTenantId}
         <where>
             <if test="erpTenantIds != null and erpTenantIds.size() > 0">

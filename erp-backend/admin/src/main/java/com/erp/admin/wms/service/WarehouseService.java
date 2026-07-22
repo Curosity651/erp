@@ -350,6 +350,14 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 		return list.stream().filter(w -> scope.contains(w.getId())).collect(Collectors.toList());
 	}
 
+	/** Validate that the current user can operate the specified active OWN warehouse. */
+	public Warehouse validateOperableOwnWarehouse(Long warehouseId) {
+		Assert.notNull(warehouseId, "仓库不能为空");
+		List<Warehouse> warehouses = listOwnWarehouses(warehouseId);
+		Assert.isTrue(warehouses.size() == 1, "仓库不存在、已停用或当前账号无权操作");
+		return warehouses.get(0);
+	}
+
 	/**
 	 * 查询区域内自有仓库列表
 	 */

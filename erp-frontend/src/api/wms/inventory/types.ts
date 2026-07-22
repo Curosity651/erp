@@ -144,6 +144,8 @@ export interface SkuSummaryVO {
   warehouseCount: number
   // 仓内库存（计算字段）
   warehouseQuantity: number
+  // 货主持有总量（海外仓仓内 + FBO，不含在途与残品）
+  totalHeldQuantity: number
   // 可用库存
   availableQuantity: number
   // 占用库存

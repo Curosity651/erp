@@ -6,6 +6,7 @@ import com.erp.admin.wms.model.entity.FboSyncLog;
 import com.erp.admin.wms.model.qo.FboSyncLogQO;
 import com.erp.admin.wms.model.vo.FboSyncLogDetailVO;
 import com.erp.admin.wms.model.vo.FboSyncLogPageVO;
+import com.erp.admin.common.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.model.domain.PageParam;
@@ -34,7 +35,7 @@ public class FboSyncLogService extends ExtendServiceImpl<FboSyncLogMapper, FboSy
      * 分页查询同步日志
      */
     public PageResult<FboSyncLogPageVO> queryPage(PageParam pageParam, FboSyncLogQO qo) {
-        IPage<FboSyncLogPageVO> page = baseMapper.queryPage(PageUtil.prodPage(pageParam), qo);
+        IPage<FboSyncLogPageVO> page = baseMapper.queryPage(PageUtil.prodPage(pageParam), currentTenant(), qo);
         return new PageResult<>(page.getRecords(), page.getTotal());
     }
 
@@ -42,7 +43,7 @@ public class FboSyncLogService extends ExtendServiceImpl<FboSyncLogMapper, FboSy
      * 获取同步日志详情
      */
     public FboSyncLogDetailVO getDetail(Long id) {
-        return baseMapper.selectDetail(id);
+        return baseMapper.selectDetail(id, currentTenant());
     }
 
     /**
@@ -63,21 +64,33 @@ public class FboSyncLogService extends ExtendServiceImpl<FboSyncLogMapper, FboSy
     /**
      * 创建同步日志（开始）
      */
-    public FboSyncLog createLog(String platform, Long shopId, String syncType) {
+    public FboSyncLog createLog(Long tenantId, String platform, Long shopId, String syncType, String batchNo) {
         FboSyncLog syncLog = new FboSyncLog();
+        syncLog.setTenantId(tenantId);
         syncLog.setLogNo(generateLogNo());
         syncLog.setPlatform(platform);
         syncLog.setShopId(shopId);
         syncLog.setSyncType(syncType);
+        syncLog.setSyncBatchNo(batchNo);
         syncLog.setSyncStatus("RUNNING");
         syncLog.setSyncTime(LocalDateTime.now());
         syncLog.setTotalCount(0);
+        syncLog.setSourceCount(0);
         syncLog.setSuccessCount(0);
         syncLog.setFailCount(0);
         syncLog.setUnmappedCount(0);
+        syncLog.setSnapshotQuantity(0);
         syncLog.setAutoCreatedWarehouseCount(0);
         this.save(syncLog);
         return syncLog;
+    }
+
+    private Long currentTenant() {
+        Long tenantId = TenantContext.getCurrentTenant();
+        if (tenantId == null || TenantContext.BLOCK_TENANT_ID.equals(tenantId)) {
+            throw new IllegalArgumentException("FBO sync logs are available only to ERP owners");
+        }
+        return tenantId;
     }
 
 }

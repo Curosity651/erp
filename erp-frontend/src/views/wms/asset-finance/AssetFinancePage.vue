@@ -1,6 +1,12 @@
 <template>
   <div class="asset-finance-page">
     <a-card title="资产与账务" :bordered="false">
+      <template #extra>
+        <a-space>
+          <span class="updated-at">更新于 {{ updatedAt || '--' }}</span>
+          <a-button :loading="overviewLoading" @click="refreshAll">刷新</a-button>
+        </a-space>
+      </template>
       <a-spin :spinning="overviewLoading">
         <!-- 资产总览：分币种，不折算 -->
         <div class="section-title">📦 资产估值（采购成本 + 物流附加，加权平均、分币种不折算）</div>
@@ -19,6 +25,24 @@
           </a-col>
           <a-col v-if="!assets.length" :span="24">
             <a-empty description="暂无持有资产" />
+          </a-col>
+        </a-row>
+
+        <a-alert
+          v-if="overview?.unvaluedQuantity"
+          class="unvalued-alert"
+          type="warning"
+          show-icon
+          :message="`有 ${overview.unvaluedSkuCount} 个 SKU、${overview.unvaluedQuantity} 件库存尚未维护采购成本，数量已计入资产，金额暂未计入`"
+        />
+
+        <div class="section-title">库存位置分布 · 共 {{ overview?.totalHeldQuantity ?? 0 }} 件</div>
+        <a-row :gutter="12" class="position-row">
+          <a-col v-for="position in overview?.holdingPositions ?? []" :key="position.code" :xs="12" :md="8" :xl="6">
+            <div class="position-item">
+              <span>{{ position.name }}</span>
+              <strong>{{ position.quantity.toLocaleString() }}</strong>
+            </div>
           </a-col>
         </a-row>
 
@@ -217,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 import { isSuccess } from '@/api'
 import SkuBriefCell from '@/components/Sku/SkuBriefCell.vue'
 import {
@@ -242,6 +266,7 @@ defineOptions({ name: 'AssetFinancePage' })
 const overview = ref<AssetFinanceOverviewVO>()
 const assets = ref<AssetCurrencyVO[]>([])
 const overviewLoading = ref(false)
+const updatedAt = ref('')
 
 const supPayCols = [
   { title: '币种', dataIndex: 'currency', key: 'currency', width: 80 },
@@ -263,6 +288,7 @@ async function loadOverview() {
     if (isSuccess(res)) {
       overview.value = res.data
       assets.value = res.data.assets
+      updatedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
     }
   } finally {
     overviewLoading.value = false
@@ -377,12 +403,19 @@ async function loadProvider() {
 }
 
 function onTabChange(key: string) {
-  if (loaded.value[key]) return
   loaded.value[key] = true
   if (key === 'procurement') loadProcurement()
   else if (key === 'logistics') loadLogistics()
   else if (key === 'supplier') loadSupplier()
   else if (key === 'provider') loadProvider()
+}
+
+async function refreshAll() {
+  await loadOverview()
+  if (activeTab.value === 'procurement') await loadProcurement()
+  else if (activeTab.value === 'logistics') await loadLogistics()
+  else if (activeTab.value === 'supplier') await loadSupplier()
+  else if (activeTab.value === 'provider') await loadProvider()
 }
 
 // ---------------- 工具 ----------------
@@ -418,6 +451,7 @@ onMounted(() => {
   loaded.value['procurement'] = true
   loadProcurement()
 })
+onActivated(refreshAll)
 </script>
 
 <style scoped>
@@ -471,4 +505,10 @@ onMounted(() => {
   color: #ff4d4f;
   font-weight: 600;
 }
+.updated-at { font-size: 12px; color: var(--ant-color-text-tertiary); }
+.unvalued-alert { margin-bottom: 16px; }
+.position-row { margin-bottom: 18px; }
+.position-item { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 10px 12px; border: 1px solid var(--ant-color-border-secondary, #f0f0f0); border-radius: 6px; }
+.position-item span { color: var(--ant-color-text-secondary); }
+.position-item strong { font-size: 16px; font-variant-numeric: tabular-nums; }
 </style>

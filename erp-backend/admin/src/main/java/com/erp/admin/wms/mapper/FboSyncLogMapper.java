@@ -18,7 +18,8 @@ public interface FboSyncLogMapper extends ExtendMapper<FboSyncLog> {
     /**
      * 分页查询
      */
-    IPage<FboSyncLogPageVO> queryPage(IPage<FboSyncLogPageVO> page, @Param("qo") FboSyncLogQO qo);
+    IPage<FboSyncLogPageVO> queryPage(IPage<FboSyncLogPageVO> page, @Param("tenantId") Long tenantId,
+            @Param("qo") FboSyncLogQO qo);
 
     /**
      * 统计今日日志数量（用于生成日志编号）
@@ -28,6 +29,6 @@ public interface FboSyncLogMapper extends ExtendMapper<FboSyncLog> {
     /**
      * 查询详情
      */
-    FboSyncLogDetailVO selectDetail(@Param("id") Long id);
+    FboSyncLogDetailVO selectDetail(@Param("id") Long id, @Param("tenantId") Long tenantId);
 
 }
