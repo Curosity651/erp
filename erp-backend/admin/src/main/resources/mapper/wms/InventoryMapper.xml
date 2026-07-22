@@ -178,6 +178,7 @@
             w.region_id AS regionId,
             COUNT(DISTINCT w.id) AS warehouseCount,
             COALESCE(SUM(i.available_quantity), 0) AS totalAvailable,
+            COALESCE(SUM(i.reserved_quantity), 0) AS totalReserved,
             COALESCE(SUM(i.in_transit_quantity), 0) AS totalInTransit,
             COALESCE(SUM(i.damaged_quantity), 0) AS totalDamaged
         FROM wms_warehouse w
@@ -201,6 +202,7 @@
             w.region_id AS regionId,
             i.sku_code AS skuCode,
             SUM(COALESCE(i.available_quantity, 0)) AS totalAvailable,
+            SUM(COALESCE(i.reserved_quantity, 0)) AS totalReserved,
             SUM(COALESCE(i.in_transit_quantity, 0)) AS totalInTransit,
             SUM(COALESCE(i.damaged_quantity, 0)) AS totalDamaged
         FROM wms_inventory i
@@ -230,6 +232,7 @@
             w.region_id AS regionId,
             i.sku_code AS skuCode,
             SUM(COALESCE(i.available_quantity, 0)) AS totalAvailable,
+            SUM(COALESCE(i.reserved_quantity, 0)) AS totalReserved,
             SUM(COALESCE(i.in_transit_quantity, 0)) AS totalInTransit,
             SUM(COALESCE(i.damaged_quantity, 0)) AS totalDamaged
         FROM wms_inventory i

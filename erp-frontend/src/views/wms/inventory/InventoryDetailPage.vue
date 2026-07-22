@@ -73,6 +73,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { DownloadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import ProTable from '#/table'
@@ -91,11 +92,21 @@ defineOptions({ name: 'InventoryDetailPage' })
 
 const tableRef = ref<ProTableInstanceExpose>()
 const flowDrawerRef = ref<InstanceType<typeof StockFlowDrawer>>()
+const route = useRoute()
 
 useTableActivateReload(() => tableRef.value?.actionRef?.reload(false))
 
-// 查询参数
-let searchParams: InventoryQO = {}
+function routeNumber(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+// 从库存总览跳转时沿用区域/仓库/SKU筛选，保证汇总与明细口径一致。
+let searchParams: InventoryQO = {
+  regionId: routeNumber(route.query.regionId),
+  warehouseId: routeNumber(route.query.warehouseId),
+  skuCode: typeof route.query.skuCode === 'string' ? route.query.skuCode : undefined
+}
 
 const columns: ProColumns[] = [
   { title: '仓库信息', key: 'warehouseInfo', width: 120, fixed: 'left' },

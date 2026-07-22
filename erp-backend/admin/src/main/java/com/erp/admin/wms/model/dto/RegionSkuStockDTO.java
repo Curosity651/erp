@@ -15,6 +15,9 @@ public class RegionSkuStockDTO {
     /** 可用库存汇总 = SUM(区域内自有仓.available) */
     private Integer totalAvailable;
 
+    /** 预占库存汇总 = SUM(区域内自有仓.reserved) */
+    private Integer totalReserved;
+
     /** 在途库存汇总 = SUM(区域内自有仓.in_transit) */
     private Integer totalInTransit;
 
@@ -26,6 +29,7 @@ public class RegionSkuStockDTO {
         dto.setRegionId(regionId);
         dto.setSkuCode(skuCode);
         dto.setTotalAvailable(0);
+        dto.setTotalReserved(0);
         dto.setTotalInTransit(0);
         dto.setTotalDamaged(0);
         return dto;

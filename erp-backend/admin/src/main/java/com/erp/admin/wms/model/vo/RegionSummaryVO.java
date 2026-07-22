@@ -22,10 +22,10 @@ public class RegionSummaryVO {
     @Schema(title = "自有仓数量")
     private Integer ownWarehouseCount;
 
-    @Schema(title = "区域可售库存 = SUM(自有仓.available) - region.reserved")
+    @Schema(title = "区域可售库存 = SUM(自有仓.available)")
     private Integer regionAvailable;
 
-    @Schema(title = "区域预占库存")
+    @Schema(title = "区域预占库存 = SUM(自有仓.reserved)")
     private Integer regionReserved;
 
     @Schema(title = "区域在途库存")

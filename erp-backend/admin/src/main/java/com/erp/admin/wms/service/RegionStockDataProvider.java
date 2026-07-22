@@ -1,9 +1,7 @@
 package com.erp.admin.wms.service;
 
 import com.erp.admin.wms.mapper.InventoryMapper;
-import com.erp.admin.wms.mapper.RegionInventoryMapper;
 import com.erp.admin.wms.model.dto.RegionSkuStockDTO;
-import com.erp.admin.wms.model.entity.RegionInventory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,7 +22,6 @@ import java.util.stream.Collectors;
 public class RegionStockDataProvider {
 
     private final InventoryMapper inventoryMapper;
-    private final RegionInventoryMapper regionInventoryMapper;
     private final ErpOwnerScopeService erpOwnerScopeService;
 
     /**
@@ -61,10 +58,13 @@ public class RegionStockDataProvider {
             return Collections.emptyMap();
         }
 
-        List<RegionInventory> list = regionInventoryMapper.selectByRegionIdsAndSkuCodes(regionIds, skuCodes);
-        return list.stream().collect(Collectors.toMap(
-                ri -> ri.getRegionId() + ":" + ri.getSkuCode(),
-                RegionInventory::getReservedQuantity,
+        List<RegionSkuStockDTO> list = inventoryMapper.selectAggregateByRegionsAndKeyword(
+                regionIds, null, erpOwnerScopeService.readScope());
+        return list.stream()
+                .filter(row -> skuCodes.contains(row.getSkuCode()))
+                .collect(Collectors.toMap(
+                row -> row.getRegionId() + ":" + row.getSkuCode(),
+                row -> row.getTotalReserved() == null ? 0 : row.getTotalReserved(),
                 (a, b) -> a
         ));
     }
@@ -77,10 +77,7 @@ public class RegionStockDataProvider {
      * 查看者身份收窄（货主只看自己，平台看全部）。
      */
     public int getRegionReserved(Long regionId, String skuCode) {
-        List<RegionInventory> list = regionInventoryMapper.selectByRegionIdsAndSkuCodes(
-                Collections.singleton(regionId), Collections.singleton(skuCode));
-        return list.stream()
-                .mapToInt(ri -> ri.getReservedQuantity() != null ? ri.getReservedQuantity() : 0)
-                .sum();
+        RegionSkuStockDTO stock = getRegionSkuStock(regionId, skuCode);
+        return stock.getTotalReserved() == null ? 0 : stock.getTotalReserved();
     }
 }

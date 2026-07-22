@@ -11,6 +11,9 @@ public class WarehouseAggregateDTO {
     private Long regionId;
     private Integer warehouseCount = 0;
     private Integer totalAvailable = 0;
+
+    private Integer totalReserved = 0;
+
     private Integer totalInTransit = 0;
     private Integer totalDamaged = 0;
 

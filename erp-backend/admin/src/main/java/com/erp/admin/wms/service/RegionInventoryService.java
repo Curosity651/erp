@@ -3,8 +3,6 @@ package com.erp.admin.wms.service;
 import com.erp.admin.wms.mapper.InventoryMapper;
 import com.erp.admin.wms.mapper.RegionInventoryMapper;
 import com.erp.admin.wms.mapper.RegionMapper;
-import com.erp.admin.wms.model.dto.RegionInTransitDTO;
-import com.erp.admin.wms.model.dto.RegionReservedDTO;
 import com.erp.admin.wms.model.dto.WarehouseAggregateDTO;
 import com.erp.admin.wms.model.entity.Region;
 import com.erp.admin.wms.model.entity.RegionInventory;
@@ -112,27 +110,7 @@ public class RegionInventoryService extends ExtendServiceImpl<RegionInventoryMap
                         (a, b) -> a
                 ));
 
-        // Step 3: 批量查询各区域的预占汇总（单次查询，类型安全）
-        Map<Long, Integer> reservedMap = baseMapper
-                .selectReservedByRegionIds(regionIds, erpOwnerScopeService.readScope())
-                .stream()
-                .collect(Collectors.toMap(
-                        RegionReservedDTO::getRegionId,
-                        RegionReservedDTO::getTotalReserved,
-                        (a, b) -> a
-                ));
-
-        // Step 3.5: 批量查询区域级在途汇总（来自 region_inventory.in_transit_quantity）
-        Map<Long, Integer> regionInTransitMap = baseMapper
-                .selectInTransitByRegionIds(regionIds, erpOwnerScopeService.readScope())
-                .stream()
-                .collect(Collectors.toMap(
-                        RegionInTransitDTO::getRegionId,
-                        RegionInTransitDTO::getTotalInTransit,
-                        (a, b) -> a
-                ));
-
-        // Step 4: 内存组装
+        // Step 3: 内存组装。库存总览只使用 OWN 海外仓快照；平台订单不参与库存计算。
         return regions.stream().map(r -> {
             RegionSummaryVO vo = new RegionSummaryVO();
             vo.setRegionId(r.getId());
@@ -141,13 +119,10 @@ public class RegionInventoryService extends ExtendServiceImpl<RegionInventoryMap
 
             WarehouseAggregateDTO agg = warehouseAggMap.getOrDefault(
                     r.getId(), WarehouseAggregateDTO.empty());
-            Integer reserved = reservedMap.getOrDefault(r.getId(), 0);
-
             vo.setOwnWarehouseCount(agg.getWarehouseCount());
-            vo.setRegionAvailable(agg.getTotalAvailable() - reserved);
-            vo.setRegionReserved(reserved);
-            Integer regionLevelInTransit = regionInTransitMap.getOrDefault(r.getId(), 0);
-            vo.setRegionInTransit(agg.getTotalInTransit() + regionLevelInTransit);
+            vo.setRegionAvailable(agg.getTotalAvailable());
+            vo.setRegionReserved(agg.getTotalReserved());
+            vo.setRegionInTransit(agg.getTotalInTransit());
             vo.setRegionDamaged(agg.getTotalDamaged());
             return vo;
         }).collect(Collectors.toList());

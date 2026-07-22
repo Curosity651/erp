@@ -44,14 +44,20 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 	private WmsRackAssignmentMapper rackAssignmentMapper;
 
 	/**
-	 * OWN 仓可见性作用域（P6）：海外仓平台/无上下文→null(看全部)；服务商/货主→其(父)服务商有货架分配的仓库 id 集合。
+	 * OWN 仓可见性作用域：无上下文→null(系统任务看全部)；海外仓平台→全部 OWN 仓；
+	 * 服务商/货主→其(父)服务商有货架分配的 OWN 仓库 id 集合。
 	 * 服务商与货主均用 {@link WmsTenantContext}（服务商=自身、货主=父服务商）匹配 wms_rack_assignment.wms_tenant_id。
 	 * @return 可见 OWN 仓 id 集合；null=不过滤(全部)；空集=看不到
 	 */
 	private Set<Long> ownWarehouseScope() {
 		Long erp = TenantContext.getCurrentTenant();
-		if (erp == null || TenantContext.BLOCK_TENANT_ID.equals(erp)) {
+		if (erp == null) {
 			return null;
+		}
+		if (TenantContext.BLOCK_TENANT_ID.equals(erp)) {
+			return baseMapper.selectOwnWarehouses(null).stream()
+					.map(Warehouse::getId)
+					.collect(Collectors.toSet());
 		}
 		Long wms = WmsTenantContext.getCurrentWmsTenant();
 		if (wms == null) {
@@ -67,11 +73,14 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 	 * @return PageResult<WarehousePageVO> 分页数据
 	 */
 	public PageResult<WarehousePageVO> queryPage(PageParam pageParam, WarehouseQO qo) {
+		if (TenantContext.BLOCK_TENANT_ID.equals(TenantContext.getCurrentTenant())) {
+			qo.setWarehouseType(WarehouseTypeEnum.OWN.getCode());
+		}
 		return baseMapper.queryPage(pageParam, qo);
 	}
 
 	/**
-	 * 获取仓库下拉选项列表（按可见性收窄：货主/服务商仅见其服务商有货架分配的 OWN 仓；平台全部）
+	 * 获取仓库下拉选项列表（所有海外仓作业身份只返回可操作的 OWN 仓）
 	 * @return List<WarehouseOptionVO> 仓库下拉选项列表
 	 */
 	public List<WarehouseOptionVO> getWarehouseOptions() {
@@ -90,6 +99,11 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 	 */
 	public WarehousePageVO getDetail(Long id) {
 		Warehouse warehouse = this.getById(id);
+		Assert.notNull(warehouse, "仓库不存在");
+		if (TenantContext.BLOCK_TENANT_ID.equals(TenantContext.getCurrentTenant())) {
+			Assert.isTrue(WarehouseTypeEnum.OWN.getCode().equals(warehouse.getWarehouseType()),
+					"海外仓平台不能使用 FBO 仓库");
+		}
 		return WarehouseConverter.INSTANCE.poToPageVo(warehouse);
 	}
 
