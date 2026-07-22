@@ -6,6 +6,7 @@ import org.ballcat.common.core.validation.group.CreateGroup;
 import org.ballcat.common.core.validation.group.UpdateGroup;
 
 import javax.validation.Valid;
+import javax.validation.constraints.DecimalMax;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
@@ -65,6 +66,7 @@ public class ShippingOrderDTO {
 	private BigDecimal totalWeight;
 
 	@Schema(title = "物流单价(USD/kg，灰关时必填)")
+	@DecimalMax(value = "99999999.9999", message = "物流单价不能超过99999999.9999")
 	private BigDecimal unitPrice;
 
 	@Schema(title = "运输费用(USD，白关时必填)")

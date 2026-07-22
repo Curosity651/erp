@@ -13,6 +13,7 @@
             <a-input-number
               :value="unitPrice"
               :min="0"
+              :max="99999999.9999"
               :precision="4"
               style="width: 100%"
               placeholder="请输入"
