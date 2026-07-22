@@ -3,6 +3,7 @@ package com.erp.admin.wms.mapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.erp.admin.wms.model.dto.RegionInTransitDTO;
 import com.erp.admin.wms.model.dto.RegionReservedDTO;
+import com.erp.admin.wms.model.dto.SkuQuantityDTO;
 import com.erp.admin.wms.model.entity.RegionInventory;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -111,4 +112,18 @@ public interface RegionInventoryMapper extends ExtendMapper<RegionInventory> {
             "</script>")
     List<RegionInTransitDTO> selectInTransitByRegionIds(@Param("regionIds") Collection<Long> regionIds,
             @Param("erpTenantIds") Collection<Long> erpTenantIds);
+
+    @Select("<script>" +
+            "SELECT sku_code AS skuCode, SUM(in_transit_quantity) AS quantity " +
+            "FROM wms_region_inventory " +
+            "WHERE erp_tenant_id = #{erpTenantId} " +
+            "AND in_transit_quantity > 0 " +
+            "<if test='regionIds != null and regionIds.size() > 0'>" +
+            "AND region_id IN " +
+            "<foreach collection='regionIds' item='id' open='(' separator=',' close=')'>#{id}</foreach>" +
+            "</if> " +
+            "GROUP BY sku_code" +
+            "</script>")
+    List<SkuQuantityDTO> selectInTransitQuantityBySku(@Param("erpTenantId") Long erpTenantId,
+            @Param("regionIds") Collection<Long> regionIds);
 }

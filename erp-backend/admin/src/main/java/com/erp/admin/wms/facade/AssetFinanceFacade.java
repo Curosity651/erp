@@ -14,6 +14,7 @@ import java.util.TreeSet;
 
 import com.erp.admin.product.service.SkuBriefService;
 import com.erp.admin.wms.mapper.AssetFinanceMapper;
+import com.erp.admin.wms.mapper.RegionInventoryMapper;
 import com.erp.admin.wms.mapper.ShipProdCalcMapper;
 import com.erp.admin.wms.model.dto.PayableProviderRowDTO;
 import com.erp.admin.wms.model.dto.PayableSupplierRowDTO;
@@ -21,6 +22,7 @@ import com.erp.admin.wms.model.dto.PurchaseCostAggDTO;
 import com.erp.admin.wms.model.dto.PurchaseUnshippedBatchDTO;
 import com.erp.admin.wms.model.dto.RegionSkuStockDTO;
 import com.erp.admin.wms.model.dto.ShippingCostLineDTO;
+import com.erp.admin.wms.model.dto.SkuQuantityDTO;
 import com.erp.admin.wms.model.entity.Region;
 import com.erp.admin.wms.model.vo.AssetFinanceOverviewVO;
 import com.erp.admin.wms.model.vo.AssetLogisticsRowVO;
@@ -49,6 +51,7 @@ public class AssetFinanceFacade {
 
     private final RegionService regionService;
     private final RegionStockDataProvider regionStockDataProvider;
+    private final RegionInventoryMapper regionInventoryMapper;
     private final ShipProdCalcMapper shipProdCalcMapper;
     private final AssetFinanceMapper assetFinanceMapper;
     private final SkuBriefService skuBriefService;
@@ -168,6 +171,10 @@ public class AssetFinanceFacade {
                 h.inTransit.merge(s.getSkuCode(), nz(s.getTotalInTransit()), Integer::sum);
                 h.damaged.merge(s.getSkuCode(), nz(s.getTotalDamaged()), Integer::sum);
             }
+            Long tenantId = com.erp.admin.common.tenant.TenantContext.getCurrentTenant();
+            for (SkuQuantityDTO row : regionInventoryMapper.selectInTransitQuantityBySku(tenantId, regionIds)) {
+                h.inTransit.merge(row.getSkuCode(), nz(row.getQuantity()), Integer::sum);
+            }
         }
         for (PurchaseUnshippedBatchDTO b : shipProdCalcMapper.selectPurchaseUnshippedBatches(null)) {
             h.unshipped.merge(b.getSkuCode(), nz(b.getQuantity()), Integer::sum);
@@ -279,9 +286,10 @@ public class AssetFinanceFacade {
             }
             BigDecimal unitCost = feeBySku.getOrDefault(sku, BigDecimal.ZERO)
                     .divide(BigDecimal.valueOf(shippedQty), 4, RoundingMode.HALF_UP);
-            BigDecimal cost = unitCost.multiply(BigDecimal.valueOf(shippedHeld));
+            int capitalizedQty = Math.min(shippedHeld, shippedQty);
+            BigDecimal cost = unitCost.multiply(BigDecimal.valueOf(capitalizedQty));
             rows.add(AssetLogisticsRowVO.builder()
-                    .skuCode(sku).shippedHeldQty(shippedHeld)
+                    .skuCode(sku).shippedHeldQty(capitalizedQty)
                     .unitCostUsd(unitCost).logisticsCostUsd(money(cost))
                     .build());
         }
