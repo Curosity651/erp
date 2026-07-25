@@ -1,7 +1,11 @@
 package com.erp.admin.wms;
 
+import java.lang.reflect.Method;
+
+import com.erp.admin.wms.model.dto.WarehouseStructureDTO;
 import com.erp.admin.wms.service.WmsLocationGenerator;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,6 +35,16 @@ class WmsLocationGeneratorTest {
 		// 3排 × 4列 = 12
 		assertThat(WmsLocationGenerator.countLocations(3, 4)).isEqualTo(12);
 		assertThat(WmsLocationGenerator.countLocations(10, 10)).isEqualTo(100);
+	}
+
+	@Test
+	void save_and_generate_share_one_rollback_transaction() throws NoSuchMethodException {
+		Method method = WmsLocationGenerator.class
+			.getMethod("saveStructureAndGenerate", WarehouseStructureDTO.class);
+		Transactional transactional = method.getAnnotation(Transactional.class);
+
+		assertThat(transactional).isNotNull();
+		assertThat(transactional.rollbackFor()).contains(Exception.class);
 	}
 
 }

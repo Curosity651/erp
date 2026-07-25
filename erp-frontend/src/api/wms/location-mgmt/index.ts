@@ -9,7 +9,7 @@ export function listStructureWarehouses() {
 
 /** 更新仓库结构参数 */
 export function updateWarehouseStructure(data: WarehouseStructureUpdate) {
-  return httpClient.patch<ApiResult<void>>('/wms/location-mgmt/structure', data)
+  return httpClient.patch<ApiResult<number>>('/wms/location-mgmt/structure', data)
 }
 
 /** 仓库分区列表 */

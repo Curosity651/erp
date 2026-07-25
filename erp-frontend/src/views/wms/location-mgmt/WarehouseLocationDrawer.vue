@@ -59,23 +59,15 @@
             </a-col>
             <a-col :span="8">
               <a-space v-if="canEdit" class="struct-btns">
-                <a-button
-                  type="primary"
-                  :loading="savingStructure"
-                  :disabled="structureLocked"
-                  @click="saveStructure"
-                >
-                  保存结构
-                </a-button>
                 <a-popconfirm
                   :title="generateConfirmText"
                   ok-text="确定"
                   cancel-text="取消"
                   :disabled="structureLocked"
-                  @confirm="doGenerate"
+                  @confirm="saveStructure"
                 >
-                  <a-button :loading="generating" :disabled="structureLocked">
-                    {{ currentGenerated ? '重新生成' : '生成库位' }}
+                  <a-button type="primary" :loading="savingStructure" :disabled="structureLocked">
+                    保存并生成
                   </a-button>
                 </a-popconfirm>
               </a-space>
@@ -393,7 +385,6 @@ import {
   updateWarehouseStructure,
   listZones,
   initDefaultZones,
-  generateLocations,
   listLocations,
   listOccupiedLocations,
   moveLocationZone,
@@ -455,7 +446,6 @@ const slotPrinting = ref(false)
 const slotPrintLocationIds = ref<number[]>([])
 
 const savingStructure = ref(false)
-const generating = ref(false)
 const loadingLocations = ref(false)
 const assigning = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
@@ -532,8 +522,8 @@ const selectedPrintSlots = computed(() => {
 })
 const generateConfirmText = computed(() =>
   currentGenerated.value
-    ? '重新生成将清空原有库位并按当前结构重建，确定？'
-    : '生成后可在无货物占用时重新生成，确定生成？'
+    ? '保存后将按新结构重新生成全部物理库位；配置和库位会在同一事务中更新，确定继续？'
+    : '保存结构后将立即生成物理库位，确定继续？'
 )
 
 /** 排号自然排序（A1,A2,...,A10） */
@@ -928,33 +918,15 @@ async function saveStructure() {
   try {
     const res = await updateWarehouseStructure({ id: current.value.id, ...form })
     if (isSuccess(res)) {
-      message.success('结构已保存')
-      // 同步本地副本，供预计数量/重新生成判断
-      current.value = { ...current.value, ...form }
+      message.success(`结构已保存，并生成 ${res.data} 个库位`)
+      current.value = { ...current.value, ...form, locationGenerated: 1 }
+      await loadLocations()
       emits('success')
     } else {
       message.error(res.message || '保存失败')
     }
   } finally {
     savingStructure.value = false
-  }
-}
-
-async function doGenerate() {
-  if (!current.value) return
-  generating.value = true
-  try {
-    const res = await generateLocations(current.value.id)
-    if (isSuccess(res)) {
-      message.success(`已生成 ${res.data} 个库位`)
-      current.value = { ...current.value, locationGenerated: 1 }
-      await loadLocations()
-      emits('success')
-    } else {
-      message.error(res.message || '生成失败')
-    }
-  } finally {
-    generating.value = false
   }
 }
 

@@ -96,35 +96,11 @@ public class WmsLocationManageController {
 		return ApiResult.ok(list);
 	}
 
-	@Operation(summary = "更新仓库结构参数")
+	@Operation(summary = "保存仓库结构并原子生成库位")
 	@PatchMapping("/structure")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
-	public ApiResult<Void> updateStructure(@Validated @RequestBody WarehouseStructureDTO dto) {
-		warehouseService.validateOperableOwnWarehouse(dto.getId());
-		if ((long) dto.getRackRows() * dto.getRackColumns() > 5000L) {
-			throw new IllegalArgumentException("物理库位总数不能超过5000");
-		}
-		// 硬闸：有货占用或已分配服务商时禁改结构（与前端置灰同口径，防绕过）
-		wmsStructureLockService.assertEditable(dto.getId());
-		Warehouse wh = new Warehouse();
-		wh.setId(dto.getId());
-		wh.setRackRows(dto.getRackRows());
-		wh.setRackColumns(dto.getRackColumns());
-		wh.setRackNoPrefix(dto.getRackNoPrefix() == null ? "" : dto.getRackNoPrefix());
-		wh.setCodePadWidth(dto.getCodePadWidth());
-		wh.setDefaultLocationType(dto.getDefaultLocationType());
-		wh.setPalletLevels(dto.getPalletLevels() == null ? 6 : Math.max(1, Math.min(dto.getPalletLevels(), 12)));
-		wh.setPalletPositionsPerLevel(dto.getPalletPositionsPerLevel() == null
-				? 3 : Math.max(1, Math.min(dto.getPalletPositionsPerLevel(), 9)));
-		wh.setMaxSkuKindsPerPallet(dto.getMaxSkuKindsPerPallet() == null ? 4 : dto.getMaxSkuKindsPerPallet());
-		wh.setAllowCrossOwnerMix(dto.getAllowCrossOwnerMix() == null ? 0 : dto.getAllowCrossOwnerMix());
-		wh.setDefaultPalletLengthMm(dto.getDefaultPalletLengthMm());
-		wh.setDefaultPalletWidthMm(dto.getDefaultPalletWidthMm());
-		wh.setDefaultPalletHeightMm(dto.getDefaultPalletHeightMm());
-		wh.setDefaultPalletMaxWeightKg(dto.getDefaultPalletMaxWeightKg());
-		wh.setDefaultPalletUtilization(dto.getDefaultPalletUtilization());
-		warehouseService.updateById(wh);
-		return ApiResult.ok();
+	public ApiResult<Integer> updateStructure(@Validated @RequestBody WarehouseStructureDTO dto) {
+		return ApiResult.ok(wmsLocationGenerator.saveStructureAndGenerate(dto));
 	}
 
 	@Operation(summary = "仓库分区列表")
