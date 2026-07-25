@@ -40,36 +40,72 @@
         <a-form :model="form" :label-col="{ style: { width: '76px' } }" class="structure-form">
           <a-row :gutter="16">
             <a-col :span="8">
-              <a-form-item label="排数">
+              <a-form-item>
+                <template #label><span class="uniform-label">排数</span></template>
                 <a-input-number
                   v-model:value="form.rackRows"
                   :min="0"
                   :max="100"
+                  :disabled="structureReadonly"
                   style="width: 100%"
                 />
               </a-form-item>
             </a-col>
             <a-col :span="8">
-              <a-form-item label="每排列数">
+              <a-form-item>
+                <template #label><span class="uniform-label">每排列数</span></template>
                 <a-input-number
                   v-model:value="form.rackColumns"
                   :min="0"
                   :max="100"
+                  :disabled="structureReadonly"
                   style="width: 100%"
                 />
               </a-form-item>
             </a-col>
             <a-col :span="8">
-              <a-form-item label="排号前缀">
-                <a-input v-model:value="form.rackNoPrefix" placeholder="如 A" allow-clear />
+              <a-form-item>
+                <template #label><span class="uniform-label">排号前缀</span></template>
+                <a-input
+                  v-model:value="form.rackNoPrefix"
+                  placeholder="如 A"
+                  allow-clear
+                  :disabled="structureReadonly"
+                />
               </a-form-item>
             </a-col>
             <a-col :span="8">
-              <a-form-item label="列号补零">
+              <a-form-item>
+                <template #label><span class="uniform-label">列号补零</span></template>
                 <a-input-number
                   v-model:value="form.codePadWidth"
                   :min="1"
                   :max="4"
+                  :disabled="structureReadonly"
+                  style="width: 100%"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item>
+                <template #label><span class="uniform-label">层数</span></template>
+                <a-input-number
+                  v-model:value="form.palletLevels"
+                  :min="1"
+                  :max="12"
+                  :disabled="structureReadonly"
+                  style="width: 100%"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item>
+                <template #label><span class="uniform-label">每层托位</span></template>
+                <a-input-number
+                  v-model:value="form.palletPositionsPerLevel"
+                  :min="1"
+                  :max="9"
+                  :disabled="structureReadonly"
                   style="width: 100%"
                 />
               </a-form-item>
@@ -80,83 +116,76 @@
                   :title="generateConfirmText"
                   ok-text="确定"
                   cancel-text="取消"
-                  :disabled="structureLocked"
+                  :disabled="structureReadonly"
                   @confirm="saveStructure"
                 >
-                  <a-button type="primary" :loading="savingStructure" :disabled="structureLocked">
+                  <a-button type="primary" :loading="savingStructure" :disabled="structureReadonly">
                     保存并生成
                   </a-button>
                 </a-popconfirm>
               </a-space>
             </a-col>
           </a-row>
-          <a-divider orientation="left" plain>托盘规则</a-divider>
-          <a-row :gutter="16">
-            <a-col :span="6"
-              ><a-form-item label="层数"
-                ><a-input-number
-                  v-model:value="form.palletLevels"
-                  :min="1"
-                  :max="12"
-                  style="width: 100%" /></a-form-item
-            ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="每层托位"
-                ><a-input-number
-                  v-model:value="form.palletPositionsPerLevel"
-                  :min="1"
-                  :max="9"
-                  style="width: 100%" /></a-form-item
-            ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="最多品种"
-                ><a-input-number
+          <div class="section-title subsection-title">
+            <span>托盘规则</span>
+          </div>
+          <a-row :gutter="[16, 4]" class="pallet-rule-grid">
+            <a-col :span="8"
+              ><a-form-item>
+                <template #label><span class="uniform-label">最多品种</span></template>
+                <a-input-number
                   v-model:value="form.maxSkuKindsPerPallet"
                   :min="1"
                   :max="4"
-                  style="width: 100%" /></a-form-item
+                  class="pallet-rule-input" /></a-form-item
             ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="跨货主混托"
-                ><a-switch v-model:checked="allowCrossOwnerMix" disabled /></a-form-item
-            ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="利用率"
-                ><a-input-number
+            <a-col :span="8"
+              ><a-form-item>
+                <template #label><span class="uniform-label">利用率</span></template>
+                <a-input-number
                   v-model:value="form.defaultPalletUtilization"
                   :min="0.1"
                   :max="1"
                   :step="0.05"
                   :precision="2"
-                  style="width: 100%" /></a-form-item
+                  class="pallet-rule-input" /></a-form-item
             ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="长(mm)"
-                ><a-input-number
+            <a-col :span="8"
+              ><a-form-item>
+                <template #label><span class="uniform-label">跨货主混托</span></template>
+                <a-switch v-model:checked="allowCrossOwnerMix" disabled /></a-form-item
+            ></a-col>
+            <a-col :span="8"
+              ><a-form-item>
+                <template #label><span class="uniform-label">长(mm)</span></template>
+                <a-input-number
                   v-model:value="form.defaultPalletLengthMm"
                   :min="1"
-                  style="width: 100%" /></a-form-item
+                  class="pallet-rule-input" /></a-form-item
             ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="宽(mm)"
-                ><a-input-number
+            <a-col :span="8"
+              ><a-form-item>
+                <template #label><span class="uniform-label">宽(mm)</span></template>
+                <a-input-number
                   v-model:value="form.defaultPalletWidthMm"
                   :min="1"
-                  style="width: 100%" /></a-form-item
+                  class="pallet-rule-input" /></a-form-item
             ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="高(mm)"
-                ><a-input-number
+            <a-col :span="8"
+              ><a-form-item>
+                <template #label><span class="uniform-label">高(mm)</span></template>
+                <a-input-number
                   v-model:value="form.defaultPalletHeightMm"
                   :min="1"
-                  style="width: 100%" /></a-form-item
+                  class="pallet-rule-input" /></a-form-item
             ></a-col>
-            <a-col :span="6"
-              ><a-form-item label="承重(kg)"
-                ><a-input-number
+            <a-col :span="8"
+              ><a-form-item>
+                <template #label><span class="uniform-label">承重(kg)</span></template>
+                <a-input-number
                   v-model:value="form.defaultPalletMaxWeightKg"
                   :min="1"
-                  style="width: 100%" /></a-form-item
+                  class="pallet-rule-input" /></a-form-item
             ></a-col>
           </a-row>
         </a-form>
@@ -501,6 +530,7 @@ const drawerTitle = computed(() =>
 )
 const currentGenerated = computed(() => current.value?.locationGenerated === 1)
 const structureLocked = computed(() => !!current.value?.structureLocked)
+const structureReadonly = computed(() => currentGenerated.value || structureLocked.value)
 const lockReason = computed(() => {
   const w = current.value
   if (!w) return ''
@@ -1046,6 +1076,36 @@ export default {
 
 .structure-form :deep(.ant-form-item) {
   margin-bottom: 12px;
+}
+
+.pallet-rule-grid :deep(.ant-form-item-label) {
+  flex: 0 0 80px !important;
+  width: 80px !important;
+}
+
+.pallet-rule-grid :deep(.ant-form-item-label > label) {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.uniform-label {
+  display: inline-block;
+  width: 66px;
+  white-space: nowrap;
+  text-align: justify;
+  text-align-last: justify;
+}
+
+.pallet-rule-grid :deep(.ant-form-item-control) {
+  min-width: 0;
+}
+
+.pallet-rule-input {
+  width: 100%;
+}
+
+.subsection-title {
+  margin-top: 12px;
 }
 
 .section-actions {
