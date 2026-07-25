@@ -60,6 +60,9 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 		if (zone == null || !warehouseId.equals(zone.getWarehouseId())) {
 			throw new BusinessException(400, "分区不存在或不属于该仓库");
 		}
+		if ("VIRTUAL".equalsIgnoreCase(zone.getZoneType())) {
+			throw new BusinessException(400, "物理库位不能设置为虚拟库位");
+		}
 
 		// 0. 目标库位（限本仓）与其编码
 		List<WmsLocation> targets = new ArrayList<>();

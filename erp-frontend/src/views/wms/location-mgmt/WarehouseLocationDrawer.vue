@@ -224,7 +224,7 @@
       <section class="drawer-section">
         <div class="section-title">品质分区</div>
         <a-space wrap>
-          <a-tag v-for="z in zones" :key="z.id" :color="zoneTagColor(z.zoneType)">
+          <a-tag v-for="z in physicalZones" :key="z.id" :color="zoneTagColor(z.zoneType)">
             {{ z.zoneName }}
           </a-tag>
         </a-space>
@@ -268,7 +268,7 @@
                 >已选 <b>{{ selectedIds.size }}</b> 个 · 设为：</span
               >
               <a-button
-                v-for="z in zones"
+                v-for="z in physicalZones"
                 :key="z.id"
                 size="small"
                 :disabled="selectedIds.size === 0"
@@ -509,6 +509,7 @@ function zoneCellColor(t?: string) {
 const open = ref(false)
 const current = ref<WarehouseStructure | undefined>(undefined)
 const zones = ref<WmsZone[]>([])
+const physicalZones = computed(() => zones.value.filter(zone => zone.zoneType !== 'VIRTUAL'))
 const locations = ref<WmsLocation[]>([])
 const palletSlots = ref<PalletSlotVO[]>([])
 const viewMode = ref<'grid' | 'list'>('grid')
