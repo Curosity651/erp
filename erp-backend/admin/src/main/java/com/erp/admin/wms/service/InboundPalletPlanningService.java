@@ -1,5 +1,6 @@
 package com.erp.admin.wms.service;
 
+import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.mapper.WmsSkuLookupMapper;
 import com.erp.admin.wms.model.entity.PurchaseInboundOrder;
@@ -27,7 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Generates a deterministic operator-reviewable pallet split and slot recommendation. */
+/** Builds manual putaway context: received goods, capacity reference and eligible slots. */
 @Service
 @RequiredArgsConstructor
 public class InboundPalletPlanningService {
@@ -36,6 +37,7 @@ public class InboundPalletPlanningService {
     private final WmsPalletService palletService;
     private final WmsPhysicalInventoryMapper physicalInventoryMapper;
     private final WmsSkuLookupMapper skuLookupMapper;
+    private final WarehouseBillingService warehouseBillingService;
 
     public InboundPutawayPlanVO plan(PurchaseInboundOrder order, List<PurchaseInboundOrderItem> items,
             Set<String> allowedRacks) {
@@ -45,6 +47,10 @@ public class InboundPalletPlanningService {
         InboundPutawayPlanVO result = new InboundPutawayPlanVO();
         result.setInboundOrderId(order.getId());
         result.setWarehouseId(order.getWarehouseId());
+        WarehouseBillingService.VolumeQuote volumeQuote = warehouseBillingService
+                .quoteInbound(ownerId, items);
+        result.setCalculatedVolumeCbm(volumeQuote.getCalculatedVolumeCbm());
+        result.setVolumeMissingSkuCodes(volumeQuote.getMissingSkuCodes());
 
         List<PalletSlotVO> allSlots = palletService.listSlots(order.getWarehouseId()).stream()
                 .filter(slot -> allowedRacks.contains(slot.getRackNo()))
@@ -53,23 +59,12 @@ public class InboundPalletPlanningService {
                 .filter(slot -> WmsPalletService.EMPTY.equals(slot.getSlotStatus()))
                 .collect(Collectors.toList());
         result.setSlotCandidates(freeSlots);
-        List<PalletSlotVO> standardFreeSlots = freeSlots.stream()
-                .filter(slot -> "STANDARD".equals(slot.getZoneType()))
-                .collect(Collectors.toList());
-
-        Map<Long, PalletSummaryVO> partialPallets = palletService
-                .listPallets(order.getWarehouseId(), ownerId, null, WmsPalletService.PARTIAL).stream()
-                .filter(pallet -> pallet.getSlotCode() != null)
-                .filter(pallet -> allSlots.stream().anyMatch(slot ->
-                        pallet.getSlotCode().equals(slot.getSlotCode()) && "STANDARD".equals(slot.getZoneType())))
-                .collect(Collectors.toMap(PalletSummaryVO::getId, value -> value, (a, b) -> a));
         int sequence = 1;
         List<InboundPutawayPlanVO.PalletPlan> plans = new ArrayList<>();
-        List<InboundPutawayPlanVO.PalletPlan> newPartials = new ArrayList<>();
 
         for (PurchaseInboundOrderItem inboundItem : items) {
-            int remaining = inboundItem.getActualQuantity() == null ? 0 : inboundItem.getActualQuantity();
-            if (remaining <= 0) {
+            int quantity = inboundItem.getActualQuantity() == null ? 0 : inboundItem.getActualQuantity();
+            if (quantity <= 0) {
                 continue;
             }
             SkuLookupVO sku = skuLookupMapper.findByTenantAndSku(ownerId, inboundItem.getSkuCode());
@@ -79,79 +74,17 @@ public class InboundPalletPlanningService {
                         + " 缺少每托数量或有效尺寸/重量，本次需要人工确认容量");
             }
 
-            // First fill an existing same-owner, same-SKU partial pallet.
-            for (PalletSummaryVO existing : partialPallets.values()) {
-                if (remaining <= 0 || existing.getItems() == null || existing.getItems().isEmpty()) {
-                    continue;
-                }
-                boolean homogeneous = existing.getItems().stream().allMatch(item ->
-                        ownerId.equals(item.getErpTenantId()) && inboundItem.getSkuCode().equals(item.getSkuCode())
-                                && "GOOD".equals(item.getQuality()));
-                if (!homogeneous || capacity.quantity <= 0) {
-                    continue;
-                }
-                int currentQty = existing.getItems().stream().mapToInt(item -> value(item.getQuantity())).sum();
-                int room = Math.max(capacity.quantity - currentQty, 0);
-                if (room <= 0) {
-                    continue;
-                }
-                int take = Math.min(room, remaining);
-                InboundPutawayPlanVO.PalletPlan plan = createPlan("EXISTING-" + existing.getId(), ownerId,
-                        inboundItem, take, capacity, existing.getSlotCode(), false);
-                plan.setExistingPallet(true);
-                plan.setPalletId(existing.getId());
-                plan.setPalletNo(existing.getPalletNo());
-                plan.setCapacityPercent(percent(currentQty + take, capacity.quantity));
-                plan.setPalletType(plan.getCapacityPercent().compareTo(new BigDecimal("100")) >= 0
-                        ? "SINGLE_FULL" : "SINGLE_PARTIAL");
-                plan.setWholePalletEligible("SINGLE_FULL".equals(plan.getPalletType()));
-                plans.add(plan);
-                remaining -= take;
+            InboundPutawayPlanVO.PalletPlan plan = createPlan("MANUAL-" + sequence++, ownerId,
+                    inboundItem, quantity, capacity, null, false);
+            plan.setSlotCode("");
+            plan.setLocationCode("");
+            if (capacity.quantity > 0 && quantity > capacity.quantity) {
+                result.getWarnings().add("SKU " + inboundItem.getSkuCode() + " 超过参考单托数量 "
+                        + capacity.quantity + "，请人工拆分为多个托盘");
             }
-
-            // Then split complete homogeneous pallets.
-            while (capacity.quantity > 0 && remaining >= capacity.quantity) {
-                InboundPutawayPlanVO.PalletPlan plan = createPlan("NEW-" + sequence++, ownerId,
-                        inboundItem, capacity.quantity, capacity, null, true);
-                plans.add(plan);
-                remaining -= capacity.quantity;
-            }
-
-            if (remaining > 0) {
-                BigDecimal itemPercent = capacity.quantity > 0
-                        ? percent(remaining, capacity.quantity) : null;
-                InboundPutawayPlanVO.PalletPlan mixedTarget = null;
-                if (itemPercent != null) {
-                    for (InboundPutawayPlanVO.PalletPlan candidate : newPartials) {
-                        long kinds = candidate.getItems().stream().map(InboundPutawayPlanVO.PalletPlanItem::getSkuCode)
-                                .distinct().count();
-                        BigDecimal used = candidate.getCapacityPercent() == null ? BigDecimal.ZERO
-                                : candidate.getCapacityPercent();
-                        if (kinds < maxKinds(warehouse)
-                                && used.add(itemPercent).compareTo(new BigDecimal("100")) <= 0) {
-                            mixedTarget = candidate;
-                            break;
-                        }
-                    }
-                }
-                if (mixedTarget == null) {
-                    mixedTarget = createPlan("NEW-" + sequence++, ownerId, inboundItem, remaining,
-                            capacity, null, false);
-                    plans.add(mixedTarget);
-                    newPartials.add(mixedTarget);
-                }
-                else {
-                    mixedTarget.getItems().add(createItem(ownerId, inboundItem, remaining, capacity.quantity));
-                    mixedTarget.setPalletType("MIXED");
-                    mixedTarget.setWholePalletEligible(false);
-                    mixedTarget.setCapacityPercent(mixedTarget.getCapacityPercent().add(itemPercent)
-                            .setScale(2, RoundingMode.HALF_UP));
-                    mixedTarget.setCapacitySource("VOLUME_WEIGHT");
-                }
-            }
+            plans.add(plan);
         }
 
-        assignSlots(plans, allSlots, standardFreeSlots);
         result.setPallets(plans);
         return result;
     }

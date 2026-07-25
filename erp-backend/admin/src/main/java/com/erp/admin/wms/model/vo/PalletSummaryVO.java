@@ -12,6 +12,10 @@ public class PalletSummaryVO {
     private String palletNo;
     private Long warehouseId;
     private String warehouseName;
+    private Long wmsTenantId;
+    private String wmsTenantName;
+    private Long erpTenantId;
+    private String ownerName;
     private String slotCode;
     private String palletType;
     private String palletStatus;
@@ -21,6 +25,7 @@ public class PalletSummaryVO {
     private BigDecimal actualWeightKg;
     private Integer skuKindCount;
     private Integer wholePalletEligible;
+    private Integer labelVersion;
     private LocalDateTime createTime;
     private List<PalletItemVO> items;
 
@@ -35,4 +40,3 @@ public class PalletSummaryVO {
         private String inboundDate;
     }
 }
-

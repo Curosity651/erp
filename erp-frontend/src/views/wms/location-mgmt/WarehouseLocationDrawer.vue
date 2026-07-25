@@ -87,9 +87,16 @@
               ><a-form-item label="层数"
                 ><a-input-number
                   v-model:value="form.palletLevels"
-                  :min="3"
-                  :max="3"
-                  disabled
+                  :min="1"
+                  :max="12"
+                  style="width: 100%" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="每层托位"
+                ><a-input-number
+                  v-model:value="form.palletPositionsPerLevel"
+                  :min="1"
+                  :max="9"
                   style="width: 100%" /></a-form-item
             ></a-col>
             <a-col :span="6"
@@ -102,7 +109,7 @@
             ></a-col>
             <a-col :span="6"
               ><a-form-item label="跨货主混托"
-                ><a-switch v-model:checked="allowCrossOwnerMix" /></a-form-item
+                ><a-switch v-model:checked="allowCrossOwnerMix" disabled /></a-form-item
             ></a-col>
             <a-col :span="6"
               ><a-form-item label="利用率"
@@ -145,8 +152,9 @@
           </a-row>
         </a-form>
         <div class="hint">
-          预计生成库位：<b>{{ expectedCount }}</b> 个（{{ form.rackRows || 0 }} 排 ×
-          {{ form.rackColumns || 0 }} 列）
+          二维库位：<b>{{ expectedCount }}</b> 个；托盘位：
+          <b>{{ expectedSlotCount }}</b> 个（{{ form.palletLevels }} 层 ×
+          {{ form.palletPositionsPerLevel }} 托）
         </div>
       </section>
 
@@ -419,9 +427,10 @@ const form = reactive({
   rackColumns: 0,
   rackNoPrefix: '',
   codePadWidth: 2,
-  palletLevels: 3,
+  palletLevels: 6,
+  palletPositionsPerLevel: 3,
   maxSkuKindsPerPallet: 4,
-  allowCrossOwnerMix: 1,
+  allowCrossOwnerMix: 0,
   defaultPalletLengthMm: 1200,
   defaultPalletWidthMm: 1000,
   defaultPalletHeightMm: 1600,
@@ -459,6 +468,9 @@ const lockedIds = computed(
   () => new Set(locations.value.filter(l => occupiedCodes.value.has(l.locationCode)).map(l => l.id))
 )
 const expectedCount = computed(() => (form.rackRows || 0) * (form.rackColumns || 0))
+const expectedSlotCount = computed(
+  () => expectedCount.value * (form.palletLevels || 0) * (form.palletPositionsPerLevel || 0)
+)
 const generateConfirmText = computed(() =>
   currentGenerated.value
     ? '重新生成将清空原有库位并按当前结构重建，确定？'
@@ -653,9 +665,10 @@ function fillForm(w?: WarehouseStructure) {
   form.rackColumns = w?.rackColumns ?? 0
   form.rackNoPrefix = w?.rackNoPrefix ?? ''
   form.codePadWidth = w?.codePadWidth ?? 2
-  form.palletLevels = 3
+  form.palletLevels = w?.palletLevels ?? 6
+  form.palletPositionsPerLevel = w?.palletPositionsPerLevel ?? 3
   form.maxSkuKindsPerPallet = w?.maxSkuKindsPerPallet ?? 4
-  form.allowCrossOwnerMix = w?.allowCrossOwnerMix ?? 1
+  form.allowCrossOwnerMix = 0
   form.defaultPalletLengthMm = w?.defaultPalletLengthMm ?? 1200
   form.defaultPalletWidthMm = w?.defaultPalletWidthMm ?? 1000
   form.defaultPalletHeightMm = w?.defaultPalletHeightMm ?? 1600

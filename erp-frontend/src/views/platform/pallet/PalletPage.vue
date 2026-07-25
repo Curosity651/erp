@@ -51,6 +51,10 @@
             </span>
           </div>
         </template>
+        <template v-else-if="column.key === 'owner'">
+          <div>{{ record.ownerName || '-' }}</div>
+          <div class="secondary">{{ record.wmsTenantName || '-' }}</div>
+        </template>
         <template v-else-if="column.key === 'capacity'">
           <a-progress
             v-if="record.capacityPercent"
@@ -79,6 +83,10 @@
     <a-drawer v-model:open="detailOpen" title="托盘详情" :width="620">
       <a-descriptions v-if="current" :column="2" bordered size="small">
         <a-descriptions-item label="托盘号">{{ current.palletNo }}</a-descriptions-item>
+        <a-descriptions-item label="货主">{{ current.ownerName || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="WMS服务商">{{
+          current.wmsTenantName || '-'
+        }}</a-descriptions-item>
         <a-descriptions-item label="层位">{{ current.slotCode || '-' }}</a-descriptions-item>
         <a-descriptions-item label="类型">{{ typeText(current.palletType) }}</a-descriptions-item>
         <a-descriptions-item label="状态">{{
@@ -164,6 +172,7 @@ const statusOptions = [
 ]
 const columns = [
   { title: '托盘号', dataIndex: 'palletNo', key: 'palletNo', width: 210, fixed: 'left' },
+  { title: '货主 / 服务商', key: 'owner', width: 160 },
   { title: '仓库 / 层位', dataIndex: 'slotCode', key: 'slotCode', width: 160 },
   { title: '类型', key: 'type', width: 110 },
   { title: '货物', key: 'goods', width: 240 },
@@ -226,7 +235,7 @@ async function printLabel(record: PalletSummaryVO) {
   if (!page) return
   const qr = await QRCode.toDataURL(record.palletNo, { margin: 1, width: 220 })
   page.document.write(
-    `<html><head><title>${record.palletNo}</title><style>@page{size:80mm 50mm;margin:0}body{font-family:Arial,"Microsoft YaHei";margin:0}.label{width:80mm;height:50mm;padding:4mm;display:grid;grid-template-columns:32mm 1fr;box-sizing:border-box;gap:4mm;align-items:center}img{width:30mm;height:30mm}h1{font-size:18pt;margin:0 0 3mm}.slot{font-size:14pt;font-weight:700}.items{font-size:8pt;line-height:1.5;margin-top:2mm}</style></head><body><div class="label"><img src="${qr}"><div><h1>${record.palletNo}</h1><div class="slot">${record.slotCode || ''}</div><div class="items">${record.items.map(item => `${item.skuCode} × ${item.quantity}`).join('<br>')}</div></div></div></body></html>`
+    `<html><head><title>${record.palletNo}</title><style>@page{size:80mm 50mm;margin:0}body{font-family:Arial,"Microsoft YaHei";margin:0}.label{width:80mm;height:50mm;padding:4mm;display:grid;grid-template-columns:32mm 1fr;box-sizing:border-box;gap:4mm;align-items:center}img{width:30mm;height:30mm}h1{font-size:16pt;margin:0 0 2mm}.owner{font-size:10pt;font-weight:700}.service{font-size:8pt;color:#555}.items{font-size:8pt;line-height:1.4;margin-top:2mm}</style></head><body><div class="label"><img src="${qr}"><div><h1>${record.palletNo}</h1><div class="owner">货主：${record.ownerName || '-'}</div><div class="service">服务商：${record.wmsTenantName || '-'}</div><div class="items">${record.items.map(item => `${item.skuCode} × ${item.quantity}`).join('<br>')}</div></div></div></body></html>`
   )
   page.document.close()
   page.print()
@@ -300,5 +309,9 @@ onMounted(async () => {
 }
 .detail-table {
   margin-top: 16px;
+}
+.secondary {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
 }
 </style>

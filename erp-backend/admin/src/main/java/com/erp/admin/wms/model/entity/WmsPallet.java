@@ -17,6 +17,8 @@ public class WmsPallet {
     private Long id;
     private String palletNo;
     private Long warehouseId;
+    private Long wmsTenantId;
+    private Long erpTenantId;
     private Long slotId;
     private Long currentSlotId;
     private String slotCode;
@@ -30,6 +32,7 @@ public class WmsPallet {
     private Integer skuKindCount;
     private Integer wholePalletEligible;
     private String lockedReason;
+    private Integer labelVersion;
     @Version
     private Integer version;
     private Long createBy;
@@ -37,4 +40,3 @@ public class WmsPallet {
     private Long updateBy;
     private LocalDateTime updateTime;
 }
-

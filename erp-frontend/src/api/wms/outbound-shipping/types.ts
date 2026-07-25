@@ -64,6 +64,19 @@ export interface PackShipOrderVO {
   // 详情才带
   items?: PackShipItemVO[]
   packages?: OutboundPackageVO[]
+  handlingPreview?: OutboundHandlingPreviewVO
+}
+
+export interface OutboundHandlingPreviewVO {
+  wholePallets: Array<{
+    palletId: number
+    palletNo: string
+    quantity: number
+    skuKinds?: number
+  }>
+  wholePalletQuantity: number
+  looseQuantity: number
+  estimatedFee: number
 }
 
 /** 列表查询条件 */
@@ -123,6 +136,9 @@ export interface ShipDTO {
   weight: number
   // mock：上传照片数（真实为文件 id 列表）
   photoCount?: number
+  fullPalletIds?: number[]
+  largeBoxCount?: number
+  smallItemCount?: number
 }
 
 /** 签出结果 */
@@ -132,6 +148,7 @@ export interface ShipResultVO {
   // 生成的链路二物流费
   shippingFee: number
   billingRecordId?: number
+  warehouseOperationFee?: number
 }
 
 /** 物流渠道选项 */

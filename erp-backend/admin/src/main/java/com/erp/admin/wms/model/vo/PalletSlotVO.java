@@ -13,6 +13,7 @@ public class PalletSlotVO {
     private String rackNo;
     private Integer columnNo;
     private Integer levelNo;
+    private Integer positionNo;
     private Long zoneId;
     private String zoneName;
     private String zoneType;
@@ -25,4 +26,3 @@ public class PalletSlotVO {
     private BigDecimal capacityPercent;
     private Integer skuKindCount;
 }
-

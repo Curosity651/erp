@@ -33,17 +33,43 @@ public class WmsBillingRecord {
     @Schema(title = "货主(操作量归集来源)")
     private Long erpTenantId;
 
+    private Long warehouseId;
+
     @Schema(title = "账期 YYYY-MM")
     private String billMonth;
 
     @Schema(title = "INBOUND/OUTBOUND/DELIVERY/RETURN/INSPECTION/DRIVER")
     private String feeType;
 
+    private String sourceType;
+
+    private Long sourceId;
+
+    private String feeCode;
+
+    private String billingUnit;
+
     private Integer quantity;
+
+    private BigDecimal billingQuantity;
+
+    private BigDecimal unitPrice;
+
+    private BigDecimal baseAmount;
 
     private BigDecimal amount;
 
+    private String currency;
+
+    private String chargeStatus;
+
+    private Long reversedRecordId;
+
+    private String rateSnapshot;
+
     private String sourceRef;
+
+    private String remark;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

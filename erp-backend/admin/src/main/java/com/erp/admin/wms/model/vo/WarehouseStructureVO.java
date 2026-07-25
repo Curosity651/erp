@@ -45,6 +45,7 @@ public class WarehouseStructureVO {
 	private Integer locationGenerated;
 
 	private Integer palletLevels;
+	private Integer palletPositionsPerLevel;
 	private Integer maxSkuKindsPerPallet;
 	private Integer allowCrossOwnerMix;
 	private Integer defaultPalletLengthMm;

@@ -71,32 +71,39 @@ public class WmsPalletService {
     public int ensureSlots(Long warehouseId) {
         Warehouse warehouse = warehouseMapper.selectById(warehouseId);
         Assert.notNull(warehouse, "仓库不存在");
-        int levels = warehouse.getPalletLevels() == null ? 3 : warehouse.getPalletLevels();
-        levels = Math.max(1, Math.min(levels, 3));
+        int levels = warehouse.getPalletLevels() == null ? 6 : warehouse.getPalletLevels();
+        levels = Math.max(1, Math.min(levels, 12));
+        int positions = warehouse.getPalletPositionsPerLevel() == null
+                ? 1 : warehouse.getPalletPositionsPerLevel();
+        positions = Math.max(1, Math.min(positions, 9));
         List<WmsLocation> locations = locationService.listByWarehouse(warehouseId).stream()
                 .filter(location -> !Integer.valueOf(1).equals(location.getIsVirtual()))
                 .collect(Collectors.toList());
         Set<String> existing = slotMapper.selectList(WrappersX.lambdaQueryX(WmsLocationSlot.class)
                 .eq(WmsLocationSlot::getWarehouseId, warehouseId)).stream()
-                .map(slot -> slot.getLocationId() + "|" + slot.getLevelNo())
+                .map(slot -> slot.getLocationId() + "|" + slot.getLevelNo() + "|" + value(slot.getPositionNo()))
                 .collect(Collectors.toSet());
         int created = 0;
         for (WmsLocation location : locations) {
             for (int level = 1; level <= levels; level++) {
-                if (existing.contains(location.getId() + "|" + level)) {
-                    continue;
+                for (int position = 1; position <= positions; position++) {
+                    if (existing.contains(location.getId() + "|" + level + "|" + position)) {
+                        continue;
+                    }
+                    WmsLocationSlot slot = new WmsLocationSlot();
+                    slot.setWarehouseId(warehouseId);
+                    slot.setLocationId(location.getId());
+                    slot.setLevelNo(level);
+                    slot.setPositionNo(position);
+                    slot.setSlotCode(location.getLocationCode() + "-L" + level
+                            + "-P" + String.format("%02d", position));
+                    slot.setMaxHeightMm(warehouse.getDefaultPalletHeightMm());
+                    slot.setMaxWeightKg(warehouse.getDefaultPalletMaxWeightKg());
+                    slot.setSlotStatus(EMPTY);
+                    slot.setVersion(0);
+                    slotMapper.insert(slot);
+                    created++;
                 }
-                WmsLocationSlot slot = new WmsLocationSlot();
-                slot.setWarehouseId(warehouseId);
-                slot.setLocationId(location.getId());
-                slot.setLevelNo(level);
-                slot.setSlotCode(location.getLocationCode() + "-L" + level);
-                slot.setMaxHeightMm(warehouse.getDefaultPalletHeightMm());
-                slot.setMaxWeightKg(warehouse.getDefaultPalletMaxWeightKg());
-                slot.setSlotStatus(EMPTY);
-                slot.setVersion(0);
-                slotMapper.insert(slot);
-                created++;
             }
         }
         return created;
@@ -131,6 +138,7 @@ public class WmsPalletService {
             vo.setRackNo(location.getRackNo());
             vo.setColumnNo(location.getColumnNo());
             vo.setLevelNo(slot.getLevelNo());
+            vo.setPositionNo(slot.getPositionNo());
             vo.setZoneId(location.getZoneId());
             vo.setZoneName(zone == null ? null : zone.getZoneName());
             vo.setZoneType(zone == null ? null : zone.getZoneType());
@@ -148,7 +156,8 @@ public class WmsPalletService {
         }
         result.sort(Comparator.comparing(PalletSlotVO::getRackNo, Comparator.nullsLast(String::compareTo))
                 .thenComparing(PalletSlotVO::getColumnNo, Comparator.nullsLast(Integer::compareTo))
-                .thenComparing(PalletSlotVO::getLevelNo));
+                .thenComparing(PalletSlotVO::getLevelNo)
+                .thenComparing(PalletSlotVO::getPositionNo, Comparator.nullsLast(Integer::compareTo)));
         return result;
     }
 
@@ -164,6 +173,7 @@ public class WmsPalletService {
     public WmsPallet createForPutaway(Long warehouseId, Long erpTenantId, String slotCode,
             List<InboundPutawayDTO.PutawayLine> lines) {
         Assert.notEmpty(lines, "托盘明细不能为空");
+        Assert.notNull(erpTenantId, "托盘必须指定货主");
         WmsLocationSlot slot = requireSlot(warehouseId, slotCode);
         if (slotMapper.claim(slot.getId()) != 1) {
             throw new BusinessException(409, "层位已被其他托盘占用：" + slotCode);
@@ -180,6 +190,9 @@ public class WmsPalletService {
         WmsPallet pallet = new WmsPallet();
         pallet.setPalletNo(nextPalletNo());
         pallet.setWarehouseId(warehouseId);
+        pallet.setErpTenantId(erpTenantId);
+        SysTenant owner = tenantMapper.selectById(erpTenantId);
+        pallet.setWmsTenantId(owner == null ? null : owner.getParentWmsTenantId());
         pallet.setSlotId(slot.getId());
         pallet.setCurrentSlotId(slot.getId());
         pallet.setSlotCode(slot.getSlotCode());
@@ -191,6 +204,7 @@ public class WmsPalletService {
                 .filter(value -> value != null).max(BigDecimal::compareTo).orElse(null));
         pallet.setSkuKindCount(kinds.size());
         pallet.setWholePalletEligible(full && kinds.size() == 1 ? 1 : 0);
+        pallet.setLabelVersion(1);
         pallet.setVersion(0);
         pallet.setCreateBy(currentUserId());
         pallet.setUpdateBy(currentUserId());
@@ -204,6 +218,8 @@ public class WmsPalletService {
             List<InboundPutawayDTO.PutawayLine> lines) {
         WmsPallet pallet = palletMapper.selectForUpdate(palletId);
         Assert.notNull(pallet, "托盘不存在");
+        Assert.isTrue(pallet.getErpTenantId() == null || erpTenantId.equals(pallet.getErpTenantId()),
+                "托盘属于其他货主，禁止混托");
         Assert.isTrue(pallet.getCurrentSlotId() != null, "托盘已离开仓库，不能继续合并");
         Assert.isTrue(PARTIAL.equals(pallet.getPalletStatus()), "只有未满托盘可以继续合并");
         WmsLocationSlot slot = slotMapper.selectForUpdate(pallet.getCurrentSlotId());
@@ -212,6 +228,10 @@ public class WmsPalletService {
                 WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
                         .eq(WmsPhysicalInventory::getPalletId, palletId)
                         .gt(WmsPhysicalInventory::getQuantity, 0));
+        String incomingQuality = normalizeQuality(lines.get(0).getQuality());
+        Assert.isTrue(current.stream().allMatch(item ->
+                        incomingQuality.equals(normalizeQuality(item.getQuality()))),
+                "同一托盘不能混放良品和残次品");
         validateCapacityAndMixing(warehouse, erpTenantId, current, lines, slot);
         BigDecimal submitted = lines.stream().map(InboundPutawayDTO.PutawayLine::getCapacityPercent)
                 .filter(value -> value != null).max(BigDecimal::compareTo).orElse(null);
@@ -242,9 +262,7 @@ public class WmsPalletService {
         owners.add(String.valueOf(erpTenantId));
         incoming.forEach(line -> kinds.add(erpTenantId + "|" + line.getSkuCode()));
         Assert.isTrue(kinds.size() <= maxKinds, "单托最多允许 " + maxKinds + " 种不同货物");
-        boolean crossOwnerAllowed = warehouse.getAllowCrossOwnerMix() == null
-                || Integer.valueOf(1).equals(warehouse.getAllowCrossOwnerMix());
-        Assert.isTrue(crossOwnerAllowed || owners.size() <= 1, "当前仓库不允许跨货主混托");
+        Assert.isTrue(owners.size() <= 1, "同一托盘禁止跨货主混托");
         BigDecimal percent = incoming.stream().map(InboundPutawayDTO.PutawayLine::getCapacityPercent)
                 .filter(value -> value != null).max(BigDecimal::compareTo).orElse(null);
         Assert.isTrue(percent == null || percent.compareTo(new BigDecimal("100")) <= 0,
@@ -390,6 +408,12 @@ public class WmsPalletService {
         vo.setWarehouseId(pallet.getWarehouseId());
         Warehouse warehouse = warehouseMapper.selectById(pallet.getWarehouseId());
         vo.setWarehouseName(warehouse == null ? null : warehouse.getWarehouseName());
+        vo.setWmsTenantId(pallet.getWmsTenantId());
+        vo.setErpTenantId(pallet.getErpTenantId());
+        SysTenant operator = pallet.getWmsTenantId() == null ? null : tenantMapper.selectById(pallet.getWmsTenantId());
+        SysTenant ownerTenant = pallet.getErpTenantId() == null ? null : tenantMapper.selectById(pallet.getErpTenantId());
+        vo.setWmsTenantName(operator == null ? null : operator.getTenantName());
+        vo.setOwnerName(ownerTenant == null ? null : ownerTenant.getTenantName());
         vo.setSlotCode(pallet.getSlotCode());
         vo.setPalletType(pallet.getPalletType());
         vo.setPalletStatus(pallet.getPalletStatus());
@@ -399,6 +423,7 @@ public class WmsPalletService {
         vo.setActualWeightKg(pallet.getActualWeightKg());
         vo.setSkuKindCount(pallet.getSkuKindCount());
         vo.setWholePalletEligible(pallet.getWholePalletEligible());
+        vo.setLabelVersion(pallet.getLabelVersion());
         vo.setCreateTime(pallet.getCreateTime());
         if (withItems) {
             List<WmsPhysicalInventory> batches = physicalInventoryMapper.selectList(
@@ -467,5 +492,9 @@ public class WmsPalletService {
 
     private String firstNonBlank(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value;
+    }
+
+    private String normalizeQuality(String quality) {
+        return "DAMAGED".equalsIgnoreCase(quality) ? "DAMAGED" : "GOOD";
     }
 }

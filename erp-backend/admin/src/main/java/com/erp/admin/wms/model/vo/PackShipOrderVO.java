@@ -75,4 +75,7 @@ public class PackShipOrderVO {
 	@Schema(title = "销售出库的平台订单包裹")
 	private List<OutboundPackageVO> packages;
 
+	@Schema(title = "仓储作业计费预览")
+	private OutboundHandlingPreviewVO handlingPreview;
+
 }

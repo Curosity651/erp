@@ -18,6 +18,7 @@ public class WmsLocationSlot {
     private Long warehouseId;
     private Long locationId;
     private Integer levelNo;
+    private Integer positionNo;
     private String slotCode;
     private Integer maxHeightMm;
     private BigDecimal maxWeightKg;
@@ -27,4 +28,3 @@ public class WmsLocationSlot {
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
-

@@ -1,5 +1,6 @@
 package com.erp.admin.wms.service;
 
+import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.erp.admin.order.service.ErpOrderService;
 import com.erp.admin.tenant.service.TenantIdentityService;
@@ -93,6 +94,8 @@ public class OutboundShippingService {
 
 	private final WarehouseOutboundDocumentService outboundDocumentService;
 
+	private final WarehouseBillingService warehouseBillingService;
+
     // ==================== 查询 ====================
 
     public PageResult<PackShipOrderVO> page(PageParam pageParam, PackShipQO qo) {
@@ -121,6 +124,8 @@ public class OutboundShippingService {
 		if (OutboundSourceType.SALES.name().equals(vo.getSourceType())) {
 			vo.setPackages(outboundPackageService.listPackages(id));
 		}
+		vo.setHandlingPreview(warehouseBillingService
+				.previewOutbound(vo.getErpTenantId(), pickAllocationMapper.selectByOutboundOrderId(id)));
         vo.setNeedPhoto(computeNeedPhoto(id));
         return vo;
     }
@@ -253,6 +258,7 @@ public class OutboundShippingService {
         // 扣物理库存 + 释放锁定（据下架 FIFO 分配）
         List<WmsOutboundPickAllocation> allocs = pickAllocationMapper.selectByOutboundOrderId(order.getId());
         Assert.notEmpty(allocs, "该出库单无拣货分配记录，无法签出");
+		BigDecimal warehouseOperationFee = warehouseBillingService.recordOutbound(order, allocs, dto);
         Set<String> touchedSku = new LinkedHashSet<>();
         Set<Long> touchedPallets = new LinkedHashSet<>();
         for (WmsOutboundPickAllocation a : allocs) {
@@ -337,6 +343,7 @@ public class OutboundShippingService {
         vo.setChannelName(channelName);
         vo.setShippingFee(fee);
         vo.setBillingRecordId(billingRecordId);
+		vo.setWarehouseOperationFee(warehouseOperationFee);
         return vo;
     }
 

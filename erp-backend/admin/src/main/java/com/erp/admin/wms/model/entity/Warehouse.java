@@ -84,6 +84,9 @@ public class Warehouse {
 	@Schema(title = "Pallet levels for each two-dimensional location")
 	private Integer palletLevels;
 
+	@Schema(title = "Pallet positions on each rack level")
+	private Integer palletPositionsPerLevel;
+
 	@Schema(title = "Maximum distinct owner and SKU combinations per pallet")
 	private Integer maxSkuKindsPerPallet;
 

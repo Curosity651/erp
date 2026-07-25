@@ -75,6 +75,7 @@ public class WmsLocationManageController {
 			vo.setDefaultLocationType(w.getDefaultLocationType());
 			vo.setLocationGenerated(w.getLocationGenerated());
 			vo.setPalletLevels(w.getPalletLevels());
+			vo.setPalletPositionsPerLevel(w.getPalletPositionsPerLevel());
 			vo.setMaxSkuKindsPerPallet(w.getMaxSkuKindsPerPallet());
 			vo.setAllowCrossOwnerMix(w.getAllowCrossOwnerMix());
 			vo.setDefaultPalletLengthMm(w.getDefaultPalletLengthMm());
@@ -108,9 +109,11 @@ public class WmsLocationManageController {
 		wh.setRackNoPrefix(dto.getRackNoPrefix() == null ? "" : dto.getRackNoPrefix());
 		wh.setCodePadWidth(dto.getCodePadWidth());
 		wh.setDefaultLocationType(dto.getDefaultLocationType());
-		wh.setPalletLevels(dto.getPalletLevels() == null ? 3 : dto.getPalletLevels());
+		wh.setPalletLevels(dto.getPalletLevels() == null ? 6 : Math.max(1, Math.min(dto.getPalletLevels(), 12)));
+		wh.setPalletPositionsPerLevel(dto.getPalletPositionsPerLevel() == null
+				? 3 : Math.max(1, Math.min(dto.getPalletPositionsPerLevel(), 9)));
 		wh.setMaxSkuKindsPerPallet(dto.getMaxSkuKindsPerPallet() == null ? 4 : dto.getMaxSkuKindsPerPallet());
-		wh.setAllowCrossOwnerMix(dto.getAllowCrossOwnerMix() == null ? 1 : dto.getAllowCrossOwnerMix());
+		wh.setAllowCrossOwnerMix(dto.getAllowCrossOwnerMix() == null ? 0 : dto.getAllowCrossOwnerMix());
 		wh.setDefaultPalletLengthMm(dto.getDefaultPalletLengthMm());
 		wh.setDefaultPalletWidthMm(dto.getDefaultPalletWidthMm());
 		wh.setDefaultPalletHeightMm(dto.getDefaultPalletHeightMm());

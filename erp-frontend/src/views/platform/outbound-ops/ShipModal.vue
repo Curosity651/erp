@@ -22,7 +22,7 @@
         type="warning"
         show-icon
         style="margin: 12px 0"
-        message="签出即出库：物理库存正式扣减、释放锁定；关联物流产品的将生成物流费（链路二）。"
+        message="签出即出库：物理库存正式扣减、释放锁定，并按整托/箱件生成仓储操作费。"
       />
 
       <a-form :label-col="{ style: { width: '90px' } }">
@@ -46,6 +46,34 @@
         <a-form-item label="称重(kg)" required>
           <a-input-number v-model:value="weight" :min="0.01" :step="0.1" style="width: 180px" />
         </a-form-item>
+        <a-divider orientation="left" plain>仓储操作计费</a-divider>
+        <a-form-item v-if="order.handlingPreview?.wholePallets.length" label="整托">
+          <a-checkbox-group v-model:value="fullPalletIds">
+            <a-space direction="vertical">
+              <a-checkbox
+                v-for="pallet in order.handlingPreview.wholePallets"
+                :key="pallet.palletId"
+                :value="pallet.palletId"
+              >
+                {{ pallet.palletNo }} · {{ pallet.quantity }}件
+              </a-checkbox>
+            </a-space>
+          </a-checkbox-group>
+        </a-form-item>
+        <a-form-item label="大箱件数">
+          <a-input-number v-model:value="largeBoxCount" :min="0" :precision="0" />
+          <span class="fee-hint">10元/箱，一箱按一件</span>
+        </a-form-item>
+        <a-form-item label="小件数量">
+          <a-input-number v-model:value="smallItemCount" :min="0" :precision="0" />
+          <span class="fee-hint">1元/件</span>
+        </a-form-item>
+        <a-alert
+          type="info"
+          show-icon
+          :message="`非整托共 ${looseQuantity} 件，大箱与小件合计必须一致。预计操作费 ${operationFee.toFixed(2)} 元`"
+          style="margin-bottom: 16px"
+        />
         <a-form-item v-if="order?.needPhoto" label="签出照片" required>
           <a-upload
             v-model:file-list="fileList"
@@ -66,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import type { UploadProps } from 'ant-design-vue'
@@ -89,6 +117,29 @@ const channel = ref<string>('AUTO')
 const trackingNo = ref<string>()
 const weight = ref<number>()
 const fileList = ref<UploadProps['fileList']>([])
+const fullPalletIds = ref<number[]>([])
+const largeBoxCount = ref(0)
+const smallItemCount = ref(0)
+
+const selectedWholeQuantity = computed(() => {
+  const selected = new Set(fullPalletIds.value)
+  return (order.value?.handlingPreview?.wholePallets || [])
+    .filter(item => selected.has(item.palletId))
+    .reduce((sum, item) => sum + item.quantity, 0)
+})
+
+const looseQuantity = computed(() =>
+  Math.max(
+    Number(order.value?.handlingPreview?.wholePalletQuantity || 0) +
+      Number(order.value?.handlingPreview?.looseQuantity || 0) -
+      selectedWholeQuantity.value,
+    0
+  )
+)
+
+const operationFee = computed(
+  () => fullPalletIds.value.length * 80 + largeBoxCount.value * 10 + smallItemCount.value
+)
 
 const channelLoading = ref(false)
 const channelOptions = ref<{ label: string; value: string }[]>([])
@@ -113,9 +164,16 @@ async function loadData(id: number) {
   trackingNo.value = undefined
   weight.value = undefined
   fileList.value = []
+  fullPalletIds.value = []
+  largeBoxCount.value = 0
+  smallItemCount.value = 0
   try {
     const res = await getPackShipDetail(id)
-    if (isSuccess(res) && res.data) order.value = res.data
+    if (isSuccess(res) && res.data) {
+      order.value = res.data
+      fullPalletIds.value = (res.data.handlingPreview?.wholePallets || []).map(item => item.palletId)
+      smallItemCount.value = res.data.handlingPreview?.looseQuantity || 0
+    }
   } finally {
     loading.value = false
   }
@@ -147,6 +205,10 @@ async function handleConfirm() {
     message.warning('该订单含次品/电子类，签出必须上传照片')
     return
   }
+  if (largeBoxCount.value + smallItemCount.value !== looseQuantity.value) {
+    message.warning(`大箱与小件合计必须等于非整托数量 ${looseQuantity.value}`)
+    return
+  }
   submitting.value = true
   try {
     const res = await confirmShip({
@@ -154,12 +216,18 @@ async function handleConfirm() {
       channel: channel.value,
       trackingNo: trackingNo.value?.trim() || undefined,
       weight: weight.value,
-      photoCount
+      photoCount,
+      fullPalletIds: fullPalletIds.value,
+      largeBoxCount: largeBoxCount.value,
+      smallItemCount: smallItemCount.value
     })
     if (isSuccess(res) && res.data) {
       const fee = res.data.shippingFee
+      const operationFee = res.data.warehouseOperationFee || 0
       message.success(
-        fee > 0 ? `签出成功，库存已扣减；已生成物流费 ${formatMoney(fee)}` : '签出成功，库存已扣减'
+        `签出成功，库存已扣减；仓储操作费 ¥${operationFee.toFixed(2)}${
+          fee > 0 ? `，物流费 ${formatMoney(fee)}` : ''
+        }`
       )
       emit('success')
       emit('update:open', false)
@@ -192,5 +260,10 @@ async function handleConfirm() {
 .photo-hint {
   font-size: 12px;
   color: #fa8c16;
+}
+.fee-hint {
+  margin-left: 10px;
+  color: #8c8c8c;
+  font-size: 12px;
 }
 </style>

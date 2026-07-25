@@ -33,8 +33,11 @@ public class WarehouseStructureDTO {
 	@Schema(title = "默认库位类型 BIG/SMALL")
 	private String defaultLocationType;
 
-	@Schema(title = "每个二维库位的托盘层数，当前固定为3")
+	@Schema(title = "每个二维库位的托盘层数")
 	private Integer palletLevels;
+
+	@Schema(title = "每层托盘位数")
+	private Integer palletPositionsPerLevel;
 
 	@Schema(title = "单托最多不同货物种类")
 	private Integer maxSkuKindsPerPallet;

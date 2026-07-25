@@ -960,8 +960,8 @@ public class OutboundPickingService {
         if (wholePriority) {
             for (Map.Entry<Long, Integer> entry : allocatedByPallet.entrySet()) {
                 WmsPallet pallet = pallets.get(entry.getKey());
-                if (pallet == null || !Integer.valueOf(1).equals(pallet.getWholePalletEligible())
-                        || !Integer.valueOf(1).equals(pallet.getSkuKindCount())) {
+                if (pallet == null || pallet.getCurrentSlotId() == null
+                        || "LOCKED".equals(pallet.getPalletStatus())) {
                     continue;
                 }
                 int palletQty = physicalInventoryMapper.listByPalletId(entry.getKey()).stream()

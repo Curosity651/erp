@@ -23,4 +23,7 @@ public class ShipResultVO {
     @Schema(title = "生成的计费流水ID(无计费则空)")
     private Long billingRecordId;
 
+    @Schema(title = "本次仓储操作费(CNY)")
+    private BigDecimal warehouseOperationFee;
+
 }

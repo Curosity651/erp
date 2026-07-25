@@ -1,5 +1,6 @@
 package com.erp.admin.wms.service;
 
+import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.tenant.service.TenantIdentityService;
@@ -92,6 +93,8 @@ public class WmsInboundExecutionService {
 	private final InboundPalletPlanningService inboundPalletPlanningService;
 
 	private final WmsPalletService palletService;
+
+	private final WarehouseBillingService warehouseBillingService;
 
 	// ==================== 收货 ====================
 
@@ -272,6 +275,8 @@ public class WmsInboundExecutionService {
 			physicalInventoryService.putaway(put);
 		}
 		assigned.values().forEach(pallet -> palletService.refreshAfterInventoryChange(pallet.getId()));
+		warehouseBillingService.recordInbound(order, items, dto.getConfirmedVolumeCbm(),
+				dto.getAfterHours(), dto.getAfterHoursReason());
 		log.info("Pallet putaway completed, inboundOrderId={}, palletCount={}", order.getId(), assigned.size());
 		return palletService.summaries(assigned.values().stream()
 				.map(com.erp.admin.wms.model.entity.WmsPallet::getId).collect(Collectors.toSet()));

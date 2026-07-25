@@ -11,6 +11,7 @@ export interface WarehouseStructure {
   defaultLocationType?: string
   locationGenerated?: number
   palletLevels?: number
+  palletPositionsPerLevel?: number
   maxSkuKindsPerPallet?: number
   allowCrossOwnerMix?: number
   defaultPalletLengthMm?: number
@@ -41,6 +42,7 @@ export interface WarehouseStructureUpdate {
   codePadWidth?: number
   defaultLocationType?: string
   palletLevels?: number
+  palletPositionsPerLevel?: number
   maxSkuKindsPerPallet?: number
   allowCrossOwnerMix?: number
   defaultPalletLengthMm?: number

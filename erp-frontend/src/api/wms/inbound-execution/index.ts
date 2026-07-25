@@ -38,6 +38,9 @@ export interface PutawayLine {
 export interface InboundPutawayDTO {
   inboundOrderId: number
   lines: PutawayLine[]
+  confirmedVolumeCbm?: number
+  afterHours?: boolean
+  afterHoursReason?: string
 }
 
 /** 可用库位（上架分配用，空闲且分区匹配品质） */
@@ -59,6 +62,7 @@ export interface PalletSlotVO {
   rackNo?: string
   columnNo?: number
   levelNo: number
+  positionNo?: number
   zoneId?: number
   zoneName?: string
   zoneType?: string
@@ -105,6 +109,8 @@ export interface InboundPutawayPlanVO {
   pallets: PalletPlan[]
   slotCandidates: PalletSlotVO[]
   warnings: string[]
+  calculatedVolumeCbm?: number
+  volumeMissingSkuCodes: string[]
 }
 
 /** 平台待作业入库单分页（采购 + 自定义全来源，平台看全部） */

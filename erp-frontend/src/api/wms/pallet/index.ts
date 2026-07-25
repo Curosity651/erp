@@ -17,6 +17,10 @@ export interface PalletSummaryVO {
   palletNo: string
   warehouseId: number
   warehouseName?: string
+  wmsTenantId?: number
+  wmsTenantName?: string
+  erpTenantId?: number
+  ownerName?: string
   slotCode?: string
   palletType: string
   palletStatus: string
@@ -26,6 +30,7 @@ export interface PalletSummaryVO {
   actualWeightKg?: number
   skuKindCount: number
   wholePalletEligible: number
+  labelVersion?: number
   createTime: string
   items: PalletItemVO[]
 }

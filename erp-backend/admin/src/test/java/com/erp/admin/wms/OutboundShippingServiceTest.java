@@ -3,6 +3,7 @@ package com.erp.admin.wms;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.order.service.ErpOrderService;
+import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.erp.admin.wms.mapper.OutboundShippingMapper;
 import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
@@ -62,6 +63,7 @@ class OutboundShippingServiceTest {
     private ErpOrderService erpOrderService;
     private SalesOutboundPackageService packageService;
     private WarehouseOutboundDocumentService documentService;
+    private WarehouseBillingService warehouseBillingService;
     private OutboundShippingService service;
 
     @BeforeEach
@@ -80,12 +82,13 @@ class OutboundShippingServiceTest {
         erpOrderService = mock(ErpOrderService.class);
         packageService = mock(SalesOutboundPackageService.class);
         documentService = mock(WarehouseOutboundDocumentService.class);
+        warehouseBillingService = mock(WarehouseBillingService.class);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
         service = new OutboundShippingService(shippingMapper, orderMapper, itemMapper, physMapper, allocMapper,
                 billingMapper, aggregator, logisticsProductService, sysTenantMapper, tis, palletService,
-                erpOrderService, packageService, documentService);
+                erpOrderService, packageService, documentService, warehouseBillingService);
     }
 
     private SalesOutboundOrder order(long id, String status) {

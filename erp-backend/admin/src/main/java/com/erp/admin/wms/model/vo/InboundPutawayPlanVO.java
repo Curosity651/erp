@@ -13,6 +13,8 @@ public class InboundPutawayPlanVO {
     private List<PalletPlan> pallets = new ArrayList<>();
     private List<PalletSlotVO> slotCandidates = new ArrayList<>();
     private List<String> warnings = new ArrayList<>();
+    private BigDecimal calculatedVolumeCbm;
+    private List<String> volumeMissingSkuCodes = new ArrayList<>();
 
     @Data
     public static class PalletPlan {
@@ -41,4 +43,3 @@ public class InboundPutawayPlanVO {
         private Integer quantityPerPallet;
     }
 }
-

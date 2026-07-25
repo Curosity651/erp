@@ -30,6 +30,15 @@ public class InboundPutawayDTO {
 	@Schema(title = "上架分配明细")
 	private List<PutawayLine> lines;
 
+	@Schema(title = "SKU尺寸缺失时人工确认的本次总体积(m³)")
+	private java.math.BigDecimal confirmedVolumeCbm;
+
+	@Schema(title = "是否因客户或服务商原因产生17点后加班")
+	private Boolean afterHours;
+
+	@Schema(title = "加班原因")
+	private String afterHoursReason;
+
 	@Data
 	@Schema(title = "上架分配行")
 	public static class PutawayLine {

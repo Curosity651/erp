@@ -65,6 +65,7 @@
         SELECT fee_type AS feeType, COALESCE(SUM(amount), 0) AS amount
         FROM wms_billing_record
         WHERE wms_tenant_id = #{wmsTenantId} AND bill_month = #{billMonth}
+          AND charge_status = 'POSTED'
         GROUP BY fee_type
     </select>
 
