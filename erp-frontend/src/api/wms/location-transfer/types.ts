@@ -13,6 +13,15 @@ export const LocationTransferStatusList = [
 
 export type LocationTransferStatus = (typeof LocationTransferStatusList)[number]['value']
 
+export const LocationTransferReasonList = [
+  { value: 'LOCATION_ORGANIZATION', label: '库位整理' },
+  { value: 'BACKLOG_STAGING', label: '积压暂存' },
+  { value: 'OUTBOUND_PREPARATION', label: '出库准备' },
+  { value: 'STOCKTAKE_CORRECTION', label: '盘点纠正' },
+  { value: 'TEMPORARY_CLEARANCE', label: '临时腾位' },
+  { value: 'OTHER', label: '其他' }
+] as const
+
 // ==================== 目标库位候选 ====================
 
 export interface TargetLocationVO {

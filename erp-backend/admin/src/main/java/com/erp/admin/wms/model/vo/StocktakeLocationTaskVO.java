@@ -13,6 +13,7 @@ public class StocktakeLocationTaskVO {
 	private Long zoneId;
 	private Long locationId;
 	private String locationCode;
+	private Integer isVirtual;
 	private String taskStatus;
 	private String assigneeName;
 	private Integer itemCount;
@@ -20,4 +21,3 @@ public class StocktakeLocationTaskVO {
 	private Integer diffCount;
 	private LocalDateTime completedTime;
 }
-

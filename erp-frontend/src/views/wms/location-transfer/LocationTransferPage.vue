@@ -53,7 +53,7 @@
     row-key="id"
     :request="tableRequest"
     :columns="columns"
-    :scroll="{ x: 1200 }"
+    :scroll="{ x: 1550 }"
     size="middle"
   >
     <template #toolBarRender>
@@ -80,7 +80,7 @@
             v-if="record.orderStatus === 'PLANNED' && hasPermission('wms:location:transfer')"
             @click="handlePlan(record)"
           >
-            选择目标库位
+            完善计划
           </a>
           <confirm-text-button
             v-if="record.orderStatus === 'PLANNED' && hasPermission('wms:location:transfer')"
@@ -120,7 +120,10 @@ import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 import { mergePageParam } from '@/utils/page-utils'
 import { doRequest } from '@/utils/axios/request'
 import { pageLocationTransfer, completeLocationTransfer, cancelLocationTransfer } from '@/api/wms/location-transfer'
-import { LocationTransferStatusList } from '@/api/wms/location-transfer/types'
+import {
+  LocationTransferReasonList,
+  LocationTransferStatusList
+} from '@/api/wms/location-transfer/types'
 import type {
   LocationTransferPageVO,
   LocationTransferQO,
@@ -180,11 +183,28 @@ const resetSearch = () => {
 
 const columns: ProColumns[] = [
   { title: '调整单号', key: 'no', width: 170, fixed: 'left' },
+  {
+    title: '来源',
+    dataIndex: 'sourceType',
+    width: 110,
+    customRender: ({ text }) => (text === 'SALES_OUTBOUND' ? '销售出库' : '人工创建')
+  },
+  { title: '关联单号', dataIndex: 'sourceNo', width: 170, ellipsis: true },
   { title: '所属服务商', dataIndex: 'operatorName', width: 130, ellipsis: true },
   { title: '货主', dataIndex: 'ownerName', width: 130, ellipsis: true },
   { title: '仓库', dataIndex: 'warehouseName', width: 120, ellipsis: true },
   { title: '明细', key: 'statistics', width: 130 },
   { title: '状态', key: 'status', width: 110 },
+  {
+    title: '调整原因',
+    dataIndex: 'reason',
+    width: 180,
+    ellipsis: true,
+    customRender: ({ text, record }) =>
+      text ||
+      LocationTransferReasonList.find(item => item.value === record.reasonCode)?.label ||
+      (record.reasonCode === 'OUTBOUND_PICKABLE_SHORTAGE' ? '销售出库准备' : '-')
+  },
   { title: '备注', dataIndex: 'remark', width: 150, ellipsis: true },
   { title: '创建时间', dataIndex: 'createTime', width: 170 },
   { key: 'operate', title: '操作', align: 'center', width: 180, fixed: 'right' }

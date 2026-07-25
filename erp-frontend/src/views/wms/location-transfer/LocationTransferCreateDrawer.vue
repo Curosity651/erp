@@ -10,7 +10,7 @@
       type="info"
       show-icon
       style="margin-bottom: 12px"
-      message="库内移库：把某库位的货移到同仓的另一个库位。仅允许 退货区→标准区 或 标准区→标准区（退货区移入标准区将标记为良品），目标货架须为该货主的服务商租用、且空闲或同批次可合并。勾选批次→填数量→选目标库位，创建后为「待调整」，去列表点「调整完成」才真正移库。"
+      message="支持物理库位与虚拟库位之间的四向移库。移入物理库位时会校验服务商租赁范围、分区和容量；创建后为“待调整”，点击“调整完成”才真正移动库存。"
     />
 
     <a-form layout="vertical">
@@ -36,6 +36,22 @@
           </a-form-item>
         </a-col>
         <a-col :span="8">
+          <a-form-item label="调整原因" required>
+            <a-select v-model:value="reasonCode" :options="reasonOptions" placeholder="请选择" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item :label="reasonCode === 'OTHER' ? '原因说明' : '原因说明（选填）'">
+            <a-input
+              v-model:value="reason"
+              :placeholder="reasonCode === 'OTHER' ? '请填写具体原因' : '可补充说明'"
+              :maxlength="200"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
           <a-form-item label="备注">
             <a-input v-model:value="remark" placeholder="可选" :maxlength="500" />
           </a-form-item>
@@ -116,7 +132,10 @@ import { doRequest } from '@/utils/axios/request'
 import { listOwnerBatches } from '@/api/wms/adjustment'
 import type { PhysicalBatchVO } from '@/api/wms/adjustment/types'
 import { createLocationTransfer, listTargetCandidates } from '@/api/wms/location-transfer'
-import type { TargetLocationVO } from '@/api/wms/location-transfer/types'
+import {
+  LocationTransferReasonList,
+  type TargetLocationVO
+} from '@/api/wms/location-transfer/types'
 
 defineOptions({ name: 'LocationTransferCreateDrawer' })
 const emit = defineEmits<{ (e: 'success'): void }>()
@@ -126,7 +145,10 @@ const loading = ref(false)
 const submitting = ref(false)
 const erpTenantId = ref<number>()
 const warehouseId = ref<number>()
+const reasonCode = ref<string>()
+const reason = ref<string>()
 const remark = ref<string>()
+const reasonOptions = LocationTransferReasonList.map(item => ({ ...item }))
 
 interface BatchRow extends PhysicalBatchVO {
   moveQty?: number
@@ -154,7 +176,7 @@ const available = (r: BatchRow) => (r.quantity || 0) - (r.reservedQty || 0)
 const targetOptions = (batchId: number) =>
   (candidatesMap[batchId] || []).map(t => ({
     label:
-      (t.isVirtual === 1 ? '🔒虚拟 · ' : '') +
+      (t.isVirtual === 1 ? '虚拟 · ' : '') +
       (t.zoneName ? `${t.locationCode}（${t.zoneName}）` : t.locationCode),
     value: t.locationCode
   }))
@@ -203,6 +225,14 @@ function submit() {
     message.warning('请选择货主与仓库')
     return
   }
+  if (!reasonCode.value) {
+    message.warning('请选择调整原因')
+    return
+  }
+  if (reasonCode.value === 'OTHER' && !reason.value?.trim()) {
+    message.warning('选择“其他”时请填写原因说明')
+    return
+  }
   const rows = batches.value.filter(b => selectedKeys.value.includes(b.id))
   if (rows.length === 0) {
     message.warning('请勾选要移库的批次')
@@ -223,8 +253,8 @@ function submit() {
     createLocationTransfer({
       warehouseId: warehouseId.value,
       erpTenantId: erpTenantId.value,
-      reasonCode: 'MANUAL_LOCATION_TRANSFER',
-      reason: remark.value || '人工库位调整',
+      reasonCode: reasonCode.value,
+      reason: reason.value?.trim(),
       remark: remark.value,
       items: rows.map(b => ({
         physicalInventoryId: b.id,
@@ -253,6 +283,8 @@ function open() {
   visible.value = true
   erpTenantId.value = undefined
   warehouseId.value = undefined
+  reasonCode.value = undefined
+  reason.value = undefined
   remark.value = undefined
   batches.value = []
   selectedKeys.value = []

@@ -261,6 +261,7 @@ async function loadOperators() {
 
 async function loadZones() {
   if (!current.value) return
+  await initDefaultZones(current.value.id)
   const res = await listZones(current.value.id)
   if (isSuccess(res)) zones.value = res.data || []
 }

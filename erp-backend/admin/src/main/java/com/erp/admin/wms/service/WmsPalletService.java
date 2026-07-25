@@ -84,6 +84,10 @@ public class WmsPalletService {
         return slotMapper.deletePhysicalSlots(warehouseId);
     }
 
+    public int countPhysicalSlots(Long warehouseId) {
+        return slotMapper.countPhysicalSlots(warehouseId);
+    }
+
     private int ensureSlots(Long warehouseId, Warehouse warehouse, List<WmsLocation> locations) {
         int levels = warehouse.getPalletLevels() == null ? 6 : warehouse.getPalletLevels();
         levels = Math.max(1, Math.min(levels, 12));
@@ -273,6 +277,72 @@ public class WmsPalletService {
         pallet.setUpdateBy(currentUserId());
         palletMapper.updateById(pallet);
         return pallet;
+    }
+
+    public boolean hasCapacityForTransfer(Long warehouseId, String locationCode, Long erpTenantId,
+            String skuCode, String quality) {
+        Warehouse warehouse = warehouseMapper.selectById(warehouseId);
+        Assert.notNull(warehouse, "仓库不存在");
+        for (PalletSlotVO slot : listSlots(warehouseId)) {
+            if (!locationCode.equals(slot.getLocationCode())) {
+                continue;
+            }
+            if (slot.getPalletId() == null) {
+                return true;
+            }
+            if (PARTIAL.equals(slot.getPalletStatus())
+                    && palletCanAccept(warehouse, slot.getPalletId(), erpTenantId, skuCode, quality)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public WmsPallet allocateForTransfer(Long warehouseId, String locationCode, Long erpTenantId,
+            String skuCode, String quality, int quantity) {
+        Warehouse warehouse = warehouseMapper.selectById(warehouseId);
+        Assert.notNull(warehouse, "仓库不存在");
+        InboundPutawayDTO.PutawayLine line = new InboundPutawayDTO.PutawayLine();
+        line.setSkuCode(skuCode);
+        line.setQuality(quality);
+        line.setQuantity(quantity);
+        line.setCapacitySource("MANUAL_REQUIRED");
+        List<InboundPutawayDTO.PutawayLine> lines = Collections.singletonList(line);
+        List<PalletSlotVO> slots = listSlots(warehouseId).stream()
+                .filter(slot -> locationCode.equals(slot.getLocationCode()))
+                .collect(Collectors.toList());
+
+        for (PalletSlotVO slot : slots) {
+            if (slot.getPalletId() != null && PARTIAL.equals(slot.getPalletStatus())
+                    && palletCanAccept(warehouse, slot.getPalletId(), erpTenantId, skuCode, quality)) {
+                return lockExistingForPutaway(slot.getPalletId(), erpTenantId, lines);
+            }
+        }
+        for (PalletSlotVO slot : slots) {
+            if (slot.getPalletId() == null) {
+                line.setSlotCode(slot.getSlotCode());
+                return createForPutaway(warehouseId, erpTenantId, slot.getSlotCode(), lines);
+            }
+        }
+        throw new BusinessException(409, "目标库位没有可用托位或可合并托盘：" + locationCode);
+    }
+
+    private boolean palletCanAccept(Warehouse warehouse, Long palletId, Long erpTenantId,
+            String skuCode, String quality) {
+        List<WmsPhysicalInventory> current = physicalInventoryMapper.selectList(
+                WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
+                        .eq(WmsPhysicalInventory::getPalletId, palletId)
+                        .gt(WmsPhysicalInventory::getQuantity, 0));
+        if (current.stream().anyMatch(item -> !erpTenantId.equals(item.getErpTenantId())
+                || !normalizeQuality(quality).equals(normalizeQuality(item.getQuality())))) {
+            return false;
+        }
+        int maxKinds = warehouse.getMaxSkuKindsPerPallet() == null ? 4 : warehouse.getMaxSkuKindsPerPallet();
+        Set<String> kinds = current.stream().map(item -> item.getErpTenantId() + "|" + item.getSkuCode())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        kinds.add(erpTenantId + "|" + skuCode);
+        return kinds.size() <= maxKinds;
     }
 
     private void validateCapacityAndMixing(Warehouse warehouse, Long erpTenantId,

@@ -31,6 +31,11 @@ export interface WarehouseStructure {
   assignedRackCount?: number
   /** 已分配的服务商名称（当前有效，去重） */
   assignedOperatorNames?: string[]
+  actualPhysicalLocationCount?: number
+  actualPalletSlotCount?: number
+  activePalletCount?: number
+  unfinishedTransferCount?: number
+  inProgressStocktakeCount?: number
 }
 
 /** 仓库结构参数更新 */

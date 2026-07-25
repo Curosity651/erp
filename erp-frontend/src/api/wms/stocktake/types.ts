@@ -61,6 +61,7 @@ export interface StocktakeDTO {
   specialSkuCodes?: string[]
   specialOwnerId?: number
   specialSearchAll?: boolean
+  virtualLocationOnly?: boolean
   blindCount?: boolean
   // 备注
   remark?: string
@@ -207,6 +208,7 @@ export interface StocktakeLocationTaskVO {
   zoneId?: number
   locationId: number
   locationCode: string
+  isVirtual?: number
   taskStatus: StocktakeTaskStatus
   assigneeName?: string
   itemCount: number
@@ -220,7 +222,7 @@ export interface StocktakeExtraItemDTO {
   erpTenantId: number
   skuCode: string
   actualQuantity: number
-  slotCode: string
+  slotCode?: string
   palletId?: number
   quality?: string
   inboundDate?: string

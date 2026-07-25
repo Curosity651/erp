@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.erp.admin.wms.enums.WmsResultCode;
+import com.erp.admin.wms.mapper.WarehouseMapper;
 import com.erp.admin.wms.model.dto.WarehouseStructureDTO;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.entity.WmsLocation;
@@ -30,6 +31,8 @@ public class WmsLocationGenerator {
 
 	private final WarehouseService warehouseService;
 
+	private final WarehouseMapper warehouseMapper;
+
 	private final WmsZoneService wmsZoneService;
 
 	private final WmsLocationService wmsLocationService;
@@ -38,12 +41,20 @@ public class WmsLocationGenerator {
 
 	private final WmsPalletService palletService;
 
+	public int countPhysicalSlots(Long warehouseId) {
+		return palletService.countPhysicalSlots(warehouseId);
+	}
+
 	/**
 	 * Saves configuration and rebuilds physical locations in one transaction.
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public int saveStructureAndGenerate(WarehouseStructureDTO dto) {
-		Warehouse current = warehouseService.validateOperableOwnWarehouse(dto.getId());
+		warehouseService.validateOperableOwnWarehouse(dto.getId());
+		Warehouse current = warehouseMapper.selectByIdForUpdate(dto.getId());
+		if (current == null) {
+			throw new IllegalStateException("仓库不存在或已被删除");
+		}
 		validateDimensions(dto.getRackRows(), dto.getRackColumns());
 		wmsStructureLockService.assertEditable(dto.getId());
 
@@ -85,7 +96,11 @@ public class WmsLocationGenerator {
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public int generateLocations(Long warehouseId) {
-		Warehouse wh = warehouseService.validateOperableOwnWarehouse(warehouseId);
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
+		Warehouse wh = warehouseMapper.selectByIdForUpdate(warehouseId);
+		if (wh == null) {
+			throw new IllegalStateException("仓库不存在或已被删除");
+		}
 		return generateLocations(wh);
 	}
 

@@ -54,6 +54,9 @@ public class StocktakeDTO {
 	@Schema(title = "专项盘点是否全仓寻货")
 	private Boolean specialSearchAll;
 
+	@Schema(title = "是否为虚拟库位专项盘点")
+	private Boolean virtualLocationOnly;
+
 	@Schema(title = "是否盲盘")
 	private Boolean blindCount;
 

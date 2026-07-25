@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.BeanUtils;
+import java.util.stream.Collectors;
 
 /**
  * 批次级库存 SSOT（D1·方案②）。上架写入仅海外仓平台（物理作业归平台）；批次/快照查询沿用 wms 读权限。
@@ -55,7 +57,13 @@ public class WmsPhysicalInventoryController {
 			@RequestParam(value = "warehouseId", required = false) Long warehouseId,
 			@RequestParam(value = "skuKeyword", required = false) String skuKeyword) {
 		assertCanAccessOwner(erpTenantId);
-		return ApiResult.ok(physicalInventoryService.listByErpTenant(erpTenantId, warehouseId, skuKeyword));
+		List<WmsPhysicalInventory> batches =
+				physicalInventoryService.listByErpTenant(erpTenantId, warehouseId, skuKeyword);
+		if (!TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM
+				.equals(tenantIdentityService.currentIdentity(null).getIdentityType())) {
+			batches = batches.stream().map(this::withoutLocationDetails).collect(Collectors.toList());
+		}
+		return ApiResult.ok(batches);
 	}
 
 	@Operation(summary = "聚合桶快照(对账)")
@@ -83,6 +91,18 @@ public class WmsPhysicalInventoryController {
 		if (!erpOwnerScopeService.canAccess(erpTenantId)) {
 			throw new BusinessException(WmsResultCode.RACK_ASSIGN_FORBIDDEN.getCode(), "无权查看该货主的库存");
 		}
+	}
+
+	private WmsPhysicalInventory withoutLocationDetails(WmsPhysicalInventory source) {
+		WmsPhysicalInventory copy = new WmsPhysicalInventory();
+		BeanUtils.copyProperties(source, copy);
+		copy.setLocationCode(null);
+		copy.setOriginLocationCode(null);
+		copy.setPalletId(null);
+		copy.setSlotId(null);
+		copy.setZoneId(null);
+		copy.setContainerStored(null);
+		return copy;
 	}
 
 }

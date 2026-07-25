@@ -19,6 +19,14 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 	@Select("SELECT * FROM wms_physical_inventory WHERE id = #{id} FOR UPDATE")
 	WmsPhysicalInventory selectByIdForUpdate(@Param("id") Long id);
 
+	@Select("SELECT DISTINCT pi.location_code "
+			+ "FROM wms_physical_inventory pi "
+			+ "JOIN wms_location l ON l.warehouse_id = pi.warehouse_id "
+			+ " AND l.location_code = pi.location_code AND l.deleted = 0 "
+			+ "WHERE pi.warehouse_id = #{warehouseId} AND l.is_virtual = 0 "
+			+ "AND (COALESCE(pi.quantity, 0) > 0 OR COALESCE(pi.reserved_qty, 0) > 0)")
+	List<String> listBlockingPhysicalLocationCodes(@Param("warehouseId") Long warehouseId);
+
 	default List<WmsPhysicalInventory> listByWarehouse(Long warehouseId) {
 		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
 				.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
@@ -140,10 +148,9 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 	 * <p>集装箱存储（口径A）：排除 {@code container_stored=1} 的批次——它们仍计入货主可用(allocatable=1)，
 	 * 但已被平台收纳进隐藏集装箱，不参与自动挑拣，避免刚入箱的积压货被 FIFO 优先发掉。
 	 */
-	default List<WmsPhysicalInventory> selectFifoAllocatable(Long wmsTenantId, Long erpTenantId, Long warehouseId,
+	default List<WmsPhysicalInventory> selectFifoAllocatable(Long erpTenantId, Long warehouseId,
 			String skuCode) {
 		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
-			.eq(WmsPhysicalInventory::getWmsTenantId, wmsTenantId == null ? 0L : wmsTenantId)
 			.eq(WmsPhysicalInventory::getErpTenantId, erpTenantId)
 			.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
 			.eq(WmsPhysicalInventory::getSkuCode, skuCode)
@@ -159,10 +166,9 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 	 * FIFO 可分配批次（行锁 SELECT ... FOR UPDATE），用于确认下架时真正锁定 reserved_qty，防超卖（C7）。
 	 * <p>同样排除 {@code container_stored=1}（口径A，见 {@link #selectFifoAllocatable}）。
 	 */
-	default List<WmsPhysicalInventory> selectFifoAllocatableForUpdate(Long wmsTenantId, Long erpTenantId,
+	default List<WmsPhysicalInventory> selectFifoAllocatableForUpdate(Long erpTenantId,
 			Long warehouseId, String skuCode) {
 		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
-			.eq(WmsPhysicalInventory::getWmsTenantId, wmsTenantId == null ? 0L : wmsTenantId)
 			.eq(WmsPhysicalInventory::getErpTenantId, erpTenantId)
 			.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
 			.eq(WmsPhysicalInventory::getSkuCode, skuCode)
@@ -179,10 +185,9 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 	 * Locks owner-visible stock held in a virtual location. It must be moved to a
 	 * physical location before outbound picking.
 	 */
-	default List<WmsPhysicalInventory> selectVirtualAllocatableForUpdate(Long wmsTenantId, Long erpTenantId,
+	default List<WmsPhysicalInventory> selectVirtualAllocatableForUpdate(Long erpTenantId,
 			Long warehouseId, String skuCode) {
 		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
-			.eq(WmsPhysicalInventory::getWmsTenantId, wmsTenantId == null ? 0L : wmsTenantId)
 			.eq(WmsPhysicalInventory::getErpTenantId, erpTenantId)
 			.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
 			.eq(WmsPhysicalInventory::getSkuCode, skuCode)

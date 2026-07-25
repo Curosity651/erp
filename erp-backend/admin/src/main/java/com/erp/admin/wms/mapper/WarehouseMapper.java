@@ -17,6 +17,8 @@ import org.ballcat.common.model.domain.PageResult;
 import org.ballcat.mybatisplus.conditions.query.LambdaQueryWrapperX;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 /**
  * 仓库Mapper
@@ -24,6 +26,9 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
  * @author erp
  */
 public interface WarehouseMapper extends ExtendMapper<Warehouse> {
+
+	@Select("SELECT * FROM wms_warehouse WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+	Warehouse selectByIdForUpdate(@Param("id") Long id);
 
 	/**
 	 * 分页查询

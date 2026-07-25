@@ -29,6 +29,7 @@ import com.erp.admin.wms.model.entity.SalesOutboundOrder;
 import com.erp.admin.wms.model.entity.SalesOutboundOrderItem;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.enums.LocationTransferStatus;
+import com.erp.admin.wms.model.enums.LocationTransferReason;
 import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.model.qo.LocationTransferQO;
 import com.erp.admin.wms.model.vo.LocationTransferDetailVO;
@@ -161,6 +162,10 @@ public class LocationTransferOrderService
 		Assert.notEmpty(dto.getItems(), "调整明细不能为空");
 		Assert.notNull(dto.getErpTenantId(), "货主不能为空");
 		Assert.notNull(dto.getWarehouseId(), "仓库不能为空");
+		Assert.isTrue(LocationTransferReason.isManualReason(dto.getReasonCode()), "请选择有效的调整原因");
+		if (LocationTransferReason.OTHER.name().equals(dto.getReasonCode())) {
+			Assert.hasText(dto.getReason(), "选择“其他”时必须填写原因说明");
+		}
 		warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
 		SysTenant owner = sysTenantMapper.selectById(dto.getErpTenantId());
 		Assert.notNull(owner, "货主不存在");
@@ -231,7 +236,7 @@ public class LocationTransferOrderService
 		for (StockShortageVO shortage : shortages) {
 			int remaining = shortage.getShortage() == null ? 0 : shortage.getShortage();
 			List<WmsPhysicalInventory> batches = physicalInventoryMapper.selectVirtualAllocatableForUpdate(
-					0L, outbound.getErpTenantId(), outbound.getWarehouseId(), shortage.getSkuCode());
+					outbound.getErpTenantId(), outbound.getWarehouseId(), shortage.getSkuCode());
 			for (WmsPhysicalInventory batch : batches) {
 				if (remaining <= 0) {
 					break;
@@ -264,7 +269,8 @@ public class LocationTransferOrderService
 
 		LocationTransferOrder plan = existing == null ? new LocationTransferOrder() : existing;
 		plan.setWarehouseId(outbound.getWarehouseId());
-		plan.setWmsTenantId(0L);
+		SysTenant outboundOwner = sysTenantMapper.selectById(outbound.getErpTenantId());
+		plan.setWmsTenantId(outboundOwner == null ? 0L : outboundOwner.getParentWmsTenantId());
 		plan.setErpTenantId(outbound.getErpTenantId());
 		plan.setOrderStatus(LocationTransferStatus.PLANNED.name());
 		plan.setSourceType("SALES_OUTBOUND");

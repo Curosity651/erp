@@ -26,4 +26,9 @@ public interface WmsLocationSlotMapper extends ExtendMapper<WmsLocationSlot> {
             "JOIN wms_location l ON l.id=s.location_id " +
             "WHERE l.warehouse_id=#{warehouseId} AND l.is_virtual=0")
     int deletePhysicalSlots(@Param("warehouseId") Long warehouseId);
+
+    @Select("SELECT COUNT(*) FROM wms_location_slot s " +
+            "JOIN wms_location l ON l.id=s.location_id " +
+            "WHERE l.warehouse_id=#{warehouseId} AND l.is_virtual=0 AND l.deleted=0")
+    int countPhysicalSlots(@Param("warehouseId") Long warehouseId);
 }

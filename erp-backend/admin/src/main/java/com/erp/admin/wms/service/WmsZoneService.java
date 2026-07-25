@@ -18,6 +18,7 @@ import org.ballcat.mybatisplus.service.impl.ExtendServiceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.springframework.dao.DuplicateKeyException;
 
 /**
  * 品质分区服务（C1）。
@@ -126,7 +127,7 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 		java.util.Set<String> existingTypes = listByWarehouse(warehouseId).stream()
 				.map(WmsZone::getZoneType)
 				.collect(java.util.stream.Collectors.toSet());
-		List<WmsZone> zones = new ArrayList<>();
+		int created = 0;
 		for (String[] def : DEFAULT_ZONES) {
 			if (existingTypes.contains(def[0])) {
 				continue;
@@ -136,12 +137,16 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 			zone.setZoneType(def[0]);
 			zone.setZoneName(def[1]);
 			zone.setAllocatable(Integer.parseInt(def[2]));
-			zones.add(zone);
+			try {
+				if (this.save(zone)) {
+					created++;
+				}
+			}
+			catch (DuplicateKeyException ignored) {
+				// Another request filled this missing type after our initial read.
+			}
 		}
-		if (!zones.isEmpty()) {
-			this.saveBatch(zones);
-		}
-		return zones.size();
+		return created;
 	}
 
 }

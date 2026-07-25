@@ -168,7 +168,7 @@ public class OutboundPickingService {
         List<PickAllocationVO> result = new ArrayList<>();
         for (Map.Entry<String, Integer> e : required.entrySet()) {
             List<WmsPhysicalInventory> batches = physicalInventoryMapper
-                    .selectFifoAllocatable(0L, vo.getErpTenantId(), vo.getWarehouseId(), e.getKey());
+					.selectFifoAllocatable(vo.getErpTenantId(), vo.getWarehouseId(), e.getKey());
             preferLoosePallets(batches);
             AllocPlan plan = planAllocation(batches, e.getValue());
             for (Take t : plan.takes) {
@@ -448,7 +448,7 @@ public class OutboundPickingService {
         Assert.isTrue(Objects.equals(taskId, line.getTaskId()), "拣货明细不属于当前任务");
         int required = Math.max(nvl(line.getShortageQty()),
                 nvl(line.getPlannedQty()) - nvl(line.getPickedQty()));
-        return physicalInventoryMapper.selectFifoAllocatable(0L, task.getErpTenantId(),
+        return physicalInventoryMapper.selectFifoAllocatable(task.getErpTenantId(),
                         task.getWarehouseId(), line.getSkuCode()).stream()
                 .filter(batch -> !Objects.equals(batch.getId(), line.getPhysicalInventoryId()))
                 .filter(batch -> nvl(batch.getQuantity()) - nvl(batch.getReservedQty()) > 0)
@@ -754,7 +754,7 @@ public class OutboundPickingService {
         List<StockShortageVO> shortages = new ArrayList<>();
         for (Map.Entry<String, Integer> e : required.entrySet()) {
             List<WmsPhysicalInventory> batches = physicalInventoryMapper
-                    .selectFifoAllocatableForUpdate(0L, order.getErpTenantId(), order.getWarehouseId(), e.getKey());
+                    .selectFifoAllocatableForUpdate(order.getErpTenantId(), order.getWarehouseId(), e.getKey());
             preferLoosePallets(batches);
             AllocPlan plan = planAllocation(batches, e.getValue());
             if (plan.shortage > 0) {
@@ -808,7 +808,7 @@ public class OutboundPickingService {
                 continue;
             }
             List<WmsPhysicalInventory> batches = physicalInventoryMapper.selectFifoAllocatableForUpdate(
-                    0L, order.getErpTenantId(), order.getWarehouseId(), entry.getKey());
+                    order.getErpTenantId(), order.getWarehouseId(), entry.getKey());
             preferLoosePallets(batches);
             AllocPlan plan = planAllocation(batches, needed);
             planned.addAll(plan.takes);
@@ -1090,7 +1090,7 @@ public class OutboundPickingService {
         List<OutboundOrderItemVO> result = new ArrayList<>();
         for (Map.Entry<String, Integer> e : required.entrySet()) {
             List<WmsPhysicalInventory> batches = physicalInventoryMapper
-                    .selectFifoAllocatable(0L, order.getErpTenantId(), order.getWarehouseId(), e.getKey());
+					.selectFifoAllocatable(order.getErpTenantId(), order.getWarehouseId(), e.getKey());
             int publicAvailable = availableQty(batches);
             int reservedForOrder = ownReserved.getOrDefault(e.getKey(), 0);
             int available = reservedForOrder > 0 ? reservedForOrder : publicAvailable;

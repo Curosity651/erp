@@ -87,7 +87,7 @@ public class WmsRackController {
 	public ApiResult<List<WmsLocation>> rackLocations(@RequestParam("warehouseId") Long warehouseId,
 			@RequestParam("rackNo") String rackNo) {
 		assertOverseasPlatform();
-		List<WmsLocation> list = wmsLocationService.listByWarehouse(warehouseId).stream()
+		List<WmsLocation> list = wmsLocationService.listPhysicalByWarehouse(warehouseId).stream()
 			.filter(l -> rackNo.equals(l.getRackNo())).collect(Collectors.toList());
 		return ApiResult.ok(list);
 	}

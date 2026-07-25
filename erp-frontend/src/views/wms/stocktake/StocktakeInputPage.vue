@@ -52,7 +52,13 @@
           <div>
             <span class="eyebrow">当前库位</span>
             <h2>{{ currentTask.locationCode }}</h2>
-            <a-segmented v-model:value="selectedLevel" :options="levelOptions" size="small" />
+            <a-segmented
+              v-if="currentTask.isVirtual !== 1"
+              v-model:value="selectedLevel"
+              :options="levelOptions"
+              size="small"
+            />
+            <a-tag v-else>虚拟库位专项</a-tag>
           </div>
           <div class="location-actions">
             <a-input
@@ -111,7 +117,10 @@
             </template>
             <template v-else-if="column.key === 'batch'">
               <span>{{ record.inboundDate || '-' }}</span>
-              <small class="muted">{{ record.slotCode || `${record.locationCode}-L1` }} · {{ qualityText(record.quality) }}</small>
+              <small class="muted">
+                {{ currentTask?.isVirtual === 1 ? '公共暂存位置' : record.slotCode || `${record.locationCode}-L1` }}
+                · {{ qualityText(record.quality) }}
+              </small>
             </template>
             <template v-else-if="column.key === 'systemQuantity'">
               <span v-if="detail?.blindCount !== 1">{{ record.systemQuantity }}</span>
@@ -176,7 +185,7 @@
           </div>
         </a-form-item>
         <a-row :gutter="12">
-          <a-col :span="12">
+          <a-col v-if="currentTask?.isVirtual !== 1" :span="12">
             <a-form-item label="SKU" required>
               <a-input v-model:value="extra.skuCode" placeholder="输入或扫描 SKU" />
             </a-form-item>
@@ -279,7 +288,10 @@ const taskProgress = computed(() => tasks.value.length ? Math.round(completedCou
 const filteredTasks = computed(() => tasks.value.filter(t => t.locationCode.toLowerCase().includes(taskKeyword.value.toLowerCase())))
 const filteredItems = computed(() => {
   const keyword = itemKeyword.value.trim().toLowerCase()
-  const levelItems = items.value.filter(item => slotLevel(item.slotCode) === selectedLevel.value)
+  const levelItems =
+    currentTask.value?.isVirtual === 1
+      ? items.value
+      : items.value.filter(item => slotLevel(item.slotCode) === selectedLevel.value)
   if (!keyword) return levelItems
   return levelItems.filter(item =>
     item.skuCode.toLowerCase().includes(keyword) ||
@@ -395,8 +407,18 @@ async function handleCompleteTask() {
 }
 
 async function handleAddExtra() {
-  if (!currentTask.value || !extra.erpTenantId || !extra.skuCode || !extra.actualQuantity || !extra.slotCode) {
-    message.warning('请填写货主、SKU、实盘数量和托盘层位')
+  if (
+    !currentTask.value ||
+    !extra.erpTenantId ||
+    !extra.skuCode ||
+    !extra.actualQuantity ||
+    (currentTask.value.isVirtual !== 1 && !extra.slotCode)
+  ) {
+    message.warning(
+      currentTask.value?.isVirtual === 1
+        ? '请填写货主、SKU和实盘数量'
+        : '请填写货主、SKU、实盘数量和托盘层位'
+    )
     return
   }
   addingExtra.value = true

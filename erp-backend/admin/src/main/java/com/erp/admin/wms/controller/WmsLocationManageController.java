@@ -91,6 +91,11 @@ public class WmsLocationManageController {
 			vo.setAssigned(lock.assigned);
 			vo.setAssignedRackCount(lock.assignedRackCount);
 			vo.setAssignedOperatorNames(lock.assignedOperatorNames);
+			vo.setActivePalletCount(lock.activePalletCount);
+			vo.setUnfinishedTransferCount(lock.unfinishedTransferCount);
+			vo.setInProgressStocktakeCount(lock.inProgressStocktakeCount);
+			vo.setActualPhysicalLocationCount(Math.toIntExact(wmsLocationService.countPhysicalByWarehouse(w.getId())));
+			vo.setActualPalletSlotCount(wmsLocationGenerator.countPhysicalSlots(w.getId()));
 			return vo;
 		}).collect(Collectors.toList());
 		return ApiResult.ok(list);

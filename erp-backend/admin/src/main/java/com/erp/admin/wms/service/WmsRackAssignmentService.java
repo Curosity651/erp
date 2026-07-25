@@ -13,6 +13,7 @@ import com.erp.admin.tenant.enums.TenantType;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.enums.WmsResultCode;
+import com.erp.admin.wms.mapper.WarehouseMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
 import com.erp.admin.wms.model.dto.RackAssignDTO;
@@ -40,6 +41,8 @@ public class WmsRackAssignmentService extends ExtendServiceImpl<WmsRackAssignmen
 
 	private final WmsLocationMapper wmsLocationMapper;
 
+	private final WarehouseMapper warehouseMapper;
+
 	private final SysTenantMapper sysTenantMapper;
 
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
@@ -52,6 +55,12 @@ public class WmsRackAssignmentService extends ExtendServiceImpl<WmsRackAssignmen
 	@Transactional(rollbackFor = Exception.class)
 	public int assign(RackAssignDTO dto) {
 		Long operatorId = currentUserId();
+		if (warehouseMapper.selectByIdForUpdate(dto.getWarehouseId()) == null) {
+			throw new BusinessException(400, "仓库不存在：" + dto.getWarehouseId());
+		}
+		Set<String> physicalRackNos = wmsLocationMapper.listPhysicalByWarehouse(dto.getWarehouseId()).stream()
+			.map(WmsLocation::getRackNo)
+			.collect(Collectors.toSet());
 		// 校验：目标必须是真实存在的 WMS 服务商（防止把货架分配给货主/平台/不存在的租户）
 		SysTenant target = sysTenantMapper.selectById(dto.getWmsTenantId());
 		if (target == null || !TenantType.WMS_OPERATOR.name().equals(target.getTenantType())) {
@@ -59,6 +68,9 @@ public class WmsRackAssignmentService extends ExtendServiceImpl<WmsRackAssignmen
 		}
 		List<WmsRackAssignment> toCreate = new ArrayList<>();
 		for (String rackNo : dto.getRackNos()) {
+			if (!physicalRackNos.contains(rackNo)) {
+				throw new BusinessException(400, "排 " + rackNo + " 不存在或不是物理货架");
+			}
 			// 悲观锁读取该仓该排的全部分配：令并发 assign 串行化，避免各自通过重叠检查后双重分配
 			List<WmsRackAssignment> existing = baseMapper.listByWarehouseAndRackForUpdate(dto.getWarehouseId(), rackNo);
 			boolean overlap = existing.stream()
@@ -106,7 +118,7 @@ public class WmsRackAssignmentService extends ExtendServiceImpl<WmsRackAssignmen
 
 		// 1) 该仓库各排库位数（按排有序）
 		Map<String, Integer> rackLocationCount = new LinkedHashMap<>();
-		for (WmsLocation loc : wmsLocationMapper.listByWarehouse(warehouseId)) {
+		for (WmsLocation loc : wmsLocationMapper.listPhysicalByWarehouse(warehouseId)) {
 			rackLocationCount.merge(loc.getRackNo(), 1, Integer::sum);
 		}
 

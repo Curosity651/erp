@@ -72,4 +72,19 @@ public class WarehouseStructureVO {
 	@Schema(title = "已分配的服务商名称（当前有效，去重）")
 	private List<String> assignedOperatorNames;
 
+	@Schema(title = "实际物理库位数量")
+	private Integer actualPhysicalLocationCount;
+
+	@Schema(title = "实际托位数量")
+	private Integer actualPalletSlotCount;
+
+	@Schema(title = "当前在库托盘数量")
+	private Integer activePalletCount;
+
+	@Schema(title = "未完成库位调整单数量")
+	private Integer unfinishedTransferCount;
+
+	@Schema(title = "进行中盘点任务数量")
+	private Integer inProgressStocktakeCount;
+
 }

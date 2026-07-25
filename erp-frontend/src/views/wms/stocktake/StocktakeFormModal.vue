@@ -83,6 +83,30 @@
       </a-form-item>
 
       <template v-if="form.stocktakeMode === 'SPECIAL'">
+        <a-form-item label="专项对象">
+          <a-radio-group v-model:value="form.virtualLocationOnly" @change="handleSpecialTypeChange">
+            <a-radio :value="false">物理库存</a-radio>
+            <a-radio :value="true">虚拟库位专项</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item
+          v-if="form.virtualLocationOnly"
+          label="虚拟库位"
+          required
+        >
+          <a-select
+            v-model:value="form.locationIds"
+            mode="multiple"
+            show-search
+            allow-clear
+            :loading="locationsLoading"
+            placeholder="请选择需要盘点的虚拟库位"
+            :filter-option="filterLocation"
+            :options="virtualLocationOptions"
+          />
+          <div class="field-hint">已选择 {{ form.locationIds?.length || 0 }} 个虚拟库位</div>
+        </a-form-item>
+        <template v-else>
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="指定货主">
@@ -110,6 +134,7 @@
             <a-radio :value="true">全仓寻货（包含空库位）</a-radio>
           </a-radio-group>
         </a-form-item>
+        </template>
       </template>
 
       <a-divider />
@@ -143,7 +168,7 @@ import WarehouseSelect from '@/components/Lov/WarehouseSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
 import { createStocktake } from '@/api/wms/stocktake'
 import type { StocktakeDTO, StocktakeMode } from '@/api/wms/stocktake/types'
-import { listLocations } from '@/api/wms/location-mgmt'
+import { listLocations, listVirtualLocations } from '@/api/wms/location-mgmt'
 import type { WmsLocation } from '@/api/wms/location-mgmt/types'
 import { isSuccess } from '@/api'
 
@@ -152,6 +177,7 @@ const visible = ref(false)
 const submitting = ref(false)
 const locationsLoading = ref(false)
 const locations = ref<WmsLocation[]>([])
+const virtualLocations = ref<WmsLocation[]>([])
 const formRef = ref<FormInstance>()
 
 const today = () => {
@@ -168,6 +194,7 @@ const newForm = (): StocktakeDTO => ({
   locationIds: [],
   specialSkuCodes: [],
   specialSearchAll: false,
+  virtualLocationOnly: false,
   blindCount: true
 })
 
@@ -183,6 +210,9 @@ const locationOptions = computed(() =>
     .filter(item => item.isVirtual !== 1)
     .map(item => ({ label: item.locationCode, value: item.id }))
 )
+const virtualLocationOptions = computed(() =>
+  virtualLocations.value.map(item => ({ label: item.locationCode, value: item.id }))
+)
 
 function filterLocation(input: string, option: any) {
   return String(option.label).toLowerCase().includes(input.toLowerCase())
@@ -191,16 +221,30 @@ function filterLocation(input: string, option: any) {
 function selectMode(mode: StocktakeMode) {
   form.stocktakeMode = mode
   form.stocktakeScope = mode === 'FULL' ? 'ALL' : 'PARTIAL'
+  if (mode !== 'SPECIAL') form.virtualLocationOnly = false
+  form.locationIds = []
+}
+
+function handleSpecialTypeChange() {
+  form.locationIds = []
+  form.specialOwnerId = undefined
+  form.specialSkuCodes = []
+  form.specialSearchAll = false
 }
 
 async function handleWarehouseChange() {
   form.locationIds = []
   locations.value = []
+  virtualLocations.value = []
   if (!form.warehouseId) return
   locationsLoading.value = true
   try {
-    const result = await listLocations(form.warehouseId)
-    if (isSuccess(result)) locations.value = result.data || []
+    const [physicalResult, virtualResult] = await Promise.all([
+      listLocations(form.warehouseId),
+      listVirtualLocations(form.warehouseId)
+    ])
+    if (isSuccess(physicalResult)) locations.value = physicalResult.data || []
+    if (isSuccess(virtualResult)) virtualLocations.value = virtualResult.data || []
   } finally {
     locationsLoading.value = false
   }
@@ -212,7 +256,16 @@ async function handleSubmit() {
   } catch {
     return
   }
-  if (form.stocktakeMode === 'SPECIAL' && !form.specialOwnerId && !form.specialSkuCodes?.length) {
+  if (form.stocktakeMode === 'SPECIAL' && form.virtualLocationOnly && !form.locationIds?.length) {
+    message.warning('虚拟库位专项盘点请至少选择一个虚拟库位')
+    return
+  }
+  if (
+    form.stocktakeMode === 'SPECIAL' &&
+    !form.virtualLocationOnly &&
+    !form.specialOwnerId &&
+    !form.specialSkuCodes?.length
+  ) {
     message.warning('专项盘点请至少指定一个货主或 SKU')
     return
   }
@@ -237,6 +290,7 @@ defineExpose({
   open() {
     Object.assign(form, newForm())
     locations.value = []
+    virtualLocations.value = []
     visible.value = true
   }
 })

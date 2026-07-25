@@ -20,6 +20,23 @@
           :message="lockReason"
           style="margin-bottom: 12px"
         />
+        <a-alert
+          v-if="configurationMismatch"
+          type="error"
+          show-icon
+          :message="mismatchReason"
+          style="margin-bottom: 12px"
+        />
+        <a-space wrap style="margin-bottom: 12px">
+          <a-tag>配置库位 {{ configuredLocationCount }}</a-tag>
+          <a-tag :color="configurationMismatch ? 'red' : 'green'">
+            实际库位 {{ actualLocationCount }}
+          </a-tag>
+          <a-tag>配置托位 {{ configuredSlotCount }}</a-tag>
+          <a-tag :color="slotConfigurationMismatch ? 'red' : 'green'">
+            实际托位 {{ actualSlotCount }}
+          </a-tag>
+        </a-space>
         <a-form :model="form" :label-col="{ style: { width: '76px' } }" class="structure-form">
           <a-row :gutter="16">
             <a-col :span="8">
@@ -27,7 +44,7 @@
                 <a-input-number
                   v-model:value="form.rackRows"
                   :min="0"
-                  :max="999"
+                  :max="100"
                   style="width: 100%"
                 />
               </a-form-item>
@@ -37,7 +54,7 @@
                 <a-input-number
                   v-model:value="form.rackColumns"
                   :min="0"
-                  :max="999"
+                  :max="100"
                   style="width: 100%"
                 />
               </a-form-item>
@@ -300,7 +317,7 @@
           <span>虚拟库位（{{ virtualLocs.length }} 个）</span>
         </div>
         <div class="virtual-hint">
-          虚拟库位不占物理货架、服务商看不到。用于把积压货经「库位调整」收纳存放；货主库存数量不变。可自定义增删、留空即不启用。
+          虚拟库位不占物理货架；货主与服务商能看到库存数量，但不显示具体虚拟位置。货物通过「库位调整」移入或移出。
         </div>
         <div v-if="canEdit" class="virtual-add">
           <a-input
@@ -494,7 +511,14 @@ const lockReason = computed(() => {
     const racks = w.assignedRackCount ? `，共 ${w.assignedRackCount} 排` : ''
     parts.push(`货架已分配给服务商${names ? `「${names}」` : ''}${racks}`)
   }
-  return `${parts.join('；')}。请先清空货物 / 到「货架分配」页解除分配后，再调整结构。`
+  if ((w.activePalletCount || 0) > 0) parts.push(`存在 ${w.activePalletCount} 个在位托盘`)
+  if ((w.unfinishedTransferCount || 0) > 0) {
+    parts.push(`存在 ${w.unfinishedTransferCount} 张未完成库位调整单`)
+  }
+  if ((w.inProgressStocktakeCount || 0) > 0) {
+    parts.push(`存在 ${w.inProgressStocktakeCount} 张进行中盘点单`)
+  }
+  return `${parts.join('；')}。请先处理上述占用或作业后再调整结构。`
 })
 /** 有货占用的库位ID（改分区锁定用） */
 const lockedIds = computed(
@@ -503,6 +527,33 @@ const lockedIds = computed(
 const expectedCount = computed(() => (form.rackRows || 0) * (form.rackColumns || 0))
 const expectedSlotCount = computed(
   () => expectedCount.value * (form.palletLevels || 0) * (form.palletPositionsPerLevel || 0)
+)
+const configuredLocationCount = computed(
+  () => (current.value?.rackRows || 0) * (current.value?.rackColumns || 0)
+)
+const configuredSlotCount = computed(
+  () =>
+    configuredLocationCount.value *
+    (current.value?.palletLevels || 0) *
+    (current.value?.palletPositionsPerLevel || 0)
+)
+const actualLocationCount = computed(
+  () => current.value?.actualPhysicalLocationCount ?? locations.value.length
+)
+const actualSlotCount = computed(
+  () => current.value?.actualPalletSlotCount ?? palletSlots.value.length
+)
+const configurationMismatch = computed(
+  () => currentGenerated.value && configuredLocationCount.value !== actualLocationCount.value
+)
+const slotConfigurationMismatch = computed(
+  () => currentGenerated.value && configuredSlotCount.value !== actualSlotCount.value
+)
+const mismatchReason = computed(
+  () =>
+    `仓库结构配置与实际数据不一致：配置 ${configuredLocationCount.value} 个库位 / ` +
+    `${configuredSlotCount.value} 个托位，实际 ${actualLocationCount.value} 个库位 / ` +
+    `${actualSlotCount.value} 个托位。`
 )
 const slotPrintLocationOptions = computed(() =>
   locations.value.map(location => ({
@@ -842,15 +893,10 @@ function fillForm(w?: WarehouseStructure) {
 
 async function loadZones() {
   if (!current.value) return
-  let res = await listZones(current.value.id)
-  let list = isSuccess(res) ? res.data || [] : []
-  // 固定四类分区若未初始化则静默创建，保证分区图例与库位设分区可用
-  if (list.length === 0) {
-    await initDefaultZones(current.value.id)
-    res = await listZones(current.value.id)
-    list = isSuccess(res) ? res.data || [] : []
-  }
-  zones.value = list
+  // 后端按类型补齐缺失分区；每次调用可修复“只缺一种”的历史仓库。
+  await initDefaultZones(current.value.id)
+  const res = await listZones(current.value.id)
+  zones.value = isSuccess(res) ? res.data || [] : []
 }
 
 async function loadLocations() {
@@ -863,6 +909,8 @@ async function loadLocations() {
     ])
     if (isSuccess(res)) locations.value = res.data || []
     if (isSuccess(slotRes)) palletSlots.value = slotRes.data || []
+    current.value.actualPhysicalLocationCount = locations.value.length
+    current.value.actualPalletSlotCount = palletSlots.value.length
   } finally {
     loadingLocations.value = false
   }
@@ -914,12 +962,23 @@ async function removeVirtual(id: number) {
 
 async function saveStructure() {
   if (!current.value) return
+  if ((form.rackRows || 0) * (form.rackColumns || 0) > 5000) {
+    message.warning('物理库位总数不能超过 5000 个')
+    return
+  }
   savingStructure.value = true
   try {
     const res = await updateWarehouseStructure({ id: current.value.id, ...form })
     if (isSuccess(res)) {
       message.success(`结构已保存，并生成 ${res.data} 个库位`)
-      current.value = { ...current.value, ...form, locationGenerated: 1 }
+      current.value = {
+        ...current.value,
+        ...form,
+        locationGenerated: 1,
+        actualPhysicalLocationCount: res.data,
+        actualPalletSlotCount:
+          (res.data || 0) * (form.palletLevels || 0) * (form.palletPositionsPerLevel || 0)
+      }
       await loadLocations()
       emits('success')
     } else {

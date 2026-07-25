@@ -54,4 +54,10 @@ public interface LocationTransferOrderMapper extends ExtendMapper<LocationTransf
 				.eq(LocationTransferOrder::getSourceKey, sourceKey));
 	}
 
+	default long countUnfinishedByWarehouse(Long warehouseId) {
+		return selectCount(WrappersX.lambdaQueryX(LocationTransferOrder.class)
+				.eq(LocationTransferOrder::getWarehouseId, warehouseId)
+				.in(LocationTransferOrder::getOrderStatus, "PLANNED", "PENDING"));
+	}
+
 }

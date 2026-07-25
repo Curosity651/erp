@@ -282,6 +282,8 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		}
 		String targetQuality = toGood ? QUALITY_GOOD : source.getQuality();
 		int targetAllocatable = QUALITY_GOOD.equals(targetQuality) ? 1 : 0;
+		WmsPallet targetPallet = palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
+				source.getErpTenantId(), source.getSkuCode(), targetQuality, qty);
 
 		// 源批扣减
 		source.setQuantity(source.getQuantity() - qty);
@@ -294,6 +296,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 				.eq(WmsPhysicalInventory::getWarehouseId, source.getWarehouseId())
 				.eq(WmsPhysicalInventory::getSkuCode, source.getSkuCode())
 				.eq(WmsPhysicalInventory::getLocationCode, targetLocationCode)
+				.eq(WmsPhysicalInventory::getPalletId, targetPallet.getId())
 				.eq(WmsPhysicalInventory::getInboundItemId, source.getInboundItemId())
 				.eq(WmsPhysicalInventory::getQuality, targetQuality))
 				.stream().findFirst().orElse(null);
@@ -320,8 +323,11 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 			nb.setReservedQty(0);
 			nb.setQuality(targetQuality);
 			nb.setLocationCode(targetLocationCode);
+			nb.setPalletId(targetPallet.getId());
+			nb.setSlotId(targetPallet.getCurrentSlotId());
 			nb.setZoneId(targetZoneId);
 			nb.setAllocatable(targetAllocatable);
+			nb.setContainerStored(0);
 			nb.setCreateBy(uid);
 			nb.setUpdateBy(uid);
 			this.baseMapper.insert(nb);
@@ -329,6 +335,8 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 
 		aggregator.refreshSnapshot(source.getWmsTenantId(), source.getErpTenantId(), source.getWarehouseId(),
 				source.getSkuCode());
+		palletService.refreshAfterInventoryChange(source.getPalletId());
+		palletService.refreshAfterInventoryChange(targetPallet.getId());
 		writeTransferFlow(source, qty, targetLocationCode, targetQuality, sourceNo, uid);
 	}
 
@@ -427,6 +435,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 
 		aggregator.refreshSnapshot(source.getWmsTenantId(), source.getErpTenantId(), source.getWarehouseId(),
 				source.getSkuCode());
+		palletService.refreshAfterInventoryChange(source.getPalletId());
 		writeContainerFlow(source, qty, source.getLocationCode(), containerLocationCode,
 				alreadyVirtual ? "CONTAINER_MOVE" : "CONTAINER_IN",
 				"移入虚拟库位 " + source.getLocationCode() + "→" + containerLocationCode, sourceNo, uid);
@@ -453,6 +462,8 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 			throw new BusinessException(400, "取回数量非法：集装箱批次[" + sourceBatchId + "]可用" + available + "，请求" + qty);
 		}
 		Long uid = currentUserId();
+		WmsPallet targetPallet = palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
+				source.getErpTenantId(), source.getSkuCode(), source.getQuality(), qty);
 
 		source.setQuantity(source.getQuantity() - qty);
 		source.setUpdateBy(uid);
@@ -465,6 +476,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 				.eq(WmsPhysicalInventory::getWarehouseId, source.getWarehouseId())
 				.eq(WmsPhysicalInventory::getSkuCode, source.getSkuCode())
 				.eq(WmsPhysicalInventory::getLocationCode, targetLocationCode)
+				.eq(WmsPhysicalInventory::getPalletId, targetPallet.getId())
 				.eq(WmsPhysicalInventory::getInboundItemId, source.getInboundItemId())
 				.eq(WmsPhysicalInventory::getQuality, source.getQuality())
 				.eq(WmsPhysicalInventory::getContainerStored, 0))
@@ -490,6 +502,8 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 			nb.setReservedQty(0);
 			nb.setQuality(source.getQuality());
 			nb.setLocationCode(targetLocationCode);
+			nb.setPalletId(targetPallet.getId());
+			nb.setSlotId(targetPallet.getCurrentSlotId());
 			nb.setZoneId(targetZoneId);
 			nb.setAllocatable(source.getAllocatable());
 			nb.setContainerStored(0);
@@ -500,6 +514,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 
 		aggregator.refreshSnapshot(source.getWmsTenantId(), source.getErpTenantId(), source.getWarehouseId(),
 				source.getSkuCode());
+		palletService.refreshAfterInventoryChange(targetPallet.getId());
 		writeContainerFlow(source, qty, source.getLocationCode(), targetLocationCode, "CONTAINER_OUT",
 				"集装箱取回 " + source.getLocationCode() + "→" + targetLocationCode, sourceNo, uid);
 	}
@@ -634,7 +649,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 	}
 
 	private WmsPhysicalInventory requireBatch(Long batchId) {
-		WmsPhysicalInventory batch = this.baseMapper.selectById(batchId);
+		WmsPhysicalInventory batch = this.baseMapper.selectByIdForUpdate(batchId);
 		if (batch == null) {
 			throw new BusinessException(404, "批次不存在：" + batchId);
 		}

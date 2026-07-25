@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsZone;
+import com.erp.admin.wms.mapper.VirtualLocationReferenceMapper;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.core.exception.BusinessException;
 import org.springframework.stereotype.Service;
@@ -13,9 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 虚拟库位管理（收纳积压货的通用化）。平台在库位管理里自定义增删多个虚拟库位。
  *
- * <p>虚拟库位不对应物理货架格子：排号为永不租出的合成值 {@link #RACK_VIRTUAL}，落在专用 VIRTUAL 分区（allocatable=1），
- * 故服务商仓储概览（按物理货架占用统计）天然感知不到。往虚拟库位放货 → 货主数量不变、服务商看不见、
- * 批次 container_stored=1 排除自动发货挑拣（搬运走库位调整，见 {@link LocationTransferService}）。
+ * <p>虚拟库位不对应物理货架格子：排号为永不租出的合成值 {@link #RACK_VIRTUAL}，落在专用
+ * VIRTUAL 分区（allocatable=1）。库存仍计入货主和服务商汇总，但具体虚拟位置只向海外仓平台展示；
+ * 批次 container_stored=1 排除直接挑拣，搬运统一走库位调整。
  *
  * @author erp
  */
@@ -34,6 +35,8 @@ public class VirtualLocationService {
 	private final WmsLocationService wmsLocationService;
 
 	private final WmsPhysicalInventoryService physicalInventoryService;
+
+	private final VirtualLocationReferenceMapper virtualLocationReferenceMapper;
 
 	private final WarehouseService warehouseService;
 
@@ -95,6 +98,12 @@ public class VirtualLocationService {
 						|| (b.getReservedQty() != null && b.getReservedQty() > 0));
 		if (hasStock) {
 			throw new BusinessException(400, "该虚拟库位上仍有货，请先取回后再删除");
+		}
+		if (virtualLocationReferenceMapper.countUnfinishedTransfers(loc.getWarehouseId(), loc.getLocationCode()) > 0) {
+			throw new BusinessException(400, "该虚拟库位存在未完成的库位调整单，不能删除");
+		}
+		if (virtualLocationReferenceMapper.countBusinessReferences(loc.getWarehouseId(), loc.getLocationCode()) > 0) {
+			throw new BusinessException(400, "该虚拟库位仍被业务单据引用，不能删除");
 		}
 		wmsLocationService.removeById(id);
 	}

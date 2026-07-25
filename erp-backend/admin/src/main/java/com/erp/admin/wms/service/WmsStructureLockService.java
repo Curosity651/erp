@@ -14,6 +14,9 @@ import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.enums.WmsResultCode;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
+import com.erp.admin.wms.mapper.WmsPalletMapper;
+import com.erp.admin.wms.mapper.LocationTransferOrderMapper;
+import com.erp.admin.wms.mapper.StocktakeMapper;
 import com.erp.admin.wms.model.entity.WmsRackAssignment;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.core.exception.BusinessException;
@@ -41,6 +44,12 @@ public class WmsStructureLockService {
 
 	private final SysTenantMapper sysTenantMapper;
 
+	private final WmsPalletMapper palletMapper;
+
+	private final LocationTransferOrderMapper locationTransferOrderMapper;
+
+	private final StocktakeMapper stocktakeMapper;
+
 	/** 结构锁定判定结果（纯值对象，供 VO 展示与 assert 复用）。 */
 	public static final class LockInfo {
 
@@ -59,18 +68,29 @@ public class WmsStructureLockService {
 		/** 已分配的服务商名称（去重，当前有效）。 */
 		public final List<String> assignedOperatorNames;
 
+		public final int activePalletCount;
+
+		public final int unfinishedTransferCount;
+
+		public final int inProgressStocktakeCount;
+
 		LockInfo(boolean occupied, int occupiedLocationCount, boolean assigned, int assignedRackCount,
-				List<String> assignedOperatorNames) {
+				List<String> assignedOperatorNames, int activePalletCount, int unfinishedTransferCount,
+				int inProgressStocktakeCount) {
 			this.occupied = occupied;
 			this.occupiedLocationCount = occupiedLocationCount;
 			this.assigned = assigned;
 			this.assignedRackCount = assignedRackCount;
 			this.assignedOperatorNames = assignedOperatorNames;
+			this.activePalletCount = activePalletCount;
+			this.unfinishedTransferCount = unfinishedTransferCount;
+			this.inProgressStocktakeCount = inProgressStocktakeCount;
 		}
 
 		/** 是否锁定（A 或 B）。 */
 		public boolean isLocked() {
-			return occupied || assigned;
+			return occupied || assigned || activePalletCount > 0 || unfinishedTransferCount > 0
+					|| inProgressStocktakeCount > 0;
 		}
 
 	}
@@ -82,7 +102,7 @@ public class WmsStructureLockService {
 	 */
 	public LockInfo compute(Long warehouseId) {
 		// A：有货占用（quantity>0 的库位数，口径与 listOccupiedLocationCodes 统一）
-		int occupiedCount = physicalInventoryMapper.listOccupiedPhysicalLocationCodes(warehouseId).size();
+		int occupiedCount = physicalInventoryMapper.listBlockingPhysicalLocationCodes(warehouseId).size();
 
 		// B：当前有效分配
 		LocalDate today = LocalDate.now(ZoneOffset.UTC);
@@ -104,7 +124,12 @@ public class WmsStructureLockService {
 					.collect(Collectors.toList());
 		}
 
-		return new LockInfo(occupiedCount > 0, occupiedCount, !actives.isEmpty(), activeRacks.size(), operatorNames);
+		int activePalletCount = Math.toIntExact(palletMapper.countActiveByWarehouse(warehouseId));
+		int unfinishedTransferCount = Math.toIntExact(
+				locationTransferOrderMapper.countUnfinishedByWarehouse(warehouseId));
+		int inProgressStocktakeCount = Math.toIntExact(stocktakeMapper.countInProgressByWarehouse(warehouseId));
+		return new LockInfo(occupiedCount > 0, occupiedCount, !actives.isEmpty(), activeRacks.size(), operatorNames,
+				activePalletCount, unfinishedTransferCount, inProgressStocktakeCount);
 	}
 
 	/**
@@ -120,6 +145,15 @@ public class WmsStructureLockService {
 		if (info.assigned) {
 			throw new BusinessException(WmsResultCode.RACK_ASSIGNED_LOCKED.getCode(),
 					WmsResultCode.RACK_ASSIGNED_LOCKED.getMessage());
+		}
+		if (info.activePalletCount > 0) {
+			throw new BusinessException(409, "该仓库仍有在库托盘，无法重新生成库位");
+		}
+		if (info.unfinishedTransferCount > 0) {
+			throw new BusinessException(409, "该仓库仍有未完成的库位调整单，无法重新生成库位");
+		}
+		if (info.inProgressStocktakeCount > 0) {
+			throw new BusinessException(409, "该仓库仍有进行中的盘点任务，无法重新生成库位");
 		}
 	}
 

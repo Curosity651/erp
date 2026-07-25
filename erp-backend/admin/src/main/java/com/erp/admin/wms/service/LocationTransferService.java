@@ -22,10 +22,9 @@ import org.springframework.util.Assert;
 /**
  * 库位调整（库内移库）服务。平台把某库位的货移到同仓的另一个库位。
  *
- * <p>四条约束（与上架规则一致）：①同仓；②目标货架属该货主的服务商当前租用；
- * ③分区：目标必为标准区 STANDARD，源只能退货区 RETURN 或标准区 STANDARD（即 RETURN→STANDARD 或 STANDARD→STANDARD）；
- * ④目标库位独占，仅同 SKU 同批次可合并。<b>退货区→标准区直接置为良品 GOOD。</b>
- * 批次真源变更与流水见 {@link WmsPhysicalInventoryService#locationTransfer}。
+ * <p>支持物理与虚拟库位之间的四向移动。虚拟库位是仓库公共位置；移入物理库位时校验
+ * 服务商租赁范围、品质分区以及托位/托盘容量。移动只改变存放位置，库存归属、SKU、
+ * 入库批次和品质保持不变。批次真源变更与流水见 {@link WmsPhysicalInventoryService#locationTransfer}。
  *
  * @author erp
  */
@@ -46,6 +45,8 @@ public class LocationTransferService {
 
 	private final WmsRackAssignmentService wmsRackAssignmentService;
 
+	private final WmsPalletService wmsPalletService;
+
 	private final SysTenantMapper sysTenantMapper;
 
 	private final TenantIdentityService tenantIdentityService;
@@ -53,8 +54,7 @@ public class LocationTransferService {
 	/**
 	 * 校验并解析单条移库计划（不执行、不动库存），供库位调整单在建单/执行时复用。
 	 *
-	 * <p>逐条校验四约束：①同仓；②目标货架属该货主服务商当前租用；③分区(RETURN/STANDARD→STANDARD)；
-	 * ④目标独占或同 SKU 同批次可合并；并校验源批可用量 ≥ 移动数量。校验通过返回目标分区与是否置良品。
+	 * <p>逐条校验同仓、源批可用量、物理货架租赁范围、品质分区和托盘容量。
 	 * @param source             源批次（真源实体）
 	 * @param warehouseId        所选仓库
 	 * @param targetLocationCode 目标库位编码
@@ -110,14 +110,10 @@ public class LocationTransferService {
 			throw new BusinessException(400, "目标货架不属于该货主的服务商租用范围：" + targetLocationCode);
 		}
 
-		// ④ 目标库位独占：为空可放；有货仅当同 SKU 同批次可合并
-		List<WmsPhysicalInventory> atTarget = physicalInventoryService.listAtLocation(warehouseId, targetLocationCode);
-		for (WmsPhysicalInventory b : atTarget) {
-			if (b.getQuantity() != null && b.getQuantity() > 0
-					&& (!source.getSkuCode().equals(b.getSkuCode())
-							|| !source.getInboundItemId().equals(b.getInboundItemId()))) {
-				throw new BusinessException(400, "目标库位已被其他货物占用：" + targetLocationCode);
-			}
+		// ③ 目标库位必须还有空托位，或存在同货主同品质且未满、品种数未超限的托盘。
+		if (!wmsPalletService.hasCapacityForTransfer(warehouseId, targetLocationCode,
+				source.getErpTenantId(), source.getSkuCode(), source.getQuality())) {
+			throw new BusinessException(400, "目标库位没有可用托位或可合并托盘：" + targetLocationCode);
 		}
 
 		// 取回(OUTOF)：虚拟库位 → 标准库位。目标的 ③②④ 已在上方按标准库位校验；源在虚拟区，不再校验源分区。
@@ -171,7 +167,7 @@ public class LocationTransferService {
 	/**
 	 * 列出某源批次可移入的目标库位候选。
 	 * <p>普通源(标准/退货区)：物理标准库位(服务商租架、空闲或可合并) + <b>本仓虚拟库位</b>(收纳积压货，INTO)。
-	 * <p>虚拟源(container_stored=1，即已在虚拟库位)：仅物理标准库位(取回 OUTOF)，不含虚拟库位。
+	 * <p>虚拟源(container_stored=1，即已在虚拟库位)：可移到物理库位，也可移到其他虚拟库位。
 	 * <p>普通源不在 退货区/标准区时返回空。
 	 */
 	public List<AvailableLocationVO> listCandidateTargets(Long physicalInventoryId) {
@@ -191,8 +187,6 @@ public class LocationTransferService {
 			return new java.util.ArrayList<>();
 		}
 		Set<String> allowedRacks = resolveAllowedRacks(wh, source.getErpTenantId());
-		Set<String> occupied = new java.util.HashSet<>(physicalInventoryService.occupiedLocationCodes(wh));
-
 		List<AvailableLocationVO> result = new java.util.ArrayList<>();
 		for (WmsLocation l : wmsLocationService.listByWarehouse(wh)) {
 			if (l.getLocationCode() == null || l.getLocationCode().equals(source.getLocationCode())) {
@@ -222,7 +216,8 @@ public class LocationTransferService {
 			if (z == null || !requiredZone.equals(z.getZoneType())) {
 				continue;
 			}
-			if (occupied.contains(l.getLocationCode()) && !mergeable(wh, l.getLocationCode(), source)) {
+			if (!wmsPalletService.hasCapacityForTransfer(wh, l.getLocationCode(),
+					source.getErpTenantId(), source.getSkuCode(), source.getQuality())) {
 				continue;
 			}
 			AvailableLocationVO vo = new AvailableLocationVO();
@@ -237,18 +232,6 @@ public class LocationTransferService {
 			result.add(vo);
 		}
 		return result;
-	}
-
-	/** 目标库位是否可合并：其上现存批次均为同 SKU + 同入库批次。 */
-	private boolean mergeable(Long warehouseId, String locationCode, WmsPhysicalInventory source) {
-		for (WmsPhysicalInventory b : physicalInventoryService.listAtLocation(warehouseId, locationCode)) {
-			if (b.getQuantity() != null && b.getQuantity() > 0
-					&& (!source.getSkuCode().equals(b.getSkuCode())
-							|| !source.getInboundItemId().equals(b.getInboundItemId()))) {
-				return false;
-			}
-		}
-		return true;
 	}
 
 	private void assertPlatform() {
