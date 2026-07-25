@@ -639,6 +639,16 @@ function rackNum(rackNo: string): number {
   const m = rackNo.match(/(\d+)\s*$/)
   return m ? parseInt(m[1]!, 10) : 0
 }
+function compareLocations(a: WmsLocation, b: WmsLocation): number {
+  return (
+    a.rackNo.localeCompare(b.rackNo, undefined, { numeric: true, sensitivity: 'base' }) ||
+    (a.columnNo || 0) - (b.columnNo || 0) ||
+    a.locationCode.localeCompare(b.locationCode, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    })
+  )
+}
 const rackNos = computed(() => {
   const set = Array.from(new Set(locations.value.map(l => l.rackNo)))
   return set.sort((a, b) => rackNum(a) - rackNum(b) || a.localeCompare(b))
@@ -964,7 +974,7 @@ async function loadLocations() {
       listLocations(current.value.id),
       listPalletSlots(current.value.id)
     ])
-    if (isSuccess(res)) locations.value = res.data || []
+    if (isSuccess(res)) locations.value = [...(res.data || [])].sort(compareLocations)
     if (isSuccess(slotRes)) palletSlots.value = slotRes.data || []
     current.value.actualPhysicalLocationCount = locations.value.length
     current.value.actualPalletSlotCount = palletSlots.value.length
