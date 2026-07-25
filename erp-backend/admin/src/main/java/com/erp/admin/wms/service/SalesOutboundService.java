@@ -154,7 +154,7 @@ public class SalesOutboundService extends ExtendServiceImpl<SalesOutboundMapper,
                 .distinct()
                 .collect(Collectors.toList());
 
-        Map<String, Integer> stockMap = physicalInventoryService.getAllocatableQuantityMap(
+        Map<String, Integer> stockMap = physicalInventoryService.getOwnerAvailableQuantityMap(
                 erpTenantId, detail.getWarehouseId(), skuCodes);
 
         // 按 SKU 汇总需求数量
@@ -274,6 +274,12 @@ public class SalesOutboundService extends ExtendServiceImpl<SalesOutboundMapper,
         order.setPostingId(postingId);
         this.updateById(order);
         log.info("Updated sales outbound order to CONFIRMED, id={}", id);
+    }
+
+    public void updateToWaitingTransfer(Long id) {
+        int updated = baseMapper.casOrderStatus(id, OutboundOrderStatus.DRAFT.name(),
+                OutboundOrderStatus.WAITING_TRANSFER.name());
+        Assert.isTrue(updated == 1, "出库单状态已变化，请刷新后重试");
     }
 
     /**

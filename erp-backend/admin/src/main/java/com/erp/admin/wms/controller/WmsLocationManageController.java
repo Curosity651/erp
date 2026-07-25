@@ -100,6 +100,10 @@ public class WmsLocationManageController {
 	@PatchMapping("/structure")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<Void> updateStructure(@Validated @RequestBody WarehouseStructureDTO dto) {
+		warehouseService.validateOperableOwnWarehouse(dto.getId());
+		if ((long) dto.getRackRows() * dto.getRackColumns() > 5000L) {
+			throw new IllegalArgumentException("物理库位总数不能超过5000");
+		}
 		// 硬闸：有货占用或已分配服务商时禁改结构（与前端置灰同口径，防绕过）
 		wmsStructureLockService.assertEditable(dto.getId());
 		Warehouse wh = new Warehouse();
@@ -127,6 +131,7 @@ public class WmsLocationManageController {
 	@GetMapping("/zones")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<List<WmsZone>> zones(@RequestParam("warehouseId") Long warehouseId) {
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		return ApiResult.ok(wmsZoneService.listByWarehouse(warehouseId));
 	}
 
@@ -134,6 +139,7 @@ public class WmsLocationManageController {
 	@PostMapping("/zones/init-defaults")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<Integer> initDefaultZones(@RequestParam("warehouseId") Long warehouseId) {
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		return ApiResult.ok(wmsZoneService.initDefaultZones(warehouseId));
 	}
 
@@ -148,7 +154,8 @@ public class WmsLocationManageController {
 	@GetMapping("/locations")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<List<WmsLocation>> locations(@RequestParam("warehouseId") Long warehouseId) {
-		return ApiResult.ok(wmsLocationService.listByWarehouse(warehouseId));
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
+		return ApiResult.ok(wmsLocationService.listPhysicalByWarehouse(warehouseId));
 	}
 
 	@Operation(summary = "该仓有货占用的库位编码集合（前端锁定有货格子改分区用）")

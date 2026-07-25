@@ -13,6 +13,9 @@ import lombok.Getter;
 @Getter
 public enum LocationTransferStatus {
 
+	/** 系统提出的计划，目标库位尚未由仓库人员确认。 */
+	PLANNED("PLANNED", "待完善"),
+
 	/** 待调整（已建单，尚未执行移库） */
 	PENDING("PENDING", "待调整"),
 

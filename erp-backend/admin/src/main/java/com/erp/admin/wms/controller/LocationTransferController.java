@@ -3,6 +3,7 @@ package com.erp.admin.wms.controller;
 import java.util.List;
 
 import com.erp.admin.wms.model.dto.LocationTransferCreateDTO;
+import com.erp.admin.wms.model.dto.LocationTransferPlanDTO;
 import com.erp.admin.wms.model.qo.LocationTransferQO;
 import com.erp.admin.wms.model.vo.AvailableLocationVO;
 import com.erp.admin.wms.model.vo.LocationTransferDetailVO;
@@ -62,6 +63,15 @@ public class LocationTransferController {
 	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
 	public ApiResult<Long> create(@Validated @RequestBody LocationTransferCreateDTO dto) {
 		return ApiResult.ok(orderService.create(dto));
+	}
+
+	@Operation(summary = "完善系统生成的库位调整计划")
+	@PatchMapping("/plan")
+	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
+	public ApiResult<Void> completePlan(@RequestParam("id") Long id,
+			@Validated @RequestBody LocationTransferPlanDTO dto) {
+		orderService.completePlan(id, dto);
+		return ApiResult.ok();
 	}
 
 	@Operation(summary = "调整完成（执行移库）")

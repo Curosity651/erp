@@ -773,8 +773,62 @@ public class OutboundPickingService {
         if (!shortages.isEmpty()) {
             return shortages;
         }
-        java.util.Set<String> touchedSku = new java.util.LinkedHashSet<>();
-        java.util.Set<Long> touchedPallets = new java.util.LinkedHashSet<>();
+        applyReservations(order, planned);
+        return java.util.Collections.emptyList();
+    }
+
+    /**
+     * Reserves every currently pickable physical batch and returns the remaining
+     * shortage. Used when the shortage can be supplied from a virtual location.
+     */
+    public List<StockShortageVO> reserveAvailableForOrder(SalesOutboundOrder order,
+            List<SalesOutboundOrderItem> items) {
+        return reserveUpToRequired(order, requiredBySku(items), Collections.emptyMap());
+    }
+
+    /**
+     * Completes an existing partial reservation after a location adjustment has
+     * moved the planned virtual stock into physical locations.
+     */
+    public List<StockShortageVO> reserveMissingForOrder(SalesOutboundOrder order,
+            List<SalesOutboundOrderItem> items) {
+        Map<String, Integer> alreadyReserved = pickAllocationMapper.selectByOutboundOrderId(order.getId()).stream()
+                .collect(Collectors.groupingBy(WmsOutboundPickAllocation::getSkuCode, LinkedHashMap::new,
+                        Collectors.summingInt(a -> nvl(a.getTakeQty()))));
+        return reserveUpToRequired(order, requiredBySku(items), alreadyReserved);
+    }
+
+    private List<StockShortageVO> reserveUpToRequired(SalesOutboundOrder order, Map<String, Integer> required,
+            Map<String, Integer> alreadyReserved) {
+        List<Take> planned = new ArrayList<>();
+        List<StockShortageVO> shortages = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : required.entrySet()) {
+            int needed = Math.max(entry.getValue() - alreadyReserved.getOrDefault(entry.getKey(), 0), 0);
+            if (needed == 0) {
+                continue;
+            }
+            List<WmsPhysicalInventory> batches = physicalInventoryMapper.selectFifoAllocatableForUpdate(
+                    0L, order.getErpTenantId(), order.getWarehouseId(), entry.getKey());
+            preferLoosePallets(batches);
+            AllocPlan plan = planAllocation(batches, needed);
+            planned.addAll(plan.takes);
+            if (plan.shortage > 0) {
+                StockShortageVO shortage = new StockShortageVO();
+                shortage.setSkuCode(entry.getKey());
+                shortage.setSkuName(entry.getKey());
+                shortage.setRequiredQty(entry.getValue());
+                shortage.setAvailableQty(entry.getValue() - plan.shortage);
+                shortage.setShortage(plan.shortage);
+                shortages.add(shortage);
+            }
+        }
+        applyReservations(order, planned);
+        return shortages;
+    }
+
+    private void applyReservations(SalesOutboundOrder order, List<Take> planned) {
+        Set<String> touchedSku = new LinkedHashSet<>();
+        Set<Long> touchedPallets = new LinkedHashSet<>();
         for (Take t : planned) {
             WmsPhysicalInventory b = t.batch;
             b.setReservedQty((b.getReservedQty() == null ? 0 : b.getReservedQty()) + t.take);
@@ -800,7 +854,6 @@ public class OutboundPickingService {
         for (Long palletId : touchedPallets) {
             palletService.refreshAfterInventoryChange(palletId);
         }
-        return java.util.Collections.emptyList();
     }
 
     /** Partial and mixed pallets are consumed before homogeneous full pallets, then FIFO is preserved. */

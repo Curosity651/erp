@@ -65,6 +65,9 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 		List<String> codes = new ArrayList<>();
 		for (WmsLocation loc : wmsLocationMapper.selectBatchIds(locationIds)) {
 			if (warehouseId.equals(loc.getWarehouseId())) {
+				if (Integer.valueOf(1).equals(loc.getIsVirtual())) {
+					throw new BusinessException(400, "虚拟库位不能修改为物理品质分区");
+				}
 				targets.add(loc);
 				codes.add(loc.getLocationCode());
 			}
@@ -120,11 +123,14 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public int initDefaultZones(Long warehouseId) {
-		if (baseMapper.existsByWarehouse(warehouseId)) {
-			return 0;
-		}
+		java.util.Set<String> existingTypes = listByWarehouse(warehouseId).stream()
+				.map(WmsZone::getZoneType)
+				.collect(java.util.stream.Collectors.toSet());
 		List<WmsZone> zones = new ArrayList<>();
 		for (String[] def : DEFAULT_ZONES) {
+			if (existingTypes.contains(def[0])) {
+				continue;
+			}
 			WmsZone zone = new WmsZone();
 			zone.setWarehouseId(warehouseId);
 			zone.setZoneType(def[0]);
@@ -132,7 +138,9 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 			zone.setAllocatable(Integer.parseInt(def[2]));
 			zones.add(zone);
 		}
-		this.saveBatch(zones);
+		if (!zones.isEmpty()) {
+			this.saveBatch(zones);
+		}
 		return zones.size();
 	}
 

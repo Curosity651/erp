@@ -176,6 +176,9 @@
             <a-button v-if="locations.length > 0" size="small" @click="printLocationLabels">
               打印库位标签
             </a-button>
+            <a-button v-if="palletSlots.length > 0" size="small" @click="openSlotPrintDialog">
+              打印托位标签
+            </a-button>
             <a-radio-group v-model:value="viewMode" size="small" button-style="solid">
               <a-radio-button value="grid">网格视图</a-radio-button>
               <a-radio-button value="list">列表视图</a-radio-button>
@@ -265,12 +268,12 @@
                         >
                           <strong>{{ cellMap[`${rn}|${c}`].locationCode }}</strong>
                           <span
-                            v-for="slot in slotsFor(cellMap[`${rn}|${c}`].id)"
-                            :key="slot.slotId"
-                            :class="{ occupied: slot.palletId }"
+                            v-for="level in slotLevelsFor(cellMap[`${rn}|${c}`].id)"
+                            :key="level.levelNo"
+                            :class="{ occupied: level.occupiedCount > 0 }"
+                            :title="level.detail"
                           >
-                            L{{ slot.levelNo }}
-                            {{ slot.palletId ? `${Math.round(slot.capacityPercent || 0)}%` : '空' }}
+                            L{{ level.levelNo }} {{ level.occupiedCount }}/{{ level.totalCount }}
                           </span>
                         </div>
                       </a-tooltip>
@@ -343,6 +346,43 @@
       </section>
     </template>
   </a-drawer>
+
+  <a-modal
+    v-model:open="slotPrintOpen"
+    title="打印托位标签"
+    ok-text="打印"
+    cancel-text="取消"
+    :confirm-loading="slotPrinting"
+    :ok-button-props="{ disabled: selectedPrintSlots.length === 0 }"
+    @ok="printPalletSlotLabels"
+  >
+    <a-form layout="vertical">
+      <a-form-item label="选择基础库位">
+        <a-select
+          v-model:value="slotPrintLocationIds"
+          mode="multiple"
+          show-search
+          :max-tag-count="3"
+          :options="slotPrintLocationOptions"
+          placeholder="请选择需要打印托位标签的库位"
+        />
+      </a-form-item>
+    </a-form>
+    <a-space>
+      <a-button size="small" @click="selectAllPrintLocations">选择全部</a-button>
+      <a-button size="small" @click="slotPrintLocationIds = []">清空</a-button>
+      <span class="hint">
+        已选 {{ slotPrintLocationIds.length }} 个库位，共 {{ selectedPrintSlots.length }} 张托位标签
+      </span>
+    </a-space>
+    <a-alert
+      v-if="selectedPrintSlots.length > 500"
+      type="warning"
+      show-icon
+      message="本次标签较多，建议按排或按部分库位分批打印。"
+      style="margin-top: 12px"
+    />
+  </a-modal>
 </template>
 
 <script setup lang="ts">
@@ -410,6 +450,9 @@ const zones = ref<WmsZone[]>([])
 const locations = ref<WmsLocation[]>([])
 const palletSlots = ref<PalletSlotVO[]>([])
 const viewMode = ref<'grid' | 'list'>('grid')
+const slotPrintOpen = ref(false)
+const slotPrinting = ref(false)
+const slotPrintLocationIds = ref<number[]>([])
 
 const savingStructure = ref(false)
 const generating = ref(false)
@@ -471,6 +514,22 @@ const expectedCount = computed(() => (form.rackRows || 0) * (form.rackColumns ||
 const expectedSlotCount = computed(
   () => expectedCount.value * (form.palletLevels || 0) * (form.palletPositionsPerLevel || 0)
 )
+const slotPrintLocationOptions = computed(() =>
+  locations.value.map(location => ({
+    label: `${location.locationCode} · ${zoneNameOf(location)}`,
+    value: location.id
+  }))
+)
+const selectedPrintSlots = computed(() => {
+  return slotPrintLocationIds.value
+    .flatMap(locationId => slotsByLocationId.value.get(locationId) || [])
+    .sort(
+      (a, b) =>
+        a.locationCode.localeCompare(b.locationCode, undefined, { numeric: true }) ||
+        a.levelNo - b.levelNo ||
+        (a.positionNo || 0) - (b.positionNo || 0)
+    )
+})
 const generateConfirmText = computed(() =>
   currentGenerated.value
     ? '重新生成将清空原有库位并按当前结构重建，确定？'
@@ -512,10 +571,64 @@ function cellTip(loc: WmsLocation): string {
     ? `${base}（该库位有货，不能改分区）`
     : base
 }
-function slotsFor(locationId: number) {
-  return palletSlots.value
-    .filter(slot => slot.locationId === locationId)
-    .sort((a, b) => b.levelNo - a.levelNo)
+
+const slotsByLocationId = computed(() => {
+  const grouped = new Map<number, PalletSlotVO[]>()
+  for (const slot of palletSlots.value) {
+    const slots = grouped.get(slot.locationId)
+    if (slots) slots.push(slot)
+    else grouped.set(slot.locationId, [slot])
+  }
+  for (const slots of grouped.values()) {
+    slots.sort(
+      (a, b) => b.levelNo - a.levelNo || (a.positionNo || 0) - (b.positionNo || 0)
+    )
+  }
+  return grouped
+})
+
+interface SlotLevelSummary {
+  levelNo: number
+  occupiedCount: number
+  totalCount: number
+  detail: string
+}
+
+const slotLevelsByLocationId = computed(() => {
+  const result = new Map<number, SlotLevelSummary[]>()
+  for (const [locationId, slots] of slotsByLocationId.value) {
+    const levels = new Map<number, PalletSlotVO[]>()
+    for (const slot of slots) {
+      const levelSlots = levels.get(slot.levelNo)
+      if (levelSlots) levelSlots.push(slot)
+      else levels.set(slot.levelNo, [slot])
+    }
+    result.set(
+      locationId,
+      Array.from(levels.entries())
+        .sort(([a], [b]) => b - a)
+        .map(([levelNo, levelSlots]) => ({
+          levelNo,
+          occupiedCount: levelSlots.filter(slot => !!slot.palletId).length,
+          totalCount: levelSlots.length,
+          detail: levelSlots
+            .map(
+              slot =>
+                `P${slot.positionNo || '-'}：${
+                  slot.palletId
+                    ? `${slot.palletNo || '已占用'}（${Math.round(slot.capacityPercent || 0)}%）`
+                    : '空'
+                }`
+            )
+            .join('，')
+        }))
+    )
+  }
+  return result
+})
+
+function slotLevelsFor(locationId: number) {
+  return slotLevelsByLocationId.value.get(locationId) || []
 }
 
 async function printLocationLabels() {
@@ -549,6 +662,67 @@ async function printLocationLabels() {
   page.document.close()
   page.focus()
   page.onload = () => page.print()
+}
+
+function openSlotPrintDialog() {
+  slotPrintLocationIds.value = locations.value[0] ? [locations.value[0].id] : []
+  slotPrintOpen.value = true
+}
+
+function selectAllPrintLocations() {
+  slotPrintLocationIds.value = locations.value.map(location => location.id)
+}
+
+async function printPalletSlotLabels() {
+  const slots = selectedPrintSlots.value
+  if (!current.value || slots.length === 0) {
+    message.warning('请至少选择一个基础库位')
+    return
+  }
+  const page = window.open('', '_blank', 'width=700,height=800')
+  if (!page) {
+    message.warning('打印窗口被浏览器拦截，请允许弹出窗口后重试')
+    return
+  }
+  slotPrinting.value = true
+  try {
+    const cards = await Promise.all(
+      slots.map(async slot => ({
+        slot,
+        qr: await QRCode.toDataURL(slot.slotCode, { margin: 1, width: 220 })
+      }))
+    )
+    const locationById = new Map(locations.value.map(location => [location.id, location]))
+    const html = cards
+      .map(({ slot, qr }) => {
+        const location = locationById.get(slot.locationId)
+        return `<section class="label">
+    <img src="${qr}" alt="${slot.slotCode}">
+    <div>
+      <div class="kind">托位 · ${slot.locationCode}</div>
+      <div class="code">${slot.slotCode}</div>
+      <div class="sub">第 ${slot.levelNo} 层 · 第 ${slot.positionNo || '-'} 托位 · ${
+        location ? zoneNameOf(location) : slot.zoneName || ''
+      }</div>
+    </div>
+  </section>`
+      })
+      .join('')
+    page.document.write(`<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>托位标签</title>
+  <style>@page{size:80mm 50mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:"Microsoft YaHei",sans-serif}
+  .label{width:80mm;height:50mm;padding:4mm;page-break-after:always;display:grid;grid-template-columns:32mm 1fr;gap:4mm;align-items:center}
+  img{width:30mm;height:30mm}.kind{font-size:9pt;color:#555}.code{font-size:15pt;font-weight:700;overflow-wrap:anywhere;line-height:1.25}.sub{font-size:9pt;color:#555;margin-top:3mm}</style>
+  </head><body>${html}</body></html>`)
+    page.document.close()
+    page.focus()
+    page.onload = () => page.print()
+    slotPrintOpen.value = false
+  } catch (error) {
+    page.close()
+    message.error('生成托位标签失败')
+  } finally {
+    slotPrinting.value = false
+  }
 }
 
 /** 选中一个库位（有货占用的库位锁定，不可选） */
@@ -693,9 +867,11 @@ async function loadLocations() {
   if (!current.value) return
   loadingLocations.value = true
   try {
-    const res = await listLocations(current.value.id)
+    const [res, slotRes] = await Promise.all([
+      listLocations(current.value.id),
+      listPalletSlots(current.value.id)
+    ])
     if (isSuccess(res)) locations.value = res.data || []
-    const slotRes = await listPalletSlots(current.value.id)
     if (isSuccess(slotRes)) palletSlots.value = slotRes.data || []
   } finally {
     loadingLocations.value = false
@@ -908,8 +1084,9 @@ export default {
 
 .cell.filled {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: 18px repeat(3, 16px);
+  column-gap: 5px;
   padding: 3px 6px;
   text-align: left;
   font-size: 10px;
@@ -918,6 +1095,7 @@ export default {
 
 .cell.filled strong {
   font-size: 11px;
+  grid-column: 1 / -1;
 }
 .cell.filled span {
   color: rgba(0, 0, 0, 0.55);

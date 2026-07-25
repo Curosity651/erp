@@ -57,6 +57,10 @@
               <a-button v-if="!pallet.existingPallet" size="small" @click="splitPallet(index)">
                 拆出一托
               </a-button>
+              <label class="head-full-toggle">
+                <span>人工满托</span>
+                <a-switch v-model:checked="pallet.manualFull" size="small" />
+              </label>
               <a-button
                 v-if="index > 0 && !pallet.existingPallet"
                 size="small"
@@ -70,24 +74,49 @@
 
           <div class="pallet-body">
             <div class="goods-column">
-              <a-select
-                :value="pallet.palletId || 0"
-                :options="existingPalletOptions(pallet)"
-                style="width: 100%; margin-bottom: 10px"
-                @change="value => selectPallet(pallet, Number(value))"
-              />
-              <div v-if="pallet.existingPallet" class="existing-goods">
-                原托已有：
-                {{
-                  selectedExisting(pallet)
-                    ?.items.map(item => `${item.skuCode} × ${item.quantity}`)
-                    .join('，')
-                }}
-              </div>
-              <div v-for="item in pallet.items" :key="item.skuCode" class="goods-row">
-                <span class="sku">{{ item.skuCode }}</span>
-                <a-input-number v-model:value="item.quantity" :min="1" :precision="0" addon-after="件" />
-                <span v-if="item.quantityPerPallet" class="subtle">标准 {{ item.quantityPerPallet }} 件/托</span>
+              <span class="field-label">托盘</span>
+              <div class="goods-toolbar">
+                <a-select
+                  :value="pallet.palletId || 0"
+                  :options="existingPalletOptions(pallet)"
+                  style="width: 100%"
+                  @change="value => selectPallet(pallet, Number(value))"
+                />
+                <a-popover trigger="click" placement="bottomLeft" :overlay-style="{ width: '460px' }">
+                  <template #content>
+                    <div class="goods-detail-panel">
+                      <div v-if="pallet.existingPallet" class="goods-detail-section">
+                        <div class="goods-detail-title">原托已有</div>
+                        <div
+                          v-for="item in selectedExisting(pallet)?.items || []"
+                          :key="`existing-${item.skuCode}`"
+                          class="existing-goods-row"
+                        >
+                          <span class="sku">{{ item.skuCode }}</span>
+                          <span>{{ item.quantity }} 件</span>
+                        </div>
+                      </div>
+                      <div class="goods-detail-section">
+                        <div class="goods-detail-title">本次上架</div>
+                        <div v-for="item in pallet.items" :key="item.skuCode" class="goods-row">
+                          <span class="sku">{{ item.skuCode }}</span>
+                          <a-input-number
+                            v-model:value="item.quantity"
+                            :min="1"
+                            :precision="0"
+                            addon-after="件"
+                          />
+                          <span v-if="item.quantityPerPallet" class="subtle">
+                            标准 {{ item.quantityPerPallet }} 件/托
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <a-button class="goods-detail-button">
+                    货物详情 · {{ pallet.items.length }} 种 · {{ palletItemQuantity(pallet) }} 件
+                  </a-button>
+                </a-popover>
               </div>
             </div>
 
@@ -131,10 +160,6 @@
                   addon-after="kg"
                   placeholder="选填"
                 />
-              </label>
-              <label class="full-toggle">
-                <span>人工满托</span>
-                <a-switch v-model:checked="pallet.manualFull" />
               </label>
             </div>
           </div>
@@ -473,6 +498,10 @@ function typeColor(type: PalletPlan['palletType']) {
   return { SINGLE_FULL: 'green', SINGLE_PARTIAL: 'blue', MIXED: 'orange' }[type]
 }
 
+function palletItemQuantity(pallet: PalletPlan) {
+  return pallet.items.reduce((total, item) => total + Number(item.quantity || 0), 0)
+}
+
 function capacityText(pallet: PalletPlan) {
   if (!pallet.capacityPercent) return '待人工确认容量'
   return `预计占用 ${Math.round(pallet.capacityPercent)}%`
@@ -554,7 +583,6 @@ export default { name: 'PutawayDrawer' }
 .section-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 .source-list { display: flex; flex-wrap: wrap; gap: 10px; }
 .source-item { display: inline-flex; gap: 12px; padding: 6px 10px; background: #f5f5f5; border-radius: 4px; }
-.existing-goods { margin: -2px 0 10px; color: #1677ff; font-size: 12px; }
 .plan-section { padding-top: 18px; }
 .plan-header, .pallet-head, .pallet-body, .footer-row { display: flex; justify-content: space-between; align-items: center; }
 .plan-header { margin-bottom: 12px; }
@@ -562,16 +590,24 @@ export default { name: 'PutawayDrawer' }
 .pallet-card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; margin-bottom: 10px; }
 .pallet-head { margin-bottom: 12px; }
 .pallet-name { display: flex; align-items: center; gap: 8px; }
+.head-full-toggle { display: inline-flex; align-items: center; gap: 6px; color: rgba(0,0,0,.65); font-size: 12px; white-space: nowrap; }
 .sequence { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: #1677ff; color: #fff; }
 .capacity-text { color: rgba(0,0,0,.65); }
 .pallet-body { align-items: flex-start; gap: 20px; }
-.goods-column { flex: 1; min-width: 240px; }
-.goods-row { display: grid; grid-template-columns: minmax(110px,1fr) 70px 120px; gap: 8px; min-height: 30px; align-items: center; }
+.goods-column { flex: 1; min-width: 240px; display: grid; gap: 5px; }
+.field-label { font-size: 12px; color: rgba(0,0,0,.65); }
+.goods-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.goods-detail-button { white-space: nowrap; }
+.goods-detail-panel { width: 410px; max-width: calc(100vw - 64px); }
+.goods-detail-section + .goods-detail-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+.goods-detail-title { margin-bottom: 8px; color: #8c8c8c; font-size: 12px; }
+.existing-goods-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 28px; }
+.goods-row { display: grid; grid-template-columns: minmax(110px,1fr) 120px 112px; gap: 8px; min-height: 30px; align-items: center; }
+.goods-row :deep(.ant-input-number-group-wrapper) { width: 100%; }
 .sku { font-weight: 600; overflow-wrap: anywhere; }
-.control-grid { flex: 0 0 480px; display: grid; grid-template-columns: 1.45fr 1fr 1fr 76px; gap: 10px; }
+.control-grid { flex: 0 0 480px; display: grid; grid-template-columns: 1.2fr 1.15fr 1fr 1.1fr; gap: 10px; }
 .control-grid label { display: grid; gap: 5px; font-size: 12px; color: rgba(0,0,0,.65); }
 .control-grid :deep(.ant-input-number), .control-grid :deep(.ant-select) { width: 100%; }
-.full-toggle { justify-items: center; }
 .capacity-required { color: #d46b08; font-size: 12px; margin-top: 4px; }
 .billing-section { border-top: 1px solid #f0f0f0; margin-top: 16px; padding-top: 16px; }
 .ready { color: #389e0d; }

@@ -5,6 +5,7 @@ import type {
   LocationTransferPageParam,
   LocationTransferPageVO,
   LocationTransferDetailVO,
+  LocationTransferPlanDTO,
   TargetLocationVO
 } from './types'
 
@@ -30,6 +31,12 @@ export function createLocationTransfer(dto: LocationTransferCreateDTO) {
 /** 调整完成（执行移库） */
 export function completeLocationTransfer(id: number) {
   return httpClient.patch<ApiResult<void>>('/wms/location-transfer/complete', null, {
+    params: { id }
+  })
+}
+
+export function completeLocationTransferPlan(id: number, dto: LocationTransferPlanDTO) {
+  return httpClient.patch<ApiResult<void>>('/wms/location-transfer/plan', dto, {
     params: { id }
   })
 }

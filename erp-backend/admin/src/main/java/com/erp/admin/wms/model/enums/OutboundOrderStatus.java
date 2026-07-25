@@ -10,6 +10,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum OutboundOrderStatus {
 
+    WAITING_TRANSFER("待库位调整"),
     DRAFT("草稿"),
     CONFIRMED("待下架"),
     CANCELLED("已取消"),

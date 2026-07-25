@@ -336,7 +336,8 @@ const canEdit = computed(() => {
 const canCancel = computed(() => {
   if (!detail.value) return false
   return (
-    detail.value.orderStatus === OutboundOrderStatus.CONFIRMED &&
+    (detail.value.orderStatus === OutboundOrderStatus.CONFIRMED ||
+      detail.value.orderStatus === OutboundOrderStatus.WAITING_TRANSFER) &&
     hasPermission('wms:sales-outbound:edit')
   )
 })

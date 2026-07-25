@@ -30,6 +30,9 @@ public class LocationTransferQO {
 	@Schema(title = "状态: PENDING / COMPLETED / CANCELLED")
 	private String orderStatus;
 
+	@Schema(title = "来源类型 MANUAL / SALES_OUTBOUND")
+	private String sourceType;
+
 	@DateTimeFormat(pattern = "yyyy-MM-dd")
 	@Schema(title = "创建日期起始")
 	private LocalDate createTimeStart;

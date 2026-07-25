@@ -155,6 +155,7 @@ export interface PendingOrderVO {
  * 出库单状态枚举
  */
 export enum OutboundOrderStatus {
+  WAITING_TRANSFER = 'WAITING_TRANSFER',
   DRAFT = 'DRAFT',
   CONFIRMED = 'CONFIRMED',
   CANCELLED = 'CANCELLED',
@@ -168,6 +169,7 @@ export enum OutboundOrderStatus {
  * 出库单状态描述映射
  */
 export const OutboundOrderStatusMap: Record<string, string> = {
+  [OutboundOrderStatus.WAITING_TRANSFER]: '待库位调整',
   [OutboundOrderStatus.DRAFT]: '草稿',
   [OutboundOrderStatus.CONFIRMED]: '待下架',
   [OutboundOrderStatus.CANCELLED]: '已取消',

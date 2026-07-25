@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
 
 /**
  * 仓库结构参数更新请求（C1）。
@@ -19,9 +21,15 @@ public class WarehouseStructureDTO {
 	private Long id;
 
 	@Schema(title = "排数")
+	@NotNull(message = "排数不能为空")
+	@Min(value = 1, message = "排数不能小于1")
+	@Max(value = 100, message = "排数不能超过100")
 	private Integer rackRows;
 
 	@Schema(title = "每排列数")
+	@NotNull(message = "每排列数不能为空")
+	@Min(value = 1, message = "每排列数不能小于1")
+	@Max(value = 100, message = "每排列数不能超过100")
 	private Integer rackColumns;
 
 	@Schema(title = "排号前缀(A→A1;空=纯数字)")
@@ -34,9 +42,13 @@ public class WarehouseStructureDTO {
 	private String defaultLocationType;
 
 	@Schema(title = "每个二维库位的托盘层数")
+	@Min(value = 1, message = "托盘层数不能小于1")
+	@Max(value = 12, message = "托盘层数不能超过12")
 	private Integer palletLevels;
 
 	@Schema(title = "每层托盘位数")
+	@Min(value = 1, message = "每层托盘位数不能小于1")
+	@Max(value = 9, message = "每层托盘位数不能超过9")
 	private Integer palletPositionsPerLevel;
 
 	@Schema(title = "单托最多不同货物种类")

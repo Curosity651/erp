@@ -31,11 +31,32 @@ public class LocationTransferOrder {
 	@Schema(title = "仓库ID")
 	private Long warehouseId;
 
+	@Schema(title = "WMS服务商ID快照")
+	private Long wmsTenantId;
+
 	@Schema(title = "货主（货物归属），整单归属一个货主")
 	private Long erpTenantId;
 
 	@Schema(title = "状态：PENDING-待调整 / COMPLETED-已完成 / CANCELLED-已取消")
 	private String orderStatus;
+
+	@Schema(title = "来源类型：MANUAL/SALES_OUTBOUND")
+	private String sourceType;
+
+	@Schema(title = "来源业务ID")
+	private Long sourceId;
+
+	@Schema(title = "来源单号")
+	private String sourceNo;
+
+	@Schema(title = "来源幂等键")
+	private String sourceKey;
+
+	@Schema(title = "调整原因编码")
+	private String reasonCode;
+
+	@Schema(title = "调整原因")
+	private String reason;
 
 	@Schema(title = "备注")
 	private String remark;

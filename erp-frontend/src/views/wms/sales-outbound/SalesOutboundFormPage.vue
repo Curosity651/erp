@@ -293,6 +293,7 @@ const loadProductOptions = async () => {
 // 获取状态颜色
 const getStatusColor = (status: string): string => {
   const colorMap: Record<string, string> = {
+    [OutboundOrderStatus.WAITING_TRANSFER]: 'warning',
     [OutboundOrderStatus.DRAFT]: 'default',
     [OutboundOrderStatus.CONFIRMED]: 'success',
     [OutboundOrderStatus.CANCELLED]: 'error'

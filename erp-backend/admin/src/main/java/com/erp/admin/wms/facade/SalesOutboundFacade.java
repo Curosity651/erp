@@ -13,6 +13,7 @@ import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.model.vo.StockShortageVO;
 import com.erp.admin.wms.service.WmsPhysicalInventoryService;
 import com.erp.admin.wms.service.OutboundPickingService;
+import com.erp.admin.wms.service.LocationTransferOrderService;
 import com.erp.admin.wms.service.SalesOutboundItemService;
 import com.erp.admin.wms.service.SalesOutboundPackageService;
 import com.erp.admin.wms.service.SalesOutboundService;
@@ -52,6 +53,7 @@ public class SalesOutboundFacade {
     private final WmsPhysicalInventoryService physicalInventoryService;
     private final ErpOrderService erpOrderService;
     private final OutboundPickingService outboundPickingService;
+    private final LocationTransferOrderService locationTransferOrderService;
     private final WarehouseService warehouseService;
 	private final SalesOutboundPackageService outboundPackageService;
 	private final ErpOrderItemMapper erpOrderItemMapper;
@@ -180,13 +182,17 @@ public class SalesOutboundFacade {
         String status = order.getOrderStatus();
         // 方案A：允许 草稿(DRAFT) 或 已确认待下架(CONFIRMED) 取消；平台一旦下架(PICKING)及之后拒绝取消
         Assert.isTrue(OutboundOrderStatus.DRAFT.name().equals(status)
+                        || OutboundOrderStatus.WAITING_TRANSFER.name().equals(status)
                         || OutboundOrderStatus.CONFIRMED.name().equals(status),
                 "仅待下架前(草稿/已确认)的出库单可以取消");
 
         List<SalesOutboundOrderItem> items = salesOutboundItemService.getByOutboundOrderId(id);
 
         // 1. 已确认单：释放海外仓物理批次预留（可用恢复）
-        if (OutboundOrderStatus.CONFIRMED.name().equals(status)) {
+        if (OutboundOrderStatus.WAITING_TRANSFER.name().equals(status)) {
+            locationTransferOrderService.cancelOutboundPlan(id);
+        }
+        else if (OutboundOrderStatus.CONFIRMED.name().equals(status)) {
             outboundPickingService.releaseForOrder(order);
         }
 
@@ -244,9 +250,18 @@ public class SalesOutboundFacade {
 
         // 2. 批次预留（方案A）：确认时就 FIFO 锁批次 + reserved_qty += + 建拣货分配 + 刷新快照，
         //    可用数当场从批次算着下降。缺货则返回明细，事务回滚、单据保持 DRAFT。
-        List<StockShortageVO> reserveShortages = outboundPickingService.reserveForOrder(order, items);
+        List<StockShortageVO> reserveShortages = outboundPickingService.reserveAvailableForOrder(order, items);
         if (!reserveShortages.isEmpty()) {
-            return reserveShortages;
+            locationTransferOrderService.createOutboundPlan(order, reserveShortages);
+
+            List<Long> orderIds = items.stream()
+                    .map(SalesOutboundOrderItem::getErpOrderId)
+                    .distinct()
+                    .collect(Collectors.toList());
+            erpOrderService.validateOutboundAllocation(orderIds, id);
+            salesOutboundService.updateToWaitingTransfer(id);
+            log.info("Sales outbound order is waiting for location transfer, id={}", id);
+            return Collections.emptyList();
         }
 
         // 3. 校验 ERP 订单仍由当前出库单占用；保持 ALLOCATED，防止重复关联
@@ -274,7 +289,7 @@ public class SalesOutboundFacade {
 
         // 查询仓库库存
         List<String> skuCodes = new ArrayList<>(requiredMap.keySet());
-        Map<String, Integer> stockMap = physicalInventoryService.getAllocatableQuantityMap(
+        Map<String, Integer> stockMap = physicalInventoryService.getOwnerAvailableQuantityMap(
                 order.getErpTenantId(), order.getWarehouseId(), skuCodes);
 
         // 检查不足的 SKU

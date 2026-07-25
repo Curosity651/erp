@@ -5,6 +5,7 @@ import type { SkuBriefVO } from '@/api/common/sku-types'
 
 /** 库位调整单状态（唯一数据源）：平台新建待调整→执行完成/取消。 */
 export const LocationTransferStatusList = [
+  { value: 'PLANNED', label: '待选择库位', badge: 'warning' },
   { value: 'PENDING', label: '待调整', badge: 'processing' },
   { value: 'COMPLETED', label: '已完成', badge: 'success' },
   { value: 'CANCELLED', label: '已取消', badge: 'default' }
@@ -40,6 +41,8 @@ export interface LocationTransferItemDTO {
 export interface LocationTransferCreateDTO {
   warehouseId: number
   erpTenantId: number
+  reasonCode: string
+  reason?: string
   remark?: string
   items: LocationTransferItemDTO[]
 }
@@ -52,6 +55,7 @@ export interface LocationTransferQO {
   erpTenantId?: number
   wmsTenantId?: number
   orderStatus?: LocationTransferStatus
+  sourceType?: string
   /** 创建日期起始 YYYY-MM-DD */
   createTimeStart?: string
   /** 创建日期结束 YYYY-MM-DD */
@@ -71,6 +75,11 @@ export interface LocationTransferPageVO {
   wmsTenantId?: number
   operatorName?: string
   orderStatus: LocationTransferStatus
+  sourceType?: string
+  sourceId?: number
+  sourceNo?: string
+  reasonCode?: string
+  reason?: string
   remark?: string
   itemCount: number
   totalQuantity: number
@@ -95,4 +104,11 @@ export interface LocationTransferItemVO {
 /** 库位调整单详情视图对象 */
 export interface LocationTransferDetailVO extends LocationTransferPageVO {
   items: LocationTransferItemVO[]
+}
+
+export interface LocationTransferPlanDTO {
+  items: Array<{
+    id: number
+    targetLocationCode: string
+  }>
 }

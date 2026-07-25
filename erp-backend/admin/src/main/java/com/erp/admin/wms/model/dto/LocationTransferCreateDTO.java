@@ -6,6 +6,7 @@ import lombok.Data;
 import javax.validation.Valid;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
 import java.util.List;
 
 /**
@@ -27,6 +28,13 @@ public class LocationTransferCreateDTO {
 
 	@Schema(title = "备注")
 	private String remark;
+
+	@NotBlank(message = "调整原因不能为空")
+	@Schema(title = "调整原因编码")
+	private String reasonCode;
+
+	@Schema(title = "调整原因说明")
+	private String reason;
 
 	@Valid
 	@NotEmpty(message = "调整明细不能为空")

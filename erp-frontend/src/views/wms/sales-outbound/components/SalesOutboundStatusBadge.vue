@@ -15,6 +15,7 @@ const props = defineProps<{
 type BadgeStatus = 'success' | 'processing' | 'default' | 'error' | 'warning'
 
 const STATUS_CONFIG_MAP: Record<string, BadgeStatus> = {
+  [OutboundOrderStatus.WAITING_TRANSFER]: 'warning',
   [OutboundOrderStatus.DRAFT]: 'default',
   [OutboundOrderStatus.CONFIRMED]: 'processing',
   [OutboundOrderStatus.CANCELLED]: 'error',

@@ -120,6 +120,21 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 			.collect(java.util.stream.Collectors.toList());
 	}
 
+	default List<String> listOccupiedPhysicalLocationCodes(Long warehouseId) {
+		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
+			.select(WmsPhysicalInventory::getLocationCode)
+			.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
+			.and(q -> q.ne(WmsPhysicalInventory::getContainerStored, 1)
+				.or().isNull(WmsPhysicalInventory::getContainerStored))
+			.gt(WmsPhysicalInventory::getQuantity, 0)
+			.isNotNull(WmsPhysicalInventory::getLocationCode))
+			.stream()
+			.map(WmsPhysicalInventory::getLocationCode)
+			.filter(c -> c != null && !c.isEmpty())
+			.distinct()
+			.collect(java.util.stream.Collectors.toList());
+	}
+
 	/**
 	 * FIFO 可分配批次（良品 + allocatable，按 inbound_date→pick_order→id 升序）。用于下架预览（只读不锁）。
 	 * <p>集装箱存储（口径A）：排除 {@code container_stored=1} 的批次——它们仍计入货主可用(allocatable=1)，
@@ -154,6 +169,26 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 			.eq(WmsPhysicalInventory::getQuality, "GOOD")
 			.eq(WmsPhysicalInventory::getAllocatable, 1)
 			.ne(WmsPhysicalInventory::getContainerStored, 1)
+			.orderByAsc(WmsPhysicalInventory::getInboundDate)
+			.orderByAsc(WmsPhysicalInventory::getPickOrder)
+			.orderByAsc(WmsPhysicalInventory::getId)
+			.last("FOR UPDATE"));
+	}
+
+	/**
+	 * Locks owner-visible stock held in a virtual location. It must be moved to a
+	 * physical location before outbound picking.
+	 */
+	default List<WmsPhysicalInventory> selectVirtualAllocatableForUpdate(Long wmsTenantId, Long erpTenantId,
+			Long warehouseId, String skuCode) {
+		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
+			.eq(WmsPhysicalInventory::getWmsTenantId, wmsTenantId == null ? 0L : wmsTenantId)
+			.eq(WmsPhysicalInventory::getErpTenantId, erpTenantId)
+			.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
+			.eq(WmsPhysicalInventory::getSkuCode, skuCode)
+			.eq(WmsPhysicalInventory::getQuality, "GOOD")
+			.eq(WmsPhysicalInventory::getAllocatable, 1)
+			.eq(WmsPhysicalInventory::getContainerStored, 1)
 			.orderByAsc(WmsPhysicalInventory::getInboundDate)
 			.orderByAsc(WmsPhysicalInventory::getPickOrder)
 			.orderByAsc(WmsPhysicalInventory::getId)

@@ -84,11 +84,8 @@ public class LocationTransferService {
 		boolean sourceVirtual = source.getContainerStored() != null && source.getContainerStored() == 1;
 		boolean targetVirtual = target.getIsVirtual() != null && target.getIsVirtual() == 1;
 
-		// 收纳(INTO)：普通库位 → 虚拟库位。仅良品可入；跳过 ②服务商租架/③分区/④独占（虚拟库位不占物理货架、可容多批）。
+		// 虚拟库位是仓库级公共位置，不参与租架校验；库存归属和品质保留在批次上。
 		if (targetVirtual) {
-			if (!"GOOD".equals(source.getQuality())) {
-				throw new BusinessException(400, "仅良品(GOOD)可放入虚拟库位");
-			}
 			return new Resolution(target.getZoneId(), false, VirtualMove.INTO);
 		}
 
@@ -98,12 +95,13 @@ public class LocationTransferService {
 		String sourceZone = source.getZoneId() == null ? null : zoneTypeById.get(source.getZoneId());
 		String targetZone = target.getZoneId() == null ? null : zoneTypeById.get(target.getZoneId());
 
-		// ③ 分区：目标必为标准区（取回与普通移库都要求落到标准区）；源分区校验对虚拟源(取回)跳过
-		if (!ZONE_STANDARD.equals(targetZone)) {
-			throw new BusinessException(400, "目标库位必须在标准区：" + targetLocationCode);
+		String requiredTargetZone = "DAMAGED".equals(source.getQuality()) ? "DEFECTIVE" : ZONE_STANDARD;
+		if (!requiredTargetZone.equals(targetZone)) {
+			throw new BusinessException(400, "目标库位分区与货物品质不匹配：" + targetLocationCode);
 		}
-		if (!sourceVirtual && !ZONE_STANDARD.equals(sourceZone) && !ZONE_RETURN.equals(sourceZone)) {
-			throw new BusinessException(400, "只允许 退货区→标准区 或 标准区→标准区 的移库");
+		if (!sourceVirtual && !ZONE_STANDARD.equals(sourceZone) && !ZONE_RETURN.equals(sourceZone)
+				&& !"DEFECTIVE".equals(sourceZone)) {
+			throw new BusinessException(400, "源库位不属于可调整的物理分区");
 		}
 
 		// ② 目标货架必须是该货主的服务商当前有效租用的货架
@@ -127,9 +125,7 @@ public class LocationTransferService {
 			return new Resolution(target.getZoneId(), false, VirtualMove.OUTOF);
 		}
 
-		// 普通移库(NONE)：退货区→标准区落库后置为良品
-		boolean toGood = ZONE_RETURN.equals(sourceZone);
-		return new Resolution(target.getZoneId(), toGood, VirtualMove.NONE);
+		return new Resolution(target.getZoneId(), false, VirtualMove.NONE);
 	}
 
 	/** 移库方向：普通库内移库 / 收纳进虚拟库位 / 从虚拟库位取回。 */
@@ -189,8 +185,9 @@ public class LocationTransferService {
 		Map<Long, WmsZone> zoneById = zones.stream().collect(Collectors.toMap(WmsZone::getId, z -> z, (a, b) -> a));
 		String sourceZone = source.getZoneId() == null ? null
 				: (zoneById.get(source.getZoneId()) == null ? null : zoneById.get(source.getZoneId()).getZoneType());
-		// 普通源必须在 退货区/标准区；虚拟源(取回)不受此限
-		if (!sourceVirtual && !ZONE_STANDARD.equals(sourceZone) && !ZONE_RETURN.equals(sourceZone)) {
+		// 普通源必须处于可操作的物理分区；虚拟源不受此限。
+		if (!sourceVirtual && !ZONE_STANDARD.equals(sourceZone) && !ZONE_RETURN.equals(sourceZone)
+				&& !"DEFECTIVE".equals(sourceZone)) {
 			return new java.util.ArrayList<>();
 		}
 		Set<String> allowedRacks = resolveAllowedRacks(wh, source.getErpTenantId());
@@ -203,10 +200,6 @@ public class LocationTransferService {
 			}
 			boolean locVirtual = l.getIsVirtual() != null && l.getIsVirtual() == 1;
 			if (locVirtual) {
-				// 虚拟库位仅对普通源作为"收纳(INTO)"候选；虚拟→虚拟无意义
-				if (sourceVirtual) {
-					continue;
-				}
 				WmsZone vz = l.getZoneId() == null ? null : zoneById.get(l.getZoneId());
 				AvailableLocationVO vo = new AvailableLocationVO();
 				vo.setLocationId(l.getId());
@@ -220,12 +213,13 @@ public class LocationTransferService {
 				result.add(vo);
 				continue;
 			}
-			// 物理标准库位候选：服务商租架 + 标准区 + 空闲或可合并
+			// 物理候选保留品质：良品去标准区，不良品去不良品区。
 			if (!allowedRacks.contains(l.getRackNo())) {
 				continue;
 			}
 			WmsZone z = l.getZoneId() == null ? null : zoneById.get(l.getZoneId());
-			if (z == null || !ZONE_STANDARD.equals(z.getZoneType())) {
+			String requiredZone = "DAMAGED".equals(source.getQuality()) ? "DEFECTIVE" : ZONE_STANDARD;
+			if (z == null || !requiredZone.equals(z.getZoneType())) {
 				continue;
 			}
 			if (occupied.contains(l.getLocationCode()) && !mergeable(wh, l.getLocationCode(), source)) {

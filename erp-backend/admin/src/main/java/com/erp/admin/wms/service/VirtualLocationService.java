@@ -35,8 +35,11 @@ public class VirtualLocationService {
 
 	private final WmsPhysicalInventoryService physicalInventoryService;
 
+	private final WarehouseService warehouseService;
+
 	/** 列出某仓库的虚拟库位。 */
 	public List<WmsLocation> listVirtual(Long warehouseId) {
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		return wmsLocationService.listByWarehouse(warehouseId).stream()
 				.filter(l -> l.getIsVirtual() != null && l.getIsVirtual() == 1)
 				.collect(Collectors.toList());
@@ -56,6 +59,7 @@ public class VirtualLocationService {
 		if (name == null || name.trim().isEmpty()) {
 			throw new BusinessException(400, "虚拟库位名称不能为空");
 		}
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		String code = name.trim();
 		boolean dup = wmsLocationService.listByWarehouse(warehouseId).stream()
 				.anyMatch(l -> code.equals(l.getLocationCode()));
@@ -87,7 +91,8 @@ public class VirtualLocationService {
 			throw new BusinessException(400, "虚拟库位不存在：" + id);
 		}
 		boolean hasStock = physicalInventoryService.listAtLocation(loc.getWarehouseId(), loc.getLocationCode()).stream()
-				.anyMatch(b -> b.getQuantity() != null && b.getQuantity() > 0);
+				.anyMatch(b -> (b.getQuantity() != null && b.getQuantity() > 0)
+						|| (b.getReservedQty() != null && b.getReservedQty() > 0));
 		if (hasStock) {
 			throw new BusinessException(400, "该虚拟库位上仍有货，请先取回后再删除");
 		}

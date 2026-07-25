@@ -44,13 +44,11 @@ public class WmsLocationGenerator {
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public int generateLocations(Long warehouseId) {
-		Warehouse wh = warehouseService.getById(warehouseId);
-		if (wh == null) {
-			throw new BusinessException(WmsResultCode.INVALID_RACK_STRUCTURE.getCode(), "仓库不存在");
-		}
+		Warehouse wh = warehouseService.validateOperableOwnWarehouse(warehouseId);
 		int rows = nz(wh.getRackRows());
 		int columns = nz(wh.getRackColumns());
-		if (rows <= 0 || columns <= 0) {
+		if (rows <= 0 || columns <= 0 || rows > 100 || columns > 100
+				|| (long) rows * columns > 5000L) {
 			throw new BusinessException(WmsResultCode.INVALID_RACK_STRUCTURE.getCode(),
 					WmsResultCode.INVALID_RACK_STRUCTURE.getMessage());
 		}
@@ -64,7 +62,8 @@ public class WmsLocationGenerator {
 		boolean regenerate = wh.getLocationGenerated() != null && wh.getLocationGenerated() == 1;
 		if (regenerate) {
 			wmsStructureLockService.assertEditable(warehouseId);
-			wmsLocationService.deleteByWarehouse(warehouseId);
+			palletService.deletePhysicalSlots(warehouseId);
+			wmsLocationService.deletePhysicalByWarehouse(warehouseId);
 		}
 
 		int pad = wh.getCodePadWidth() == null ? 2 : wh.getCodePadWidth();
@@ -83,6 +82,7 @@ public class WmsLocationGenerator {
 				loc.setLocationCode(buildLocationCode(prefix, r, c, pad));
 				loc.setLocationType(locationType);
 				loc.setPickType("PICK");
+				loc.setIsVirtual(0);
 				list.add(loc);
 			}
 		}

@@ -8,6 +8,7 @@ import com.erp.admin.wms.model.vo.LocationTransferPageVO;
 import com.erp.admin.wms.model.vo.LocationTransferStatsVO;
 import org.apache.ibatis.annotations.Param;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
+import org.ballcat.mybatisplus.toolkit.WrappersX;
 
 import java.util.Collection;
 import java.util.List;
@@ -47,5 +48,10 @@ public interface LocationTransferOrderMapper extends ExtendMapper<LocationTransf
 	 * @return 统计列表
 	 */
 	List<LocationTransferStatsVO> selectStatsByIds(@Param("ids") Collection<Long> ids);
+
+	default LocationTransferOrder selectBySourceKey(String sourceKey) {
+		return selectOne(WrappersX.lambdaQueryX(LocationTransferOrder.class)
+				.eq(LocationTransferOrder::getSourceKey, sourceKey));
+	}
 
 }

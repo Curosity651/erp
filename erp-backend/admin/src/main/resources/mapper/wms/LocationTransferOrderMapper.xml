@@ -11,16 +11,21 @@
             w.warehouse_name,
             o.erp_tenant_id,
             t.tenant_name AS owner_name,
-            t.parent_wms_tenant_id AS wms_tenant_id,
+            COALESCE(o.wms_tenant_id, t.parent_wms_tenant_id) AS wms_tenant_id,
             op.tenant_name AS operator_name,
             o.order_status,
+            o.source_type,
+            o.source_id,
+            o.source_no,
+            o.reason_code,
+            o.reason,
             o.remark,
             o.complete_time,
             o.create_time
         FROM wms_location_transfer_order o
         LEFT JOIN wms_warehouse w ON o.warehouse_id = w.id
         LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
-        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = COALESCE(o.wms_tenant_id, t.parent_wms_tenant_id)
         <where>
             AND o.deleted = 0
             <if test="qo.transferNo != null and qo.transferNo != ''">
@@ -37,6 +42,9 @@
             </if>
             <if test="qo.orderStatus != null and qo.orderStatus != ''">
                 AND o.order_status = #{qo.orderStatus}
+            </if>
+            <if test="qo.sourceType != null and qo.sourceType != ''">
+                AND o.source_type = #{qo.sourceType}
             </if>
             <if test="qo.createTimeStart != null">
                 AND DATE(o.create_time) &gt;= #{qo.createTimeStart}
@@ -57,16 +65,21 @@
             w.warehouse_name,
             o.erp_tenant_id,
             t.tenant_name AS owner_name,
-            t.parent_wms_tenant_id AS wms_tenant_id,
+            COALESCE(o.wms_tenant_id, t.parent_wms_tenant_id) AS wms_tenant_id,
             op.tenant_name AS operator_name,
             o.order_status,
+            o.source_type,
+            o.source_id,
+            o.source_no,
+            o.reason_code,
+            o.reason,
             o.remark,
             o.complete_time,
             o.create_time
         FROM wms_location_transfer_order o
         LEFT JOIN wms_warehouse w ON o.warehouse_id = w.id
         LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
-        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = COALESCE(o.wms_tenant_id, t.parent_wms_tenant_id)
         WHERE o.id = #{id} AND o.deleted = 0
     </select>
 

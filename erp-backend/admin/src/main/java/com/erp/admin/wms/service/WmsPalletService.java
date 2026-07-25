@@ -72,14 +72,30 @@ public class WmsPalletService {
     public int ensureSlots(Long warehouseId) {
         Warehouse warehouse = warehouseMapper.selectById(warehouseId);
         Assert.notNull(warehouse, "仓库不存在");
+        List<WmsLocation> locations = physicalLocations(warehouseId);
+        return ensureSlots(warehouseId, warehouse, locations);
+    }
+
+    private List<WmsLocation> physicalLocations(Long warehouseId) {
+        return locationService.listPhysicalByWarehouse(warehouseId);
+    }
+
+    public int deletePhysicalSlots(Long warehouseId) {
+        return slotMapper.deletePhysicalSlots(warehouseId);
+    }
+
+    private int ensureSlots(Long warehouseId, Warehouse warehouse, List<WmsLocation> locations) {
         int levels = warehouse.getPalletLevels() == null ? 6 : warehouse.getPalletLevels();
         levels = Math.max(1, Math.min(levels, 12));
         int positions = warehouse.getPalletPositionsPerLevel() == null
                 ? 1 : warehouse.getPalletPositionsPerLevel();
         positions = Math.max(1, Math.min(positions, 9));
-        List<WmsLocation> locations = locationService.listByWarehouse(warehouseId).stream()
-                .filter(location -> !Integer.valueOf(1).equals(location.getIsVirtual()))
-                .collect(Collectors.toList());
+        long expectedCount = (long) locations.size() * levels * positions;
+        Long actualCount = slotMapper.selectCount(WrappersX.lambdaQueryX(WmsLocationSlot.class)
+                .eq(WmsLocationSlot::getWarehouseId, warehouseId));
+        if (actualCount != null && actualCount.longValue() == expectedCount) {
+            return 0;
+        }
         Set<String> existing = slotMapper.selectList(WrappersX.lambdaQueryX(WmsLocationSlot.class)
                 .eq(WmsLocationSlot::getWarehouseId, warehouseId)).stream()
                 .map(slot -> slot.getLocationId() + "|" + slot.getLevelNo() + "|" + value(slot.getPositionNo()))
@@ -117,8 +133,9 @@ public class WmsPalletService {
     }
 
     public List<PalletSlotVO> listSlots(Long warehouseId) {
-        ensureSlots(warehouseId);
-        List<WmsLocation> locations = locationService.listByWarehouse(warehouseId);
+        Warehouse warehouse = warehouseMapper.selectById(warehouseId);
+        Assert.notNull(warehouse, "仓库不存在");
+        List<WmsLocation> locations = physicalLocations(warehouseId);
         Map<Long, WmsLocation> locationById = locations.stream()
                 .collect(Collectors.toMap(WmsLocation::getId, value -> value, (a, b) -> a));
         Map<Long, WmsZone> zoneById = zoneService.listByWarehouse(warehouseId).stream()

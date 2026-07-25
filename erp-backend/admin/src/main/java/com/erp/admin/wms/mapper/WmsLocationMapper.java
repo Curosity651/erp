@@ -27,6 +27,14 @@ public interface WmsLocationMapper extends ExtendMapper<WmsLocation> {
 			.orderByAsc(WmsLocation::getColumnNo));
 	}
 
+	default List<WmsLocation> listPhysicalByWarehouse(Long warehouseId) {
+		return this.selectList(WrappersX.lambdaQueryX(WmsLocation.class)
+			.eq(WmsLocation::getWarehouseId, warehouseId)
+			.eq(WmsLocation::getIsVirtual, 0)
+			.orderByAsc(WmsLocation::getRackNo)
+			.orderByAsc(WmsLocation::getColumnNo));
+	}
+
 	/**
 	 * 删除某仓库全部库位（重新生成前清旧）——<b>物理删除</b>。
 	 * <p>WmsLocation 带 {@code @TableLogic}，若走常规逻辑删除只会把旧行标 deleted=1、仍占用唯一索引
@@ -38,6 +46,9 @@ public interface WmsLocationMapper extends ExtendMapper<WmsLocation> {
 	@Delete("DELETE FROM wms_location WHERE warehouse_id = #{warehouseId}")
 	int deleteByWarehouse(@Param("warehouseId") Long warehouseId);
 
+	@Delete("DELETE FROM wms_location WHERE warehouse_id = #{warehouseId} AND is_virtual = 0")
+	int deletePhysicalByWarehouse(@Param("warehouseId") Long warehouseId);
+
 	/**
 	 * 统计仓库下库位数。
 	 * @param warehouseId 仓库ID
@@ -45,6 +56,12 @@ public interface WmsLocationMapper extends ExtendMapper<WmsLocation> {
 	 */
 	default long countByWarehouse(Long warehouseId) {
 		return this.selectCount(WrappersX.lambdaQueryX(WmsLocation.class).eq(WmsLocation::getWarehouseId, warehouseId));
+	}
+
+	default long countPhysicalByWarehouse(Long warehouseId) {
+		return this.selectCount(WrappersX.lambdaQueryX(WmsLocation.class)
+			.eq(WmsLocation::getWarehouseId, warehouseId)
+			.eq(WmsLocation::getIsVirtual, 0));
 	}
 
 }

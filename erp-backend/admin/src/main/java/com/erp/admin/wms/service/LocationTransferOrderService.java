@@ -13,18 +13,29 @@ import java.util.stream.Collectors;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
 import com.erp.admin.tenant.service.TenantIdentityService;
+import com.erp.admin.tenant.mapper.SysTenantMapper;
+import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.mapper.LocationTransferOrderMapper;
+import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
+import com.erp.admin.wms.mapper.SalesOutboundMapper;
+import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.model.dto.LocationTransferCreateDTO;
 import com.erp.admin.wms.model.dto.LocationTransferItemDTO;
+import com.erp.admin.wms.model.dto.LocationTransferPlanDTO;
+import com.erp.admin.wms.model.dto.LocationTransferPlanItemDTO;
 import com.erp.admin.wms.model.entity.LocationTransferItem;
 import com.erp.admin.wms.model.entity.LocationTransferOrder;
+import com.erp.admin.wms.model.entity.SalesOutboundOrder;
+import com.erp.admin.wms.model.entity.SalesOutboundOrderItem;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.enums.LocationTransferStatus;
+import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.model.qo.LocationTransferQO;
 import com.erp.admin.wms.model.vo.LocationTransferDetailVO;
 import com.erp.admin.wms.model.vo.LocationTransferItemVO;
 import com.erp.admin.wms.model.vo.LocationTransferPageVO;
 import com.erp.admin.wms.model.vo.LocationTransferStatsVO;
+import com.erp.admin.wms.model.vo.StockShortageVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.core.exception.BusinessException;
@@ -67,6 +78,16 @@ public class LocationTransferOrderService
 	private final TenantIdentityService tenantIdentityService;
 
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
+
+	private final SysTenantMapper sysTenantMapper;
+
+	private final WmsPhysicalInventoryMapper physicalInventoryMapper;
+
+	private final SalesOutboundMapper salesOutboundMapper;
+
+	private final SalesOutboundItemMapper salesOutboundItemMapper;
+
+	private final OutboundPickingService outboundPickingService;
 
 	// ==================== 查询 ====================
 
@@ -140,7 +161,9 @@ public class LocationTransferOrderService
 		Assert.notEmpty(dto.getItems(), "调整明细不能为空");
 		Assert.notNull(dto.getErpTenantId(), "货主不能为空");
 		Assert.notNull(dto.getWarehouseId(), "仓库不能为空");
-		Assert.notNull(warehouseService.getById(dto.getWarehouseId()), "仓库不存在");
+		warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
+		SysTenant owner = sysTenantMapper.selectById(dto.getErpTenantId());
+		Assert.notNull(owner, "货主不存在");
 
 		List<LocationTransferItem> items = new ArrayList<>();
 		for (LocationTransferItemDTO d : dto.getItems()) {
@@ -170,8 +193,12 @@ public class LocationTransferOrderService
 
 		LocationTransferOrder order = new LocationTransferOrder();
 		order.setWarehouseId(dto.getWarehouseId());
+		order.setWmsTenantId(owner.getParentWmsTenantId());
 		order.setErpTenantId(dto.getErpTenantId());
 		order.setOrderStatus(LocationTransferStatus.PENDING.name());
+		order.setSourceType("MANUAL");
+		order.setReasonCode(dto.getReasonCode());
+		order.setReason(dto.getReason());
 		order.setRemark(dto.getRemark());
 		order.setTransferNo(generateTransferNo());
 		order.setCreateBy(currentUserId());
@@ -188,18 +215,130 @@ public class LocationTransferOrderService
 	}
 
 	/**
+	 * Reserves the virtual-location portion of an outbound order and creates a
+	 * location adjustment plan that warehouse staff must complete.
+	 */
+	@Transactional(rollbackFor = Exception.class)
+	public Long createOutboundPlan(SalesOutboundOrder outbound, List<StockShortageVO> shortages) {
+		Assert.notEmpty(shortages, "出库调整缺口不能为空");
+		String sourceKey = "SALES_OUTBOUND:" + outbound.getId();
+		LocationTransferOrder existing = baseMapper.selectBySourceKey(sourceKey);
+		if (existing != null && !LocationTransferStatus.CANCELLED.name().equals(existing.getOrderStatus())) {
+			return existing.getId();
+		}
+
+		List<LocationTransferItem> planItems = new ArrayList<>();
+		for (StockShortageVO shortage : shortages) {
+			int remaining = shortage.getShortage() == null ? 0 : shortage.getShortage();
+			List<WmsPhysicalInventory> batches = physicalInventoryMapper.selectVirtualAllocatableForUpdate(
+					0L, outbound.getErpTenantId(), outbound.getWarehouseId(), shortage.getSkuCode());
+			for (WmsPhysicalInventory batch : batches) {
+				if (remaining <= 0) {
+					break;
+				}
+				int available = Math.max((batch.getQuantity() == null ? 0 : batch.getQuantity())
+						- (batch.getReservedQty() == null ? 0 : batch.getReservedQty()), 0);
+				int take = Math.min(available, remaining);
+				if (take <= 0) {
+					continue;
+				}
+				physicalInventoryService.changeReservedQuantity(batch.getId(), take);
+
+				LocationTransferItem item = new LocationTransferItem();
+				item.setErpTenantId(outbound.getErpTenantId());
+				item.setSkuCode(batch.getSkuCode());
+				item.setPhysicalInventoryId(batch.getId());
+				item.setSourceLocationCode(batch.getLocationCode());
+				item.setSourceQuality(batch.getQuality());
+				item.setQuantity(take);
+				item.setToGood(0);
+				item.setRemark("销售出库待转入物理拣货位");
+				planItems.add(item);
+				remaining -= take;
+			}
+			if (remaining > 0) {
+				throw new BusinessException(409, "SKU[" + shortage.getSkuCode()
+						+ "]暂存库存已被占用，请刷新后重试");
+			}
+		}
+
+		LocationTransferOrder plan = existing == null ? new LocationTransferOrder() : existing;
+		plan.setWarehouseId(outbound.getWarehouseId());
+		plan.setWmsTenantId(0L);
+		plan.setErpTenantId(outbound.getErpTenantId());
+		plan.setOrderStatus(LocationTransferStatus.PLANNED.name());
+		plan.setSourceType("SALES_OUTBOUND");
+		plan.setSourceId(outbound.getId());
+		plan.setSourceNo(outbound.getOutboundNo());
+		plan.setSourceKey(sourceKey);
+		plan.setReasonCode("OUTBOUND_PICKABLE_SHORTAGE");
+		plan.setReason("可用库存位于暂存库位，需先调整到物理拣货位");
+		plan.setTransferNo(generateTransferNo());
+		plan.setCreateBy(currentUserId());
+		if (existing == null) {
+			saveOrderWithRetry(plan);
+		}
+		else {
+			itemService.deleteByOrderId(plan.getId());
+			plan.setCompleteTime(null);
+			plan.setCompleteBy(null);
+			this.updateById(plan);
+		}
+		for (LocationTransferItem item : planItems) {
+			item.setTransferOrderId(plan.getId());
+		}
+		itemService.saveBatch(planItems);
+		return plan.getId();
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void completePlan(Long id, LocationTransferPlanDTO dto) {
+		assertPlatform();
+		LocationTransferOrder order = requireOrder(id);
+		Assert.isTrue(LocationTransferStatus.PLANNED.name().equals(order.getOrderStatus()),
+				"只有待完善的库位调整计划可以完善");
+		Map<Long, String> targetByItemId = dto.getItems().stream()
+				.collect(Collectors.toMap(LocationTransferPlanItemDTO::getId,
+						LocationTransferPlanItemDTO::getTargetLocationCode, (a, b) -> a));
+		List<LocationTransferItem> items = itemService.getByOrderId(id);
+		Assert.isTrue(items.size() == targetByItemId.size(), "必须为全部计划明细选择目标库位");
+		for (LocationTransferItem item : items) {
+			String targetCode = targetByItemId.get(item.getId());
+			Assert.hasText(targetCode, "目标库位不能为空");
+			WmsPhysicalInventory source = physicalInventoryService.getById(item.getPhysicalInventoryId());
+			Assert.notNull(source, "源批次不存在：" + item.getPhysicalInventoryId());
+			if ("SALES_OUTBOUND".equals(order.getSourceType())) {
+				source.setReservedQty(Math.max((source.getReservedQty() == null ? 0 : source.getReservedQty())
+						- item.getQuantity(), 0));
+			}
+			LocationTransferService.Resolution resolution = locationTransferService.resolveLine(source,
+					order.getWarehouseId(), targetCode, item.getQuantity());
+			item.setTargetLocationCode(targetCode);
+			item.setTargetZoneId(resolution.getTargetZoneId());
+			item.setToGood(0);
+			itemService.updateById(item);
+		}
+		order.setOrderStatus(LocationTransferStatus.PENDING.name());
+		this.updateById(order);
+	}
+
+	/**
 	 * 平台执行「调整完成」（仅待调整）：逐条再次校验并执行移库 → COMPLETED。
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public void complete(Long id) {
 		assertPlatform();
 		LocationTransferOrder order = requireOrder(id);
+		boolean outboundPlan = "SALES_OUTBOUND".equals(order.getSourceType());
 		Assert.isTrue(LocationTransferStatus.PENDING.name().equals(order.getOrderStatus()),
 				"只有待调整的库位调整单可以执行");
 
 		List<LocationTransferItem> items = itemService.getByOrderId(id);
 		Assert.notEmpty(items, "调整明细为空");
 		for (LocationTransferItem item : items) {
+			if (outboundPlan) {
+				physicalInventoryService.changeReservedQuantity(item.getPhysicalInventoryId(), -item.getQuantity());
+			}
 			WmsPhysicalInventory source = physicalInventoryService.getById(item.getPhysicalInventoryId());
 			Assert.notNull(source, "源批次不存在：" + item.getPhysicalInventoryId());
 			// 执行时再次校验（不冻结，防止建单后库存变化）
@@ -222,6 +361,22 @@ public class LocationTransferOrderService
 			}
 		}
 
+		if (outboundPlan) {
+			SalesOutboundOrder outbound = salesOutboundMapper.selectByIdForUpdate(order.getSourceId());
+			Assert.notNull(outbound, "关联销售出库单不存在");
+			Assert.isTrue(OutboundOrderStatus.WAITING_TRANSFER.name().equals(outbound.getOrderStatus()),
+					"关联销售出库单已不再等待库位调整");
+			List<SalesOutboundOrderItem> outboundItems = salesOutboundItemMapper
+					.selectByOutboundOrderId(outbound.getId());
+			List<StockShortageVO> shortages = outboundPickingService.reserveMissingForOrder(outbound, outboundItems);
+			if (!shortages.isEmpty()) {
+				throw new BusinessException(409, "库位调整后可拣库存仍不足：" + shortages.get(0).getSkuCode());
+			}
+			int updated = salesOutboundMapper.casOrderStatus(outbound.getId(),
+					OutboundOrderStatus.WAITING_TRANSFER.name(), OutboundOrderStatus.CONFIRMED.name());
+			Assert.isTrue(updated == 1, "销售出库单状态已变化，请刷新后重试");
+		}
+
 		order.setOrderStatus(LocationTransferStatus.COMPLETED.name());
 		order.setCompleteTime(LocalDateTime.now());
 		order.setCompleteBy(currentUserId());
@@ -236,11 +391,39 @@ public class LocationTransferOrderService
 	public void cancel(Long id) {
 		assertPlatform();
 		LocationTransferOrder order = requireOrder(id);
-		Assert.isTrue(LocationTransferStatus.PENDING.name().equals(order.getOrderStatus()),
+		Assert.isTrue(LocationTransferStatus.PENDING.name().equals(order.getOrderStatus())
+						|| LocationTransferStatus.PLANNED.name().equals(order.getOrderStatus()),
 				"只有待调整的库位调整单可以撤销");
+		cancelPlan(order, true);
+		log.info("平台撤销库位调整单, id={}, no={}", order.getId(), order.getTransferNo());
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void cancelOutboundPlan(Long outboundOrderId) {
+		LocationTransferOrder plan = baseMapper.selectBySourceKey("SALES_OUTBOUND:" + outboundOrderId);
+		if (plan != null && (LocationTransferStatus.PLANNED.name().equals(plan.getOrderStatus())
+				|| LocationTransferStatus.PENDING.name().equals(plan.getOrderStatus()))) {
+			cancelPlan(plan, false);
+		}
+	}
+
+	private void cancelPlan(LocationTransferOrder order, boolean restoreOutboundDraft) {
+		if ("SALES_OUTBOUND".equals(order.getSourceType())) {
+			for (LocationTransferItem item : itemService.getByOrderId(order.getId())) {
+				physicalInventoryService.changeReservedQuantity(item.getPhysicalInventoryId(), -item.getQuantity());
+			}
+			SalesOutboundOrder outbound = salesOutboundMapper.selectByIdForUpdate(order.getSourceId());
+			if (outbound != null) {
+				outboundPickingService.releaseForOrder(outbound);
+				if (restoreOutboundDraft) {
+					int updated = salesOutboundMapper.casOrderStatus(outbound.getId(),
+							OutboundOrderStatus.WAITING_TRANSFER.name(), OutboundOrderStatus.DRAFT.name());
+					Assert.isTrue(updated == 1, "销售出库单状态已变化，请刷新后重试");
+				}
+			}
+		}
 		order.setOrderStatus(LocationTransferStatus.CANCELLED.name());
 		this.updateById(order);
-		log.info("平台撤销库位调整单, id={}, no={}", order.getId(), order.getTransferNo());
 	}
 
 	/**

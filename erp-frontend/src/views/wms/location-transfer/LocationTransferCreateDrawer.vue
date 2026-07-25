@@ -223,6 +223,8 @@ function submit() {
     createLocationTransfer({
       warehouseId: warehouseId.value,
       erpTenantId: erpTenantId.value,
+      reasonCode: 'MANUAL_LOCATION_TRANSFER',
+      reason: remark.value || '人工库位调整',
       remark: remark.value,
       items: rows.map(b => ({
         physicalInventoryId: b.id,

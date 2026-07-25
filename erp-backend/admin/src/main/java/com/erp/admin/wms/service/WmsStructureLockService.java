@@ -82,7 +82,7 @@ public class WmsStructureLockService {
 	 */
 	public LockInfo compute(Long warehouseId) {
 		// A：有货占用（quantity>0 的库位数，口径与 listOccupiedLocationCodes 统一）
-		int occupiedCount = physicalInventoryMapper.listOccupiedLocationCodes(warehouseId).size();
+		int occupiedCount = physicalInventoryMapper.listOccupiedPhysicalLocationCodes(warehouseId).size();
 
 		// B：当前有效分配
 		LocalDate today = LocalDate.now(ZoneOffset.UTC);
