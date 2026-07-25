@@ -57,6 +57,17 @@ export interface WarehouseStructureUpdate {
   defaultPalletUtilization?: number
 }
 
+export interface WarehousePalletRuleUpdate {
+  id: number
+  maxSkuKindsPerPallet: number
+  allowCrossOwnerMix: number
+  defaultPalletLengthMm: number
+  defaultPalletWidthMm: number
+  defaultPalletHeightMm: number
+  defaultPalletMaxWeightKg: number
+  defaultPalletUtilization: number
+}
+
 /** 品质分区 */
 export interface WmsZone {
   id: number

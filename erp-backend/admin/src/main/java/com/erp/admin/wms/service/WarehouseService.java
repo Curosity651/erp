@@ -15,6 +15,7 @@ import com.erp.admin.common.tenant.WmsTenantContext;
 import com.erp.admin.wms.converter.WarehouseConverter;
 import com.erp.admin.wms.mapper.WarehouseMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
+import com.erp.admin.wms.model.dto.WarehousePalletRuleDTO;
 import com.erp.admin.wms.model.dto.WarehouseDTO;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.enums.WarehouseTypeEnum;
@@ -136,6 +137,30 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 
 		Warehouse warehouse = WarehouseConverter.INSTANCE.dtoToEntity(dto);
 		return this.updateById(warehouse);
+	}
+
+	/**
+	 * Updates pallet rules without changing the physical location structure.
+	 */
+	@Transactional(rollbackFor = Exception.class)
+	public void updatePalletRules(WarehousePalletRuleDTO dto) {
+		validateOperableOwnWarehouse(dto.getId());
+		Warehouse current = baseMapper.selectByIdForUpdate(dto.getId());
+		if (current == null) {
+			throw new IllegalStateException("仓库不存在或已被删除");
+		}
+		Warehouse update = new Warehouse();
+		update.setId(dto.getId());
+		update.setMaxSkuKindsPerPallet(dto.getMaxSkuKindsPerPallet());
+		update.setAllowCrossOwnerMix(dto.getAllowCrossOwnerMix());
+		update.setDefaultPalletLengthMm(dto.getDefaultPalletLengthMm());
+		update.setDefaultPalletWidthMm(dto.getDefaultPalletWidthMm());
+		update.setDefaultPalletHeightMm(dto.getDefaultPalletHeightMm());
+		update.setDefaultPalletMaxWeightKg(dto.getDefaultPalletMaxWeightKg());
+		update.setDefaultPalletUtilization(dto.getDefaultPalletUtilization());
+		if (!updateById(update)) {
+			throw new IllegalStateException("托盘规则保存失败，请刷新后重试");
+		}
 	}
 
 	/**

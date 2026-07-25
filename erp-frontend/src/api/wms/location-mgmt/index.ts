@@ -1,6 +1,12 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult } from '@/api/types'
-import type { WarehouseStructure, WarehouseStructureUpdate, WmsZone, WmsLocation } from './types'
+import type {
+  WarehousePalletRuleUpdate,
+  WarehouseStructure,
+  WarehouseStructureUpdate,
+  WmsZone,
+  WmsLocation
+} from './types'
 
 /** 自有仓库列表（含结构参数） */
 export function listStructureWarehouses() {
@@ -10,6 +16,11 @@ export function listStructureWarehouses() {
 /** 更新仓库结构参数 */
 export function updateWarehouseStructure(data: WarehouseStructureUpdate) {
   return httpClient.patch<ApiResult<number>>('/wms/location-mgmt/structure', data)
+}
+
+/** 更新托盘规则，不重新生成库位或托位 */
+export function updateWarehousePalletRules(data: WarehousePalletRuleUpdate) {
+  return httpClient.patch<ApiResult<void>>('/wms/location-mgmt/pallet-rules', data)
 }
 
 /** 仓库分区列表 */

@@ -137,6 +137,7 @@
                   v-model:value="form.maxSkuKindsPerPallet"
                   :min="1"
                   :max="4"
+                  :disabled="!palletRuleEditing || savingPalletRules"
                   class="pallet-rule-input" /></a-form-item
             ></a-col>
             <a-col :span="8"
@@ -148,6 +149,7 @@
                   :max="1"
                   :step="0.05"
                   :precision="2"
+                  :disabled="!palletRuleEditing || savingPalletRules"
                   class="pallet-rule-input" /></a-form-item
             ></a-col>
             <a-col :span="8"
@@ -161,6 +163,7 @@
                 <a-input-number
                   v-model:value="form.defaultPalletLengthMm"
                   :min="1"
+                  :disabled="!palletRuleEditing || savingPalletRules"
                   class="pallet-rule-input" /></a-form-item
             ></a-col>
             <a-col :span="8"
@@ -169,6 +172,7 @@
                 <a-input-number
                   v-model:value="form.defaultPalletWidthMm"
                   :min="1"
+                  :disabled="!palletRuleEditing || savingPalletRules"
                   class="pallet-rule-input" /></a-form-item
             ></a-col>
             <a-col :span="8"
@@ -177,6 +181,7 @@
                 <a-input-number
                   v-model:value="form.defaultPalletHeightMm"
                   :min="1"
+                  :disabled="!palletRuleEditing || savingPalletRules"
                   class="pallet-rule-input" /></a-form-item
             ></a-col>
             <a-col :span="8"
@@ -185,8 +190,27 @@
                 <a-input-number
                   v-model:value="form.defaultPalletMaxWeightKg"
                   :min="1"
+                  :disabled="!palletRuleEditing || savingPalletRules"
                   class="pallet-rule-input" /></a-form-item
             ></a-col>
+            <a-col :span="16">
+              <a-space v-if="canEdit" class="pallet-rule-actions">
+                <a-button
+                  type="primary"
+                  :loading="savingPalletRules"
+                  :disabled="!palletRuleEditing"
+                  @click="savePalletRuleSettings"
+                >
+                  保存
+                </a-button>
+                <a-button
+                  :disabled="palletRuleEditing || savingPalletRules"
+                  @click="palletRuleEditing = true"
+                >
+                  修改
+                </a-button>
+              </a-space>
+            </a-col>
           </a-row>
         </a-form>
         <div class="hint">
@@ -429,6 +453,7 @@ import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import {
   updateWarehouseStructure,
+  updateWarehousePalletRules,
   listZones,
   initDefaultZones,
   listLocations,
@@ -492,6 +517,8 @@ const slotPrinting = ref(false)
 const slotPrintLocationIds = ref<number[]>([])
 
 const savingStructure = ref(false)
+const palletRuleEditing = ref(false)
+const savingPalletRules = ref(false)
 const loadingLocations = ref(false)
 const assigning = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
@@ -1019,6 +1046,33 @@ async function saveStructure() {
   }
 }
 
+async function savePalletRuleSettings() {
+  if (!current.value) return
+  savingPalletRules.value = true
+  try {
+    const rules = {
+      maxSkuKindsPerPallet: form.maxSkuKindsPerPallet,
+      allowCrossOwnerMix: form.allowCrossOwnerMix,
+      defaultPalletLengthMm: form.defaultPalletLengthMm,
+      defaultPalletWidthMm: form.defaultPalletWidthMm,
+      defaultPalletHeightMm: form.defaultPalletHeightMm,
+      defaultPalletMaxWeightKg: form.defaultPalletMaxWeightKg,
+      defaultPalletUtilization: form.defaultPalletUtilization
+    }
+    const res = await updateWarehousePalletRules({ id: current.value.id, ...rules })
+    if (!isSuccess(res)) {
+      message.error(res.message || '托盘规则保存失败')
+      return
+    }
+    current.value = { ...current.value, ...rules }
+    palletRuleEditing.value = false
+    message.success('托盘规则已保存')
+    emits('success')
+  } finally {
+    savingPalletRules.value = false
+  }
+}
+
 function openDrawer(warehouse: WarehouseStructure) {
   current.value = { ...warehouse }
   fillForm(warehouse)
@@ -1031,6 +1085,7 @@ function openDrawer(warehouse: WarehouseStructure) {
   occupiedCodes.value = new Set()
   virtualLocs.value = []
   newVirtualName.value = ''
+  palletRuleEditing.value = false
   loadZones()
   loadLocations()
   loadOccupied()
@@ -1102,6 +1157,13 @@ export default {
 
 .pallet-rule-input {
   width: 100%;
+}
+
+.pallet-rule-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding-top: 1px;
 }
 
 .subsection-title {

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.erp.admin.wms.model.dto.MoveLocationZoneDTO;
+import com.erp.admin.wms.model.dto.WarehousePalletRuleDTO;
 import com.erp.admin.wms.model.dto.WarehouseStructureDTO;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.entity.WmsLocation;
@@ -106,6 +107,14 @@ public class WmsLocationManageController {
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<Integer> updateStructure(@Validated @RequestBody WarehouseStructureDTO dto) {
 		return ApiResult.ok(wmsLocationGenerator.saveStructureAndGenerate(dto));
+	}
+
+	@Operation(summary = "更新托盘规则（不重新生成库位）")
+	@PatchMapping("/pallet-rules")
+	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
+	public ApiResult<Void> updatePalletRules(@Validated @RequestBody WarehousePalletRuleDTO dto) {
+		warehouseService.updatePalletRules(dto);
+		return ApiResult.ok();
 	}
 
 	@Operation(summary = "仓库分区列表")
