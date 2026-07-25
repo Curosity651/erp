@@ -7,6 +7,18 @@
     </a-steps>
 
     <a-spin :spinning="loading">
+      <a-result
+        v-if="loadError && !loading"
+        status="error"
+        title="上架数据加载失败"
+        :sub-title="loadError"
+      >
+        <template #extra>
+          <a-button type="primary" @click="retryLoad">重新加载</a-button>
+        </template>
+      </a-result>
+
+      <template v-else>
       <a-alert
         v-for="warning in plan?.warnings || []"
         :key="warning"
@@ -165,6 +177,7 @@
           费率：50元/m³；只有勾选客户原因加班时才加收基础操作费的50%。
         </div>
       </section>
+      </template>
     </a-spin>
 
     <template #footer>
@@ -203,6 +216,7 @@ const emits = defineEmits<{ (e: 'success'): void }>()
 
 const open = ref(false)
 const loading = ref(false)
+const loadError = ref('')
 const submitting = ref(false)
 const currentId = ref<number>()
 const currentNo = ref('')
@@ -275,6 +289,7 @@ async function openPutaway(record: PurchaseInboundPageVO) {
   confirmedVolumeCbm.value = undefined
   afterHours.value = false
   afterHoursReason.value = ''
+  loadError.value = ''
   open.value = true
   loading.value = true
   try {
@@ -307,10 +322,19 @@ async function openPutaway(record: PurchaseInboundPageVO) {
           ? palletResponse.data.filter(item => item.erpTenantId === ownerId)
           : []
       allSlots.value = isSuccess(slotResponse) && slotResponse.data ? slotResponse.data : []
+    } else {
+      loadError.value = response.message || '没有取得上架计划，请稍后重试'
     }
+  } catch (error: any) {
+    loadError.value = error?.message || '网络或服务器异常，请重新加载'
   } finally {
     loading.value = false
   }
+}
+
+function retryLoad() {
+  if (!currentId.value) return
+  openPutaway({ id: currentId.value, inboundNo: currentNo.value } as PurchaseInboundPageVO)
 }
 
 function selectedExisting(pallet: PalletPlan) {

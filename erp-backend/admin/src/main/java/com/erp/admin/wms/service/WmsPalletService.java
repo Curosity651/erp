@@ -23,6 +23,7 @@ import org.ballcat.common.core.exception.BusinessException;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
@@ -101,8 +102,14 @@ public class WmsPalletService {
                     slot.setMaxWeightKg(warehouse.getDefaultPalletMaxWeightKg());
                     slot.setSlotStatus(EMPTY);
                     slot.setVersion(0);
-                    slotMapper.insert(slot);
-                    created++;
+                    try {
+                        slotMapper.insert(slot);
+                        created++;
+                    }
+                    catch (DuplicateKeyException ignored) {
+                        // Another request may initialize the same slot concurrently.
+                        // The unique keys are the source of truth, so this is a successful no-op.
+                    }
                 }
             }
         }
