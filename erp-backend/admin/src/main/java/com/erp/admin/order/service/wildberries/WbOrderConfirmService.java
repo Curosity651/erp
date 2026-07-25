@@ -11,6 +11,7 @@ import com.erp.admin.order.mapper.ErpOrderMapper;
 import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.order.model.enums.ErpOrderStatusEnum;
 import com.erp.admin.order.service.ErpOrderService;
+import com.erp.admin.order.service.PlatformConfirmGuard;
 import com.erp.admin.order.service.common.model.ConfirmResult;
 import com.erp.admin.platform.PlatformEnum;
 import com.erp.admin.platform.credential.CredentialService;
@@ -38,6 +39,7 @@ public class WbOrderConfirmService {
 	private final WbPlatformApi wbPlatformApi;
 	private final WbOrderSyncService wbOrderSyncService;
 	private final ErpOrderService erpOrderService;
+	private final PlatformConfirmGuard confirmGuard;
 
 	/**
 	 * 批量确认发货
@@ -103,6 +105,12 @@ public class WbOrderConfirmService {
 			for (ErpOrder order : shopOrders) {
 				ConfirmResult.Item it = new ConfirmResult.Item();
 				it.setOrderId(order.getId());
+				if (!confirmGuard.tryClaim(order.getId())) {
+					it.setSuccess(false);
+					it.setMessage("该订单正在确认或已提交平台，请先同步订单状态");
+					items.add(it);
+					continue;
+				}
 				try {
 					String supplyId = order.getShipmentId();
 
@@ -117,7 +125,9 @@ public class WbOrderConfirmService {
 					it.setSuccess(true);
 					it.setSupplyId(supplyId);
 					it.setMessage("OK");
+					confirmGuard.success(order.getId());
 				} catch (Exception ex) {
+					confirmGuard.failure(order.getId());
 					it.setSuccess(false);
 					it.setMessage(ex.getMessage());
 				}

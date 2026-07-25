@@ -6,7 +6,8 @@ import type {
   LabelBatchVO,
   SyncSummaryVO,
   OzonActBatchVO,
-  OzonPickListBatchVO
+  OzonPickListBatchVO,
+  OzonDeliveryMethodRule
 } from './types'
 
 /**
@@ -65,6 +66,14 @@ export function getOzonActBatch(batchNo: string) {
   return httpClient.get<ApiResult<OzonActBatchVO>>('/order/ozon-order/act/batch', {
     params: { batchNo }
   })
+}
+
+export function listOzonDeliveryMethodRules() {
+  return httpClient.get<ApiResult<OzonDeliveryMethodRule[]>>('/order/ozon-order/delivery-method-rules')
+}
+
+export function saveOzonDeliveryMethodRule(rule: OzonDeliveryMethodRule) {
+  return httpClient.post<ApiResult<number>>('/order/ozon-order/delivery-method-rules', rule)
 }
 
 /**

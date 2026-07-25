@@ -216,21 +216,29 @@ public interface ErpOrderMapper extends ExtendMapper<ErpOrder> {
 	 * 将 outboundStatus 从 ALLOCATED 更新为 NONE
 	 *
 	 * @param ids 订单ID列表
+	 * @param outboundOrderId 当前占用所属的销售出库单ID
 	 * @return 影响行数
 	 */
-	int releaseOutboundAllocation(@Param("ids") List<Long> ids);
+	int releaseOutboundAllocation(@Param("ids") List<Long> ids,
+			@Param("outboundOrderId") Long outboundOrderId);
 
-	/**
-	 * 使用乐观锁确认出库
-	 * <p>
-	 * 将 outboundStatus 从 ALLOCATED 更新为 COMPLETED，同时 version + 1
-	 *
-	 * @param id 订单ID
-	 * @param outboundOrderId 出库单ID
-	 * @param version 当前版本号
-	 * @return 影响行数（0表示并发冲突）
-	 */
-	int confirmOutboundWithVersion(@Param("id") Long id, @Param("outboundOrderId") Long outboundOrderId, @Param("version") Integer version);
+	/** 将已占用订单绑定到销售出库单，状态仍保持 ALLOCATED。 */
+	int bindOutboundWithVersion(@Param("id") Long id, @Param("outboundOrderId") Long outboundOrderId,
+			@Param("version") Integer version);
+
+	/** 海外仓签出后将订单从 ALLOCATED 推进到 COMPLETED。 */
+	int completeOutboundWithVersion(@Param("id") Long id, @Param("outboundOrderId") Long outboundOrderId,
+			@Param("version") Integer version);
+
+	/** 原子取得平台确认执行权；处理中超过十分钟的请求允许恢复。 */
+	@Update("UPDATE erp_order SET confirm_state = 'PROCESSING', confirm_started_at = NOW(), update_time = NOW() " +
+			"WHERE id = #{id} AND (confirm_state IS NULL OR confirm_state IN ('NONE','FAILED') " +
+			"OR (confirm_state = 'PROCESSING' AND confirm_started_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)))")
+	int claimPlatformConfirm(@Param("id") Long id);
+
+	@Update("UPDATE erp_order SET confirm_state = #{state}, update_time = NOW() " +
+			"WHERE id = #{id} AND confirm_state = 'PROCESSING'")
+	int finishPlatformConfirm(@Param("id") Long id, @Param("state") String state);
 
 	/**
 	 * 更新订单已退货数量

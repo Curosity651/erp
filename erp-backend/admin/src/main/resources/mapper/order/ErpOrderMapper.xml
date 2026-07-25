@@ -36,10 +36,23 @@
             #{id}
         </foreach>
           AND outbound_status = 'ALLOCATED'
+		  AND outbound_order_id = #{outboundOrderId}
     </update>
 
-    <!-- 使用乐观锁确认出库 -->
-    <update id="confirmOutboundWithVersion">
+    <!-- 将已占用订单绑定到销售出库单，仍保持 ALLOCATED -->
+    <update id="bindOutboundWithVersion">
+        UPDATE erp_order
+        SET outbound_order_id = #{outboundOrderId},
+            version = version + 1,
+            update_time = NOW()
+        WHERE id = #{id}
+          AND version = #{version}
+          AND outbound_status = 'ALLOCATED'
+          AND outbound_order_id IS NULL
+    </update>
+
+    <!-- 海外仓签出后才确认 ERP 订单出库完成 -->
+    <update id="completeOutboundWithVersion">
         UPDATE erp_order
         SET outbound_status = 'COMPLETED',
             outbound_order_id = #{outboundOrderId},
@@ -49,6 +62,7 @@
         WHERE id = #{id}
           AND version = #{version}
           AND outbound_status = 'ALLOCATED'
+          AND outbound_order_id = #{outboundOrderId}
     </update>
 
     <!-- 按SKU编码批量查询日均销量 -->

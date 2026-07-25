@@ -8,6 +8,8 @@ import com.erp.admin.order.model.entity.OzonShipmentAct;
 import org.ballcat.mybatisplus.conditions.query.LambdaQueryWrapperX;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * Ozon 运单 Mapper。
@@ -17,6 +19,17 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
  * @author system
  */
 public interface OzonShipmentActMapper extends ExtendMapper<OzonShipmentAct> {
+
+	default OzonShipmentAct selectByRequestKey(String requestKey) {
+		return selectOne(WrappersX.<OzonShipmentAct>lambdaQueryX()
+				.eq(OzonShipmentAct::getRequestKey, requestKey));
+	}
+
+	@Update("UPDATE ozon_shipment_act SET status='CREATING', batch_no=#{batchNo}, error_msg=NULL, " +
+			"order_count=#{orderCount}, created_by=#{userId}, ozon_act_id=NULL, object_key=NULL, " +
+			"file_name=NULL, update_time=NOW() WHERE request_key=#{requestKey} AND status='FAILED'")
+	int retryFailed(@Param("requestKey") String requestKey, @Param("batchNo") String batchNo,
+			@Param("orderCount") Integer orderCount, @Param("userId") Long userId);
 
 	/** 按批次号取该批全部运单（前端轮询用） */
 	default List<OzonShipmentAct> selectByBatchNo(String batchNo) {

@@ -6,7 +6,15 @@ import type {
   PickAllocationVO,
   PickDTO,
   PickListVO,
-  PickerVO
+  PickerVO,
+  BatchPickPreviewDTO,
+  BatchPickDTO,
+  BatchPickPreviewVO,
+  BatchPickResultVO,
+  PickLineScanDTO,
+  PickExceptionDTO,
+  ResolvePickExceptionDTO,
+  PackageScanDTO
 } from './types'
 import {
   mockPage,
@@ -98,4 +106,43 @@ export async function listPickers(): Promise<ApiResult<PickerVO[]>> {
     return ok(mockPickers())
   }
   return httpClient.get(`${BASE}/pickers`)
+}
+
+export function previewBatchPick(dto: BatchPickPreviewDTO): Promise<ApiResult<BatchPickPreviewVO>> {
+  return httpClient.post(`${BASE}/batch-preview`, dto)
+}
+
+export function createBatchPick(dto: BatchPickDTO): Promise<ApiResult<BatchPickResultVO>> {
+  return httpClient.post(`${BASE}/batch-create`, dto)
+}
+
+export function completePickTask(taskId: number): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/${taskId}/complete`)
+}
+
+export function confirmPackageSort(taskId: number, packageId: number): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/${taskId}/packages/${packageId}/sort`)
+}
+
+export function scanPickLine(dto: PickLineScanDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/scan`, dto)
+}
+
+export function reportPickException(dto: PickExceptionDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/exception`, dto)
+}
+
+export function listPickAlternatives(
+  taskId: number,
+  lineId: number
+): Promise<ApiResult<PickAllocationVO[]>> {
+  return httpClient.get(`${BASE}/tasks/${taskId}/lines/${lineId}/alternatives`)
+}
+
+export function resolvePickException(dto: ResolvePickExceptionDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/exception/resolve`, dto)
+}
+
+export function scanPackageSort(taskId: number, dto: PackageScanDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/${taskId}/packages/scan`, dto)
 }

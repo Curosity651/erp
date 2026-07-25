@@ -6,6 +6,7 @@ import java.util.function.BiFunction;
 
 import com.erp.admin.order.model.qo.ErpOrderQO;
 import com.erp.admin.order.model.dto.ozon.OzonActCreateDTO;
+import com.erp.admin.order.model.entity.OzonDeliveryMethodRule;
 import com.erp.admin.order.model.vo.LabelBatchVO;
 import com.erp.admin.order.model.vo.OzonActBatchVO;
 import com.erp.admin.order.model.vo.OzonOrderExportVO;
@@ -13,6 +14,7 @@ import com.erp.admin.order.model.vo.OzonOrderPageVO;
 import com.erp.admin.order.model.vo.OzonPickListBatchVO;
 import com.erp.admin.order.model.vo.SyncSummaryVO;
 import com.erp.admin.order.service.ozon.OzonActService;
+import com.erp.admin.order.service.ozon.OzonDeliveryMethodRuleService;
 import com.erp.admin.order.service.ozon.OzonPickListService;
 import com.erp.admin.order.service.label.LabelPrintOrchestrator;
 import com.erp.admin.order.service.ErpOrderService;
@@ -70,6 +72,7 @@ public class OzonOrderController {
 
 	private final OzonOrderQueryService ozonOrderQueryService;
 	private final OzonActService ozonActService;
+	private final OzonDeliveryMethodRuleService deliveryMethodRuleService;
 	private final OzonPickListService ozonPickListService;
 	private final OzonOrderConfirmService ozonOrderConfirmService;
 	private final ErpOrderService erpOrderService;
@@ -229,7 +232,7 @@ public class OzonOrderController {
 	/**
 	 * 【准备发运】创建运单（交接单 act）。
 	 * <p>
-	 * 仅大仓（仓库名含「大」字）且已打印面单的 FBS 订单会被纳入。
+	 * 仅命中「店铺 + 配送方式」交接单规则且已打印面单的 FBS 订单会被纳入。
 	 * 选中订单可能跨店铺/物流方式，后端按 (店铺, 物流方式) 自动分组，一组一份运单。
 	 * <p>
 	 * 立即返回批次号；运单 PDF 由 Ozon 异步生成（约 1~2 分钟），
@@ -264,6 +267,20 @@ public class OzonOrderController {
 	@Operation(summary = "轮询运单(act)批次状态")
 	public ApiResult<OzonActBatchVO> getActBatch(@RequestParam String batchNo) {
 		return ApiResult.ok(ozonActService.pollBatch(batchNo));
+	}
+
+	@GetMapping("/delivery-method-rules")
+	@PreAuthorize("@per.hasPermission('order:erp-order:read')")
+	@Operation(summary = "查询 Ozon 配送方式交接单规则")
+	public ApiResult<List<OzonDeliveryMethodRule>> deliveryMethodRules() {
+		return ApiResult.ok(deliveryMethodRuleService.list());
+	}
+
+	@PostMapping("/delivery-method-rules")
+	@PreAuthorize("@per.hasPermission('order:erp-order:edit')")
+	@Operation(summary = "保存 Ozon 配送方式交接单规则")
+	public ApiResult<Long> saveDeliveryMethodRule(@RequestBody @Validated OzonDeliveryMethodRule rule) {
+		return ApiResult.ok(deliveryMethodRuleService.save(rule));
 	}
 
 	/**

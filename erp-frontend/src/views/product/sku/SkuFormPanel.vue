@@ -138,6 +138,25 @@
                     </a-row>
 
                     <a-row :gutter="16">
+                      <a-col :span="24">
+                        <a-form-item
+                          label="商品条码"
+                          name="barcodes"
+                          extra="可录入多个EAN、UPC或内部商品条码；仓库扫描时均可识别为当前ERP SKU。"
+                        >
+                          <a-select
+                            v-model:value="formData.barcodes"
+                            mode="tags"
+                            :max-tag-count="8"
+                            :token-separators="[',', ' ', '\n']"
+                            placeholder="扫描或输入条码后按回车，最多20个"
+                            size="large"
+                          />
+                        </a-form-item>
+                      </a-col>
+                    </a-row>
+
+                    <a-row :gutter="16">
                       <a-col :span="12">
                         <a-form-item label="销售国家" name="salesCountry">
                           <country-select

@@ -53,6 +53,9 @@ public class SalesOutboundDetailVO {
     @Schema(title = "物流产品ID(父服务商提供，签出计费依据)")
     private Long logisticsProductId;
 
+	@Schema(title = "平台资料处理 WAREHOUSE_PRINT/OWNER_PROVIDED")
+	private String documentMode;
+
     @Schema(title = "物流产品名称")
     private String logisticsProductName;
 

@@ -1,28 +1,36 @@
 package com.erp.admin.wms.controller;
 
 import com.erp.admin.wms.model.dto.PackDTO;
+import com.erp.admin.wms.model.dto.PackPackageDTO;
+import com.erp.admin.wms.model.dto.PackageScanDTO;
 import com.erp.admin.wms.model.dto.ShipDTO;
 import com.erp.admin.wms.model.qo.PackShipQO;
 import com.erp.admin.wms.model.vo.LogisticsChannelVO;
 import com.erp.admin.wms.model.vo.PackShipOrderVO;
 import com.erp.admin.wms.model.vo.ShipResultVO;
+import com.erp.admin.order.model.vo.LabelBatchVO;
+import com.erp.admin.order.model.vo.OzonActBatchVO;
 import com.erp.admin.wms.service.OutboundShippingService;
+import com.erp.admin.wms.service.WarehouseOutboundDocumentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
 import org.ballcat.common.model.result.ApiResult;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.time.LocalDate;
 
 /**
  * 海外仓平台出库作业·打包签出控制器（业务需求 1.3.2）。仅平台身份（service 内二次校验）。
@@ -36,6 +44,8 @@ import java.util.List;
 public class OutboundShippingController {
 
     private final OutboundShippingService outboundShippingService;
+	private final WarehouseOutboundDocumentService outboundDocumentService;
+	private final PrincipalAttributeAccessor principalAttributeAccessor;
 
     @Operation(summary = "分页 拣货中/已打包/已发货 订单")
     @GetMapping("/page")
@@ -58,6 +68,65 @@ public class OutboundShippingController {
         outboundShippingService.pack(dto);
         return ApiResult.ok();
     }
+
+	@Operation(summary = "销售出库按平台订单逐包裹打包")
+	@PostMapping("/pack-package")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> packPackage(@Validated @RequestBody PackPackageDTO dto) {
+		outboundShippingService.packPackage(dto);
+		return ApiResult.ok();
+	}
+
+	@Operation(summary = "销售出库包裹扫码复核")
+	@PostMapping("/pack-package/scan")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> scanPackPackage(@Validated @RequestBody PackageScanDTO dto) {
+		outboundShippingService.scanPackPackage(dto, principalAttributeAccessor.getUserId());
+		return ApiResult.ok();
+	}
+
+	@Operation(summary = "核对货主外部提供的平台面单")
+	@PostMapping("/external-document")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> confirmExternalDocument(@RequestParam Long outboundOrderId,
+			@RequestParam Long packageId) {
+		outboundShippingService.confirmExternalDocument(outboundOrderId, packageId);
+		return ApiResult.ok();
+	}
+
+	@Operation(summary = "核对货主外部提供的平台交接单")
+	@PostMapping("/external-handover")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> confirmExternalHandover(@RequestParam Long outboundOrderId,
+			@RequestParam Long packageId) {
+		outboundShippingService.confirmExternalHandover(outboundOrderId, packageId);
+		return ApiResult.ok();
+	}
+
+	@PostMapping("/documents/labels")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	@Operation(summary = "按销售出库单生成平台面单")
+	public ApiResult<LabelBatchVO> prepareLabels(@RequestParam Long outboundOrderId) {
+		return ApiResult.ok(outboundDocumentService.prepareLabels(
+				outboundOrderId, principalAttributeAccessor.getUserId()));
+	}
+
+	@PostMapping("/documents/ozon-act")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	@Operation(summary = "生成销售出库单所需的 Ozon 交接单")
+	public ApiResult<OzonActBatchVO> prepareOzonAct(@RequestParam Long outboundOrderId,
+			@RequestParam LocalDate departureDate) {
+		return ApiResult.ok(outboundDocumentService.prepareOzonActs(
+				outboundOrderId, departureDate, principalAttributeAccessor.getUserId()));
+	}
+
+	@GetMapping("/documents/ozon-act")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	@Operation(summary = "轮询销售出库单 Ozon 交接单")
+	public ApiResult<OzonActBatchVO> pollOzonAct(@RequestParam Long outboundOrderId,
+			@RequestParam String batchNo) {
+		return ApiResult.ok(outboundDocumentService.pollOzonActs(outboundOrderId, batchNo));
+	}
 
     @Operation(summary = "签出 PACKED→SHIPPED(扣库存+释放锁定+计费)")
     @PostMapping("/ship")

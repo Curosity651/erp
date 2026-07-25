@@ -7,6 +7,8 @@ import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 /**
  * 销售出库单明细 Mapper
@@ -14,6 +16,11 @@ import java.util.List;
  * @author erp
  */
 public interface SalesOutboundItemMapper extends ExtendMapper<SalesOutboundOrderItem> {
+
+    @Select("SELECT * FROM wms_sales_outbound_order_item WHERE outbound_order_id = #{outboundOrderId} "
+            + "AND erp_order_id = #{erpOrderId} ORDER BY id FOR UPDATE")
+    List<SalesOutboundOrderItem> selectPackageItemsForUpdate(
+            @Param("outboundOrderId") Long outboundOrderId, @Param("erpOrderId") Long erpOrderId);
 
     /**
      * 根据出库单ID查询明细

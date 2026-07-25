@@ -6,7 +6,10 @@ import type {
   PackDTO,
   ShipDTO,
   ShipResultVO,
-  LogisticsChannelVO
+  LogisticsChannelVO,
+  PackPackageDTO,
+  OzonActBatchVO,
+  PackageScanDTO
 } from './types'
 import { mockPage, mockDetail, mockPack, mockShip, mockChannels } from './mock'
 
@@ -63,6 +66,52 @@ export async function confirmPack(dto: PackDTO): Promise<ApiResult<void>> {
     return r.ok ? ok(undefined as any) : { code: 500, data: null as any, message: r.message }
   }
   return httpClient.post(`${BASE}/pack`, dto)
+}
+
+export function confirmPackPackage(dto: PackPackageDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/pack-package`, dto)
+}
+
+export function confirmExternalDocument(
+  outboundOrderId: number,
+  packageId: number
+): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/external-document`, undefined, {
+    params: { outboundOrderId, packageId }
+  })
+}
+
+export function scanPackPackage(dto: PackageScanDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/pack-package/scan`, dto)
+}
+
+export function confirmExternalHandover(
+  outboundOrderId: number,
+  packageId: number
+): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/external-handover`, undefined, {
+    params: { outboundOrderId, packageId }
+  })
+}
+
+export function prepareOutboundLabels(outboundOrderId: number): Promise<ApiResult<any>> {
+  return httpClient.post(`${BASE}/documents/labels`, undefined, { params: { outboundOrderId } })
+}
+
+export function prepareOzonAct(
+  outboundOrderId: number,
+  departureDate: string
+): Promise<ApiResult<OzonActBatchVO>> {
+  return httpClient.post(`${BASE}/documents/ozon-act`, undefined, {
+    params: { outboundOrderId, departureDate }
+  })
+}
+
+export function pollOzonAct(
+  outboundOrderId: number,
+  batchNo: string
+): Promise<ApiResult<OzonActBatchVO>> {
+  return httpClient.get(`${BASE}/documents/ozon-act`, { params: { outboundOrderId, batchNo } })
 }
 
 /** 签出 */

@@ -68,13 +68,13 @@ public class SalesOutboundOrder {
     @Schema(title = "出库总数量")
     private Integer totalQuantity;
 
-    @Schema(title = "单据状态: DRAFT/CONFIRMED/CANCELLED + 平台作业 PICKING/BACKORDER/PACKED/SHIPPED/COMPLETED")
+    @Schema(title = "单据状态: DRAFT/CONFIRMED/CANCELLED + 平台作业 PICKING/PICKED/BACKORDER/PACKED/SHIPPED/COMPLETED")
     private String orderStatus;
 
     @Schema(title = "关联库存过账单ID")
     private Long postingId;
 
-    @Schema(title = "下架模式 CENTRALIZED/BY_ORDER/SECONDARY（平台下架后回填）")
+    @Schema(title = "拣货任务类型 SINGLE/WAVE（平台创建任务后回填）")
     private String pickMode;
 
     @Schema(title = "拣货员用户ID（平台下架后回填）")
@@ -102,7 +102,10 @@ public class SalesOutboundOrder {
     private java.math.BigDecimal shippingFee;
 
     @Schema(title = "关联物流产品ID（计费依据，可空）")
-    private Long logisticsProductId;
+	private Long logisticsProductId;
+
+	/** 平台资料处理：WAREHOUSE_PRINT / OWNER_PROVIDED。 */
+	private String documentMode;
 
     @Schema(title = "备注")
     private String remark;

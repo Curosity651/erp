@@ -61,6 +61,7 @@
 
     <!-- 操作按钮区域 -->
     <template #toolBarRender>
+      <a-button @click="ruleDialogOpen = true">交接规则</a-button>
       <export-confirm-button title="确认导出当前查询条件下的订单?" :on-export="handleExport" />
       <a-button @click="openHistory">
         <HistoryOutlined />
@@ -233,6 +234,8 @@
     @generated="reloadTable"
   />
 
+  <OzonDeliveryRuleDialog v-model:open="ruleDialogOpen" />
+
   <!-- 打印历史对话框 -->
   <LabelBatchHistoryDialog v-model:open="historyDialog.open" platform="Ozon" />
 
@@ -266,6 +269,7 @@ import type { OzonOrderQO, OzonOrderPageVO } from '@/api/order/ozon-order/types'
 import OzonOrderPrintDialog from './OzonOrderPrintDialog.vue'
 import OzonOrderPickListDialog from './OzonOrderPickListDialog.vue'
 import OzonOrderActDialog from './OzonOrderActDialog.vue'
+import OzonDeliveryRuleDialog from './OzonDeliveryRuleDialog.vue'
 import { warehouseTypeOf, WAREHOUSE_TYPE_META } from './warehouse-type'
 import LabelBatchHistoryDialog from '@/views/order/label/LabelBatchHistoryDialog.vue'
 import { ExportConfirmButton } from '@/components/Button'
@@ -294,6 +298,7 @@ const mapOzonSubstatus = createStatusMapper(OZON_SUBSTATUS_MAP)
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
+const ruleDialogOpen = ref(false)
 
 /* 刷新表格 */
 const reloadTable = (resetPageIndex?: boolean) => {

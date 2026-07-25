@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 
@@ -13,6 +15,9 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
  * @author erp
  */
 public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInventory> {
+
+	@Select("SELECT * FROM wms_physical_inventory WHERE id = #{id} FOR UPDATE")
+	WmsPhysicalInventory selectByIdForUpdate(@Param("id") Long id);
 
 	default List<WmsPhysicalInventory> listByWarehouse(Long warehouseId) {
 		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
@@ -45,6 +50,12 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 			.eq(WmsPhysicalInventory::getErpTenantId, erpTenantId)
 			.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
 			.eq(WmsPhysicalInventory::getSkuCode, skuCode));
+	}
+
+	default List<WmsPhysicalInventory> listByPalletId(Long palletId) {
+		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
+			.eq(WmsPhysicalInventory::getPalletId, palletId)
+			.gt(WmsPhysicalInventory::getQuantity, 0));
 	}
 
 	/**

@@ -64,6 +64,7 @@
             so.order_status,
             so.posting_id,
             so.logistics_product_id,
+			so.document_mode,
             lp.product_name AS logistics_product_name,
             so.channel_name,
             so.tracking_no,

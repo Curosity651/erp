@@ -32,6 +32,8 @@ export const OUTBOUND_STATUS_OPTIONS: { label: string; value: OutboundStatus }[]
 
 /** 下架模式文案 */
 export const PICK_MODE_TEXT: Record<PickMode, string> = {
+  SINGLE: '按单拣货',
+  WAVE: '波次拣货',
   CENTRALIZED: '集中分拣',
   BY_ORDER: '按单分拣',
   SECONDARY: '二次分拣'
@@ -39,6 +41,8 @@ export const PICK_MODE_TEXT: Record<PickMode, string> = {
 
 /** 下架模式说明（选择时提示适用场景） */
 export const PICK_MODE_DESC: Record<PickMode, string> = {
+  SINGLE: '单张订单独立拣货并核验',
+  WAVE: '多张订单按库位和 SKU 合并拣货，之后按订单分货',
   CENTRALIZED: '一票一件（1 单 1 SKU），批量拣回打包台配货',
   BY_ORDER: '高货值/爆款/重货大货，按单找货逐单核验',
   SECONDARY: '一票多件（1 单 ≥2 SKU），拣到打包台后按篮子分配'

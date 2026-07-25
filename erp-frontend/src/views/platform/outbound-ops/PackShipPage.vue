@@ -77,7 +77,7 @@
       </template>
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="record.status === 'PICKING'" @click="openPack(record)">打包</a>
+          <a v-if="record.status === 'PICKED'" @click="openPack(record)">打包</a>
           <a v-else-if="record.status === 'PACKED'" @click="openShip(record)">签出</a>
           <span v-else style="color: rgba(0, 0, 0, 0.25)">—</span>
         </operation-group>

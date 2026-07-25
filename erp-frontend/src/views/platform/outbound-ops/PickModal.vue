@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="open"
-    title="下架 - FIFO 分配拣货"
+    title="创建按单拣货任务"
     :width="820"
     :confirm-loading="submitting"
     :ok-button-props="{ disabled: hasShortage }"
@@ -25,6 +25,14 @@
         message="存在缺货 SKU：按规则整单挂起（backorder），不可部分下架。请补货后再下架。"
       />
 
+      <a-alert
+        v-else-if="hasReservation"
+        type="success"
+        show-icon
+        style="margin: 12px 0"
+        message="该订单库存已预留，可以创建拣货任务；下方显示本订单自己的预留批次。"
+      />
+
       <!-- 需求 vs 可用 -->
       <div class="section-title">出库明细</div>
       <a-table
@@ -41,7 +49,8 @@
           </template>
         </a-table-column>
         <a-table-column title="需求数" data-index="requiredQty" :width="80" align="right" />
-        <a-table-column title="可用良品" data-index="availableQty" :width="90" align="right" />
+        <a-table-column title="本单预留" data-index="ownReservedQty" :width="90" align="right" />
+        <a-table-column title="公共可用" data-index="publicAvailableQty" :width="90" align="right" />
         <a-table-column title="缺口" :width="80" align="right">
           <template #default="{ record }">
             <span v-if="record.shortage" class="shortage">
@@ -66,16 +75,8 @@
           <a-table-column title="取货数" data-index="takeQty" :width="80" align="right" />
         </a-table>
 
-        <!-- 下架模式 + 拣货员 -->
+        <!-- 拣货员 -->
         <a-form :label-col="{ style: { width: '80px' } }" style="margin-top: 16px">
-          <a-form-item label="下架模式" required>
-            <a-radio-group v-model:value="pickMode" button-style="solid">
-              <a-radio-button v-for="m in PICK_MODE_OPTIONS" :key="m.value" :value="m.value">
-                {{ m.label }}
-              </a-radio-button>
-            </a-radio-group>
-            <div class="mode-desc">{{ PICK_MODE_DESC[pickMode] }}</div>
-          </a-form-item>
           <a-form-item label="拣货员" required>
             <a-select
               v-model:value="pickerId"
@@ -101,8 +102,7 @@ import {
   confirmPick,
   listPickers
 } from '@/api/wms/outbound-picking'
-import type { OutboundOrderVO, PickAllocationVO, PickMode } from '@/api/wms/outbound-picking/types'
-import { PICK_MODE_OPTIONS, PICK_MODE_DESC } from './constants'
+import type { OutboundOrderVO, PickAllocationVO } from '@/api/wms/outbound-picking/types'
 
 const props = defineProps<{ open: boolean; orderId?: number }>()
 const emit = defineEmits<{
@@ -115,13 +115,15 @@ const submitting = ref(false)
 const order = ref<OutboundOrderVO | null>(null)
 const allocations = ref<PickAllocationVO[]>([])
 
-const pickMode = ref<PickMode>('BY_ORDER')
 const pickerId = ref<number>()
 
 const pickerLoading = ref(false)
 const pickerOptions = ref<{ label: string; value: number }[]>([])
 
 const hasShortage = computed(() => (order.value?.items || []).some(i => i.shortage))
+const hasReservation = computed(() =>
+  (order.value?.items || []).length > 0 && (order.value?.items || []).every(i => i.ownReservedQty >= i.requiredQty)
+)
 
 function rowClass(record: { shortage: boolean }) {
   return record.shortage ? 'shortage-row' : ''
@@ -145,7 +147,6 @@ async function loadData(id: number) {
   order.value = null
   allocations.value = []
   pickerId.value = undefined
-  pickMode.value = 'BY_ORDER'
   try {
     const res = await getOutboundDetail(id)
     if (isSuccess(res) && res.data) order.value = res.data
@@ -183,7 +184,7 @@ async function handleConfirm() {
   try {
     const res = await confirmPick({
       outboundOrderId: order.value.id,
-      pickMode: pickMode.value,
+      pickMode: 'SINGLE',
       pickerId: pickerId.value
     })
     if (isSuccess(res)) {

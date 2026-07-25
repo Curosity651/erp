@@ -5,6 +5,8 @@
     <sql id="baseColumns">
         o.id,
         o.outbound_no AS outboundNo,
+        o.source_type AS sourceType,
+        o.order_count AS salesOrderCount,
         o.erp_tenant_id AS erpTenantId,
         t.tenant_name AS ownerName,
         t.parent_wms_tenant_id AS operatorId,
@@ -67,12 +69,14 @@
     <select id="selectPickers" resultType="com.erp.admin.wms.model.vo.PickerVO">
         SELECT user_id AS id, nickname AS name
         FROM sys_user
-        WHERE deleted = 0 AND status = 1
+        WHERE deleted = 0 AND status = 1 AND tenant_id = #{tenantId}
         ORDER BY user_id
     </select>
 
     <select id="selectPickerName" resultType="string">
-        SELECT nickname FROM sys_user WHERE user_id = #{id} LIMIT 1
+        SELECT nickname FROM sys_user
+        WHERE user_id = #{id} AND tenant_id = #{tenantId} AND deleted = 0 AND status = 1
+        LIMIT 1
     </select>
 
 </mapper>

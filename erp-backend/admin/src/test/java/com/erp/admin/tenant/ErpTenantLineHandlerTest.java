@@ -33,11 +33,11 @@ class ErpTenantLineHandlerTest {
 	}
 
 	@Test
-	void whitelisted_table_without_context_is_skipped() {
+	void business_table_without_context_is_fail_closed() {
 		// 方案②：后台无上下文线程不注入，避免打断定时任务
 		assertThat(TenantContext.getCurrentTenant()).isNull();
-		assertThat(handler.ignoreTable("sku")).isTrue();
-		assertThat(handler.ignoreTable("sku_mapping")).isTrue();
+		assertThat(handler.ignoreTable("sku")).isFalse();
+		assertThat(handler.ignoreTable("sku_mapping")).isFalse();
 	}
 
 	@Test
@@ -75,9 +75,10 @@ class ErpTenantLineHandlerTest {
 		TenantContext.setCurrentTenant(9L);
 		String[] tables = {
 				// A2 商品
-				"sku", "category", "brand", "supplier", "sku_mapping", "sku_files",
+				"sku", "category", "brand", "supplier", "sku_mapping", "sku_files", "sku_barcode",
 				// A3 ERP/OMS 业务
-				"erp_order", "erp_order_item", "erp_label_batch", "erp_label_batch_file", "erp_label_batch_item", "shop",
+				"erp_order", "erp_order_item", "erp_label_batch", "erp_label_batch_file", "erp_label_batch_item",
+				"ozon_shipment_act", "ozon_shipment_act_order", "ozon_delivery_method_rule", "shop",
 				"project_group", "position", "sales_target", "sync_cursor", "wb_report_detail", "wb_financial_sync_job",
 				"wb_financial_sync_task", "wb_financial_sync_page_log", "wb_office", "wb_supply" };
 		for (String t : tables) {

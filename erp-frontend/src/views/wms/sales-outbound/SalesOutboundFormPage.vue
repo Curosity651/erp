@@ -105,6 +105,14 @@
               </a-select>
             </a-form-item>
           </a-col>
+          <a-col :xs="24" :sm="24" :lg="12">
+            <a-form-item label="平台资料" name="documentMode">
+              <a-radio-group v-model:value="formModel.documentMode" button-style="solid">
+                <a-radio-button value="WAREHOUSE_PRINT">仓库打印</a-radio-button>
+                <a-radio-button value="OWNER_PROVIDED">货主已提供</a-radio-button>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
         </a-row>
       </div>
 
@@ -155,7 +163,7 @@
         <a-button @click="handleCancel">取消</a-button>
         <a-button :loading="submitLoading" @click="handleSaveDraft"> 保存草稿 </a-button>
         <a-button type="primary" :loading="submitLoading" @click="handleConfirmOutbound">
-          确认出库
+          提交仓库
         </a-button>
       </a-space>
     </template>
@@ -263,6 +271,7 @@ const formModel = reactive<SalesOutboundDTO>({
   outboundDate: '',
   remark: undefined,
   logisticsProductId: undefined,
+  documentMode: 'WAREHOUSE_PRINT',
   items: []
 })
 
@@ -455,11 +464,37 @@ const handleSaveDraft = async () => {
   }
 }
 
-// 确认出库
+// 提交仓库：这里只预留库存并进入仓库作业，最终签出才扣减。
 const handleConfirmOutbound = async () => {
+  const grouped = new Map<string, { required: number; available: number; known: boolean; name: string }>()
+  outboundItems.value.forEach(item => {
+    const current = grouped.get(item.skuCode) || {
+      required: 0,
+      available: Number(item.availableStock || 0),
+      known: item.availableStock != null,
+      name: item.skuCode
+    }
+    current.required += Number(item.quantity || 0)
+    current.available = Math.max(current.available, Number(item.availableStock || 0))
+    current.known = current.known && item.availableStock != null
+    grouped.set(item.skuCode, current)
+  })
+  const shortages = [...grouped.entries()]
+    .filter(([, value]) => value.known && value.available < value.required)
+    .map(([skuCode, value]) => ({
+      skuCode,
+      skuName: value.name,
+      requiredQty: value.required,
+      availableQty: value.available,
+      shortage: value.required - value.available
+    }))
+  if (shortages.length) {
+    stockShortageModalRef.value?.open(shortages)
+    return
+  }
   Modal.confirm({
-    title: '确认出库',
-    content: '确认出库后将扣减库存，确定要继续吗？',
+    title: '提交仓库',
+    content: '提交后将预留库存并进入海外仓下架流程，最终签出时才扣减实物库存。',
     okText: '确定',
     cancelText: '取消',
     onOk: async () => {
@@ -468,7 +503,7 @@ const handleConfirmOutbound = async () => {
       try {
         const result = await confirmOutbound(id)
         if (isSuccess(result)) {
-          message.success('确认出库成功')
+          message.success('已提交仓库并预留库存')
           emitter.emit('refresh-sales-outbound-list')
           goBackToList()
         } else {
@@ -477,11 +512,11 @@ const handleConfirmOutbound = async () => {
           if (shortages && shortages.length > 0) {
             stockShortageModalRef.value?.open(shortages)
           } else {
-            message.error(result.message || '确认出库失败')
+            message.error(result.message || '提交仓库失败')
           }
         }
       } catch (e) {
-        message.error('确认出库失败')
+        message.error('提交仓库失败')
       }
     }
   })
@@ -512,6 +547,7 @@ const loadOutboundDetail = async (id: number) => {
       formModel.outboundDate = detail.outboundDate
       formModel.remark = detail.remark
       formModel.logisticsProductId = detail.logisticsProductId
+      formModel.documentMode = detail.documentMode || 'WAREHOUSE_PRINT'
       warehouseName.value = detail.warehouseName || ''
 
       // 设置日期显示值

@@ -22,9 +22,9 @@ public interface OutboundPickingMapper {
     OutboundOrderVO selectOrderById(@Param("id") Long id);
 
     /** 拣货员选项（启用的系统用户） */
-    List<PickerVO> selectPickers();
+    List<PickerVO> selectPickers(@Param("tenantId") Long tenantId);
 
     /** 拣货员姓名（下架回填 picker_name） */
-    String selectPickerName(@Param("id") Long id);
+    String selectPickerName(@Param("id") Long id, @Param("tenantId") Long tenantId);
 
 }

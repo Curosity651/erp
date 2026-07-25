@@ -2,6 +2,7 @@ package com.erp.admin.wms;
 
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
 import com.erp.admin.tenant.service.TenantIdentityService;
+import com.erp.admin.order.service.ErpOrderService;
 import com.erp.admin.wms.mapper.OutboundShippingMapper;
 import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
@@ -11,12 +12,15 @@ import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.model.dto.PackDTO;
 import com.erp.admin.wms.model.dto.ShipDTO;
 import com.erp.admin.wms.model.entity.SalesOutboundOrder;
+import com.erp.admin.wms.model.entity.SalesOutboundOrderItem;
 import com.erp.admin.wms.model.entity.WmsOutboundPickAllocation;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.service.OutboundShippingService;
 import com.erp.admin.wms.service.WmsInventoryAggregator;
 import com.erp.admin.wms.service.WmsPalletService;
+import com.erp.admin.wms.service.SalesOutboundPackageService;
+import com.erp.admin.wms.service.WarehouseOutboundDocumentService;
 import org.ballcat.common.core.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +59,9 @@ class OutboundShippingServiceTest {
     private com.erp.admin.tenant.mapper.SysTenantMapper sysTenantMapper;
     private TenantIdentityService tis;
     private WmsPalletService palletService;
+    private ErpOrderService erpOrderService;
+    private SalesOutboundPackageService packageService;
+    private WarehouseOutboundDocumentService documentService;
     private OutboundShippingService service;
 
     @BeforeEach
@@ -70,11 +77,15 @@ class OutboundShippingServiceTest {
         sysTenantMapper = mock(com.erp.admin.tenant.mapper.SysTenantMapper.class);
         tis = mock(TenantIdentityService.class);
         palletService = mock(WmsPalletService.class);
+        erpOrderService = mock(ErpOrderService.class);
+        packageService = mock(SalesOutboundPackageService.class);
+        documentService = mock(WarehouseOutboundDocumentService.class);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
         service = new OutboundShippingService(shippingMapper, orderMapper, itemMapper, physMapper, allocMapper,
-                billingMapper, aggregator, logisticsProductService, sysTenantMapper, tis, palletService);
+                billingMapper, aggregator, logisticsProductService, sysTenantMapper, tis, palletService,
+                erpOrderService, packageService, documentService);
     }
 
     private SalesOutboundOrder order(long id, String status) {
@@ -87,8 +98,8 @@ class OutboundShippingServiceTest {
     }
 
     @Test
-    void pack_only_from_picking() {
-        when(orderMapper.selectById(1L)).thenReturn(order(1, OutboundOrderStatus.PACKED.name()));
+    void pack_rejects_order_still_picking() {
+        when(orderMapper.selectByIdForUpdate(1L)).thenReturn(order(1, OutboundOrderStatus.PICKING.name()));
         PackDTO dto = new PackDTO();
         dto.setOutboundOrderId(1L);
         dto.setPackMode("BY_ORDER");
@@ -97,7 +108,8 @@ class OutboundShippingServiceTest {
 
     @Test
     void pack_transitions_to_packed() {
-        when(orderMapper.selectById(1L)).thenReturn(order(1, OutboundOrderStatus.PICKING.name()));
+        when(orderMapper.selectByIdForUpdate(1L)).thenReturn(order(1, OutboundOrderStatus.PICKED.name()));
+        when(orderMapper.updateById(any(SalesOutboundOrder.class))).thenReturn(1);
         PackDTO dto = new PackDTO();
         dto.setOutboundOrderId(1L);
         dto.setPackMode("BY_ORDER");
@@ -117,7 +129,13 @@ class OutboundShippingServiceTest {
 
     @Test
     void ship_deducts_batch_and_releases_reserved_and_marks_shipped() {
-        when(orderMapper.selectById(1L)).thenReturn(order(1, OutboundOrderStatus.PACKED.name()));
+        SalesOutboundOrder outbound = order(1, OutboundOrderStatus.PACKED.name());
+        outbound.setSourceType("SALES");
+        when(packageService.allPacked(1L)).thenReturn(true);
+        when(orderMapper.selectById(1L)).thenReturn(outbound);
+        SalesOutboundOrderItem item = new SalesOutboundOrderItem();
+        item.setErpOrderId(88L);
+        when(itemMapper.selectByOutboundOrderId(1L)).thenReturn(Collections.singletonList(item));
         WmsOutboundPickAllocation a = new WmsOutboundPickAllocation();
         a.setPhysicalInventoryId(100L);
         a.setSkuCode("SKU1");
@@ -143,6 +161,7 @@ class OutboundShippingServiceTest {
         assertThat(bcap.getValue().getReservedQty()).isEqualTo(0);
         // 聚合刷新受影响 SKU
         verify(aggregator).refreshSnapshot(eq(0L), eq(6L), eq(1L), eq("SKU1"));
+        verify(erpOrderService).completeOutbound(Collections.singletonList(88L), 1L);
         // 无物流产品 → 不计费
         verify(billingMapper, never()).insert(any());
         // 订单转 SHIPPED

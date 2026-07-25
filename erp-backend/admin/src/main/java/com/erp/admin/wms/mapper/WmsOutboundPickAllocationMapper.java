@@ -5,6 +5,7 @@ import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 
 import java.util.List;
+import java.util.Collection;
 
 /**
  * 出库下架 FIFO 分配 Mapper。
@@ -20,6 +21,18 @@ public interface WmsOutboundPickAllocationMapper extends ExtendMapper<WmsOutboun
             .orderByAsc(WmsOutboundPickAllocation::getLocationCode)
             .orderByAsc(WmsOutboundPickAllocation::getInboundDate)
             .orderByAsc(WmsOutboundPickAllocation::getPickOrder));
+    }
+
+    default List<WmsOutboundPickAllocation> selectByOrdersAndInventory(
+            Collection<Long> outboundOrderIds, Long physicalInventoryId) {
+        if (outboundOrderIds == null || outboundOrderIds.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        return selectList(WrappersX.lambdaQueryX(WmsOutboundPickAllocation.class)
+                .in(WmsOutboundPickAllocation::getOutboundOrderId, outboundOrderIds)
+                .eq(WmsOutboundPickAllocation::getPhysicalInventoryId, physicalInventoryId)
+                .orderByAsc(WmsOutboundPickAllocation::getId)
+                .last("FOR UPDATE"));
     }
 
 }

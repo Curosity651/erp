@@ -26,6 +26,11 @@ public enum StockStatus {
     ZERO("zero", "无库存"),
 
     /**
+     * 已为当前出库单预留，尚未完成物理扣减
+     */
+    RESERVED("reserved", "已预留"),
+
+    /**
      * 已扣减
      */
     DEDUCTED("deducted", "已扣减");

@@ -11,10 +11,20 @@
         />
       </a-form-item>
       <a-form-item label="SKU">
-        <a-input v-model:value="filters.skuCode" allow-clear placeholder="SKU 编码" style="width: 160px" />
+        <a-input
+          v-model:value="filters.skuCode"
+          allow-clear
+          placeholder="SKU 编码"
+          style="width: 160px"
+        />
       </a-form-item>
       <a-form-item label="状态">
-        <a-select v-model:value="filters.status" allow-clear :options="statusOptions" style="width: 130px" />
+        <a-select
+          v-model:value="filters.status"
+          allow-clear
+          :options="statusOptions"
+          style="width: 130px"
+        />
       </a-form-item>
       <a-form-item>
         <a-button type="primary" :loading="loading" @click="load">查询</a-button>
@@ -51,7 +61,10 @@
           <a-tag v-else color="orange">待校准</a-tag>
         </template>
         <template v-else-if="column.key === 'status'">
-          <a-badge :status="statusColor(record.palletStatus)" :text="statusText(record.palletStatus)" />
+          <a-badge
+            :status="statusColor(record.palletStatus)"
+            :text="statusText(record.palletStatus)"
+          />
         </template>
         <template v-else-if="column.key === 'operate'">
           <a-space size="small">
@@ -68,9 +81,15 @@
         <a-descriptions-item label="托盘号">{{ current.palletNo }}</a-descriptions-item>
         <a-descriptions-item label="层位">{{ current.slotCode || '-' }}</a-descriptions-item>
         <a-descriptions-item label="类型">{{ typeText(current.palletType) }}</a-descriptions-item>
-        <a-descriptions-item label="状态">{{ statusText(current.palletStatus) }}</a-descriptions-item>
-        <a-descriptions-item label="容量">{{ current.capacityPercent ? `${current.capacityPercent}%` : '待校准' }}</a-descriptions-item>
-        <a-descriptions-item label="重量">{{ current.actualWeightKg ? `${current.actualWeightKg} kg` : '-' }}</a-descriptions-item>
+        <a-descriptions-item label="状态">{{
+          statusText(current.palletStatus)
+        }}</a-descriptions-item>
+        <a-descriptions-item label="容量">{{
+          current.capacityPercent ? `${current.capacityPercent}%` : '待校准'
+        }}</a-descriptions-item>
+        <a-descriptions-item label="重量">{{
+          current.actualWeightKg ? `${current.actualWeightKg} kg` : '-'
+        }}</a-descriptions-item>
       </a-descriptions>
       <a-table
         v-if="current"
@@ -83,13 +102,24 @@
       />
     </a-drawer>
 
-    <a-modal v-model:open="capacityOpen" title="校准托盘容量" :confirm-loading="saving" @ok="saveCapacity">
+    <a-modal
+      v-model:open="capacityOpen"
+      title="校准托盘容量"
+      :confirm-loading="saving"
+      @ok="saveCapacity"
+    >
       <a-form :model="capacity" layout="vertical">
         <a-form-item label="现场占用比例" required>
           <a-slider v-model:value="capacity.capacityPercent" :min="1" :max="100" :marks="marks" />
         </a-form-item>
         <a-form-item label="实际重量">
-          <a-input-number v-model:value="capacity.actualWeightKg" :min="0" :precision="2" addon-after="kg" style="width: 100%" />
+          <a-input-number
+            v-model:value="capacity.actualWeightKg"
+            :min="0"
+            :precision="2"
+            addon-after="kg"
+            style="width: 100%"
+          />
         </a-form-item>
         <a-form-item label="现场已满">
           <a-switch v-model:checked="capacity.markFull" />
@@ -106,6 +136,7 @@ import { isSuccess } from '@/api'
 import { getWarehouseOptions } from '@/api/wms/warehouse'
 import { calibratePallet, listPallets } from '@/api/wms/pallet'
 import type { PalletSummaryVO } from '@/api/wms/pallet'
+import QRCode from 'qrcode'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -115,13 +146,21 @@ const detailOpen = ref(false)
 const capacityOpen = ref(false)
 const warehouseOptions = ref<{ value: number; label: string }[]>([])
 const filters = reactive<{ warehouseId?: number; skuCode?: string; status?: string }>({})
-const capacity = reactive<{ palletId?: number; capacityPercent: number; actualWeightKg?: number; markFull: boolean }>({ capacityPercent: 50, markFull: false })
+const capacity = reactive<{
+  palletId?: number
+  capacityPercent: number
+  actualWeightKg?: number
+  markFull: boolean
+}>({ capacityPercent: 50, markFull: false })
 const marks = { 25: '25%', 50: '50%', 75: '75%', 100: '满' }
 
 const statusOptions = [
-  { value: 'PARTIAL', label: '半托' }, { value: 'FULL', label: '满托' },
-  { value: 'ALLOCATED', label: '已分配' }, { value: 'PICKING', label: '拣货中' },
-  { value: 'LOCKED', label: '已锁定' }, { value: 'CLOSED', label: '已关闭' }
+  { value: 'PARTIAL', label: '半托' },
+  { value: 'FULL', label: '满托' },
+  { value: 'ALLOCATED', label: '已分配' },
+  { value: 'PICKING', label: '拣货中' },
+  { value: 'LOCKED', label: '已锁定' },
+  { value: 'CLOSED', label: '已关闭' }
 ]
 const columns = [
   { title: '托盘号', dataIndex: 'palletNo', key: 'palletNo', width: 210, fixed: 'left' },
@@ -145,10 +184,15 @@ async function load() {
   try {
     const response = await listPallets(filters)
     if (isSuccess(response)) rows.value = response.data || []
-  } finally { loading.value = false }
+  } finally {
+    loading.value = false
+  }
 }
 
-function showDetail(record: PalletSummaryVO) { current.value = record; detailOpen.value = true }
+function showDetail(record: PalletSummaryVO) {
+  current.value = record
+  detailOpen.value = true
+}
 function openCapacity(record: PalletSummaryVO) {
   current.value = record
   capacity.palletId = record.id
@@ -161,33 +205,100 @@ async function saveCapacity() {
   if (!capacity.palletId) return
   saving.value = true
   try {
-    const response = await calibratePallet({ palletId: capacity.palletId, capacityPercent: capacity.capacityPercent, actualWeightKg: capacity.actualWeightKg, markFull: capacity.markFull })
-    if (isSuccess(response)) { message.success('托盘容量已更新'); capacityOpen.value = false; await load() }
-  } finally { saving.value = false }
+    const response = await calibratePallet({
+      palletId: capacity.palletId,
+      capacityPercent: capacity.capacityPercent,
+      actualWeightKg: capacity.actualWeightKg,
+      markFull: capacity.markFull
+    })
+    if (isSuccess(response)) {
+      message.success('托盘容量已更新')
+      capacityOpen.value = false
+      await load()
+    }
+  } finally {
+    saving.value = false
+  }
 }
 
-function printLabel(record: PalletSummaryVO) {
+async function printLabel(record: PalletSummaryVO) {
   const page = window.open('', '_blank', 'width=700,height=600')
   if (!page) return
-  page.document.write(`<html><head><title>${record.palletNo}</title><style>body{font-family:Arial,"Microsoft YaHei";padding:30px}.label{width:440px;height:270px;border:3px solid #111;padding:24px;box-sizing:border-box}h1{font-size:32px;margin:0 0 20px}.slot{font-size:28px;font-weight:700}.items{font-size:17px;line-height:1.8;margin-top:16px}.code{font-family:monospace;font-size:24px;letter-spacing:2px;margin-top:14px}</style></head><body><div class="label"><h1>${record.palletNo}</h1><div class="slot">${record.slotCode || ''}</div><div class="items">${record.items.map(item => `${item.skuCode} × ${item.quantity}`).join('<br>')}</div><div class="code">*${record.palletNo}*</div></div></body></html>`)
-  page.document.close(); page.print()
+  const qr = await QRCode.toDataURL(record.palletNo, { margin: 1, width: 220 })
+  page.document.write(
+    `<html><head><title>${record.palletNo}</title><style>@page{size:80mm 50mm;margin:0}body{font-family:Arial,"Microsoft YaHei";margin:0}.label{width:80mm;height:50mm;padding:4mm;display:grid;grid-template-columns:32mm 1fr;box-sizing:border-box;gap:4mm;align-items:center}img{width:30mm;height:30mm}h1{font-size:18pt;margin:0 0 3mm}.slot{font-size:14pt;font-weight:700}.items{font-size:8pt;line-height:1.5;margin-top:2mm}</style></head><body><div class="label"><img src="${qr}"><div><h1>${record.palletNo}</h1><div class="slot">${record.slotCode || ''}</div><div class="items">${record.items.map(item => `${item.skuCode} × ${item.quantity}`).join('<br>')}</div></div></div></body></html>`
+  )
+  page.document.close()
+  page.print()
 }
 
-function typeText(value: string) { return ({ SINGLE_FULL: '单品满托', SINGLE_PARTIAL: '单品半托', MIXED: '混托' } as Record<string,string>)[value] || value }
-function typeColor(value: string) { return ({ SINGLE_FULL: 'green', SINGLE_PARTIAL: 'blue', MIXED: 'orange' } as Record<string,string>)[value] || 'default' }
-function statusText(value: string) { return ({ PARTIAL: '半托', FULL: '满托', ALLOCATED: '已分配', PICKING: '拣货中', SHIPPED: '已发货', CLOSED: '已关闭', LOCKED: '已锁定' } as Record<string,string>)[value] || value }
-function statusColor(value: string) { return value === 'FULL' ? 'success' : value === 'CLOSED' ? 'default' : value === 'LOCKED' ? 'error' : 'processing' }
+function typeText(value: string) {
+  return (
+    (
+      { SINGLE_FULL: '单品满托', SINGLE_PARTIAL: '单品半托', MIXED: '混托' } as Record<
+        string,
+        string
+      >
+    )[value] || value
+  )
+}
+function typeColor(value: string) {
+  return (
+    ({ SINGLE_FULL: 'green', SINGLE_PARTIAL: 'blue', MIXED: 'orange' } as Record<string, string>)[
+      value
+    ] || 'default'
+  )
+}
+function statusText(value: string) {
+  return (
+    (
+      {
+        PARTIAL: '半托',
+        FULL: '满托',
+        ALLOCATED: '已分配',
+        PICKING: '拣货中',
+        SHIPPED: '已发货',
+        CLOSED: '已关闭',
+        LOCKED: '已锁定'
+      } as Record<string, string>
+    )[value] || value
+  )
+}
+function statusColor(value: string) {
+  return value === 'FULL'
+    ? 'success'
+    : value === 'CLOSED'
+      ? 'default'
+      : value === 'LOCKED'
+        ? 'error'
+        : 'processing'
+}
 
 onMounted(async () => {
   const response = await getWarehouseOptions()
-  if (isSuccess(response)) warehouseOptions.value = (response.data || []).map(item => ({ value: item.id, label: item.warehouseName }))
+  if (isSuccess(response))
+    warehouseOptions.value = (response.data || []).map(item => ({
+      value: item.id,
+      label: item.warehouseName
+    }))
   await load()
 })
 </script>
 
 <style scoped>
-.page { background: #fff; padding: 16px; min-height: 100%; }
-.filters { margin-bottom: 16px; }
-.goods-cell { display: grid; gap: 2px; }
-.detail-table { margin-top: 16px; }
+.page {
+  background: #fff;
+  padding: 16px;
+  min-height: 100%;
+}
+.filters {
+  margin-bottom: 16px;
+}
+.goods-cell {
+  display: grid;
+  gap: 2px;
+}
+.detail-table {
+  margin-top: 16px;
+}
 </style>

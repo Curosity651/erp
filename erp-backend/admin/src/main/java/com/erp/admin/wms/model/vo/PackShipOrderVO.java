@@ -19,6 +19,12 @@ public class PackShipOrderVO {
 
     private String outboundNo;
 
+	private String sourceType;
+
+	private Integer salesOrderCount;
+
+	private String platform;
+
     private Long erpTenantId;
 
     private String ownerName;
@@ -48,6 +54,8 @@ public class PackShipOrderVO {
     @Schema(title = "关联物流产品名(计费依据)")
     private String logisticsProductName;
 
+	private String documentMode;
+
     @Schema(title = "次品/电子类→签出强制拍照")
     private Boolean needPhoto;
 
@@ -63,5 +71,8 @@ public class PackShipOrderVO {
 
     @Schema(title = "明细(详情才带)")
     private List<PackShipItemVO> items;
+
+	@Schema(title = "销售出库的平台订单包裹")
+	private List<OutboundPackageVO> packages;
 
 }

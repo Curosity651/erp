@@ -5,6 +5,9 @@
     <sql id="baseColumns">
         o.id,
         o.outbound_no AS outboundNo,
+		o.source_type AS sourceType,
+		o.order_count AS salesOrderCount,
+		o.platform AS platform,
         o.erp_tenant_id AS erpTenantId,
         t.tenant_name AS ownerName,
         t.parent_wms_tenant_id AS operatorId,
@@ -21,6 +24,7 @@
         o.weight AS weight,
         o.shipping_fee AS shippingFee,
         lp.product_name AS logisticsProductName,
+		o.document_mode AS documentMode,
         DATE_FORMAT(o.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
     </sql>
 

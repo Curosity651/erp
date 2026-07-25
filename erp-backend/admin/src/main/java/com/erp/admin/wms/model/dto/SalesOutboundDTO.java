@@ -47,6 +47,9 @@ public class SalesOutboundDTO {
     @Schema(title = "物流产品ID(父服务商提供，选填；签出时按其单价生成物流费)")
     private Long logisticsProductId;
 
+	@Schema(title = "平台资料处理：WAREHOUSE_PRINT/OWNER_PROVIDED")
+	private String documentMode;
+
     @Valid
     @NotEmpty(message = "出库明细不能为空")
     @Schema(title = "出库明细")

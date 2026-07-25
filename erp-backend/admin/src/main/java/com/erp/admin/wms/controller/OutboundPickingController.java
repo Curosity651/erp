@@ -2,10 +2,18 @@ package com.erp.admin.wms.controller;
 
 import com.erp.admin.wms.model.dto.PickDTO;
 import com.erp.admin.wms.model.qo.OutboundPickingQO;
+import com.erp.admin.wms.model.dto.BatchPickDTO;
+import com.erp.admin.wms.model.dto.BatchPickPreviewDTO;
+import com.erp.admin.wms.model.dto.PackageScanDTO;
+import com.erp.admin.wms.model.dto.PickExceptionDTO;
+import com.erp.admin.wms.model.dto.PickLineScanDTO;
+import com.erp.admin.wms.model.dto.ResolvePickExceptionDTO;
 import com.erp.admin.wms.model.vo.OutboundOrderVO;
 import com.erp.admin.wms.model.vo.PickAllocationVO;
 import com.erp.admin.wms.model.vo.PickListVO;
 import com.erp.admin.wms.model.vo.PickerVO;
+import com.erp.admin.wms.model.vo.BatchPickPreviewVO;
+import com.erp.admin.wms.model.vo.BatchPickResultVO;
 import com.erp.admin.wms.service.OutboundPickingService;
 import com.erp.admin.wms.service.OutboundPickingService.PickResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +25,7 @@ import org.ballcat.common.model.domain.PageResult;
 import org.ballcat.common.model.result.ApiResult;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +47,7 @@ import java.util.List;
 public class OutboundPickingController {
 
     private final OutboundPickingService outboundPickingService;
+    private final PrincipalAttributeAccessor principalAttributeAccessor;
 
     @Operation(summary = "分页待下架/拣货中订单")
     @GetMapping("/page")
@@ -71,6 +81,78 @@ public class OutboundPickingController {
         }
         return ApiResult.ok();
     }
+
+    @Operation(summary = "批量拣货任务自动拆分预览")
+    @PostMapping("/batch-preview")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<BatchPickPreviewVO> batchPreview(@Validated @RequestBody BatchPickPreviewDTO dto) {
+        return ApiResult.ok(outboundPickingService.previewBatch(dto));
+    }
+
+    @Operation(summary = "批量创建拣货任务")
+    @PostMapping("/batch-create")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<BatchPickResultVO> batchCreate(@Validated @RequestBody BatchPickDTO dto) {
+        return ApiResult.ok(outboundPickingService.createBatch(dto));
+    }
+
+    @Operation(summary = "确认拣货任务完成并进入待打包")
+    @PostMapping("/tasks/{taskId}/complete")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<Void> completeTask(@PathVariable("taskId") Long taskId) {
+        outboundPickingService.completeTask(taskId);
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "扫描或手工登记一条实拣数量")
+    @PostMapping("/tasks/scan")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<Void> scanLine(@Validated @RequestBody PickLineScanDTO dto) {
+        outboundPickingService.scanPickLine(dto, principalAttributeAccessor.getUserId());
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "报告拣货缺货异常")
+    @PostMapping("/tasks/exception")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<Void> reportException(@Validated @RequestBody PickExceptionDTO dto) {
+        outboundPickingService.reportPickException(dto, principalAttributeAccessor.getUserId());
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "查询异常明细的替代批次")
+    @GetMapping("/tasks/{taskId}/lines/{lineId}/alternatives")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<List<PickAllocationVO>> alternatives(@PathVariable("taskId") Long taskId,
+            @PathVariable("lineId") Long lineId) {
+        return ApiResult.ok(outboundPickingService.listPickAlternatives(taskId, lineId));
+    }
+
+    @Operation(summary = "主管处理拣货异常")
+    @PostMapping("/tasks/exception/resolve")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<Void> resolveException(@Validated @RequestBody ResolvePickExceptionDTO dto) {
+        outboundPickingService.resolvePickException(dto, principalAttributeAccessor.getUserId());
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "扫描核对一个平台订单格口商品")
+    @PostMapping("/tasks/{taskId}/packages/scan")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    public ApiResult<Void> scanPackageSort(@PathVariable("taskId") Long taskId,
+            @Validated @RequestBody PackageScanDTO dto) {
+        outboundPickingService.scanPackageSort(taskId, dto, principalAttributeAccessor.getUserId());
+        return ApiResult.ok();
+    }
+
+	@Operation(summary = "确认一个平台订单格口完成分货")
+	@PostMapping("/tasks/{taskId}/packages/{packageId}/sort")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> confirmPackageSort(@PathVariable("taskId") Long taskId,
+			@PathVariable("packageId") Long packageId) {
+		outboundPickingService.confirmPackageSort(taskId, packageId);
+		return ApiResult.ok();
+	}
 
     @Operation(summary = "拣货单")
     @GetMapping("/{id}/pick-list")

@@ -139,6 +139,8 @@ public class OzonOrderUpsertService {
 		order.setWarehouseId(dto.getWarehouseId() != null ? dto.getWarehouseId().toString() : null);
 		// 仅 FBS 有发货仓库名；用于大仓/小仓判定（含「大」字=大仓，只有大仓需生成运单）
 		order.setWarehouseName(dto.getWarehouseName());
+		order.setDeliveryMethodId(dto.getDeliveryMethodId());
+		order.setDeliveryMethodName(dto.getDeliveryMethodName());
 		order.setDestinationWarehouseId(
 				dto.getDestinationWarehouseId() != null ? dto.getDestinationWarehouseId().toString() : null);
 

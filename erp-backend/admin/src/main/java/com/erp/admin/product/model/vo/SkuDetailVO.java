@@ -359,4 +359,7 @@ public class SkuDetailVO {
 	@Schema(title = "SKU文件映射表", description = "key为文件类型，value为该类型的文件列表")
 	private Map<String, List<SkuFileVO>> files;
 
+	@Schema(title = "商品条码列表")
+	private List<String> barcodes;
+
 }

@@ -347,4 +347,8 @@ public class SkuUpdateDTO implements TaxRateValidatable {
 	@Schema(title = "SKU文件映射表", description = "key为文件类型，value为该类型的文件列表，传入完整映射用于全量更新")
 	private Map<String, List<SkuFileDTO>> files;
 
+	@Size(max = 20, message = "一个SKU最多维护20个商品条码")
+	@Schema(title = "商品条码列表", description = "支持一个ERP SKU对应多个EAN/UPC或内部商品条码")
+	private List<String> barcodes;
+
 }

@@ -13,6 +13,8 @@ export interface SalesOutboundDTO {
   /** 物流产品ID（父服务商提供，选填；签出时按其单价计物流费） */
   logisticsProductId?: number
   logisticsProductName?: string
+  /** 平台资料处理：仓库打印 / 货主已提供（过渡模式） */
+  documentMode?: 'WAREHOUSE_PRINT' | 'OWNER_PROVIDED'
   channelName?: string
   trackingNo?: string
   weight?: number
@@ -76,6 +78,7 @@ export interface SalesOutboundDetailVO extends SalesOutboundPageVO {
   items: SalesOutboundItemVO[]
   /** 物流产品ID（父服务商提供） */
   logisticsProductId?: number
+  documentMode?: 'WAREHOUSE_PRINT' | 'OWNER_PROVIDED'
   /** 是否存在库存不足 */
   hasStockShortage?: boolean
   /** 库存不足的SKU数量 */
@@ -188,4 +191,4 @@ export interface StockShortageVO {
 /**
  * 库存状态类型
  */
-export type StockStatus = 'sufficient' | 'insufficient' | 'zero' | 'deducted'
+export type StockStatus = 'sufficient' | 'insufficient' | 'zero' | 'reserved' | 'deducted'

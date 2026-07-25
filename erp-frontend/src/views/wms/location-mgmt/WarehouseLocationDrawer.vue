@@ -83,14 +83,65 @@
           </a-row>
           <a-divider orientation="left" plain>托盘规则</a-divider>
           <a-row :gutter="16">
-            <a-col :span="6"><a-form-item label="层数"><a-input-number v-model:value="form.palletLevels" :min="3" :max="3" disabled style="width: 100%" /></a-form-item></a-col>
-            <a-col :span="6"><a-form-item label="最多品种"><a-input-number v-model:value="form.maxSkuKindsPerPallet" :min="1" :max="4" style="width: 100%" /></a-form-item></a-col>
-            <a-col :span="6"><a-form-item label="跨货主混托"><a-switch v-model:checked="allowCrossOwnerMix" /></a-form-item></a-col>
-            <a-col :span="6"><a-form-item label="利用率"><a-input-number v-model:value="form.defaultPalletUtilization" :min="0.1" :max="1" :step="0.05" :precision="2" style="width: 100%" /></a-form-item></a-col>
-            <a-col :span="6"><a-form-item label="长(mm)"><a-input-number v-model:value="form.defaultPalletLengthMm" :min="1" style="width: 100%" /></a-form-item></a-col>
-            <a-col :span="6"><a-form-item label="宽(mm)"><a-input-number v-model:value="form.defaultPalletWidthMm" :min="1" style="width: 100%" /></a-form-item></a-col>
-            <a-col :span="6"><a-form-item label="高(mm)"><a-input-number v-model:value="form.defaultPalletHeightMm" :min="1" style="width: 100%" /></a-form-item></a-col>
-            <a-col :span="6"><a-form-item label="承重(kg)"><a-input-number v-model:value="form.defaultPalletMaxWeightKg" :min="1" style="width: 100%" /></a-form-item></a-col>
+            <a-col :span="6"
+              ><a-form-item label="层数"
+                ><a-input-number
+                  v-model:value="form.palletLevels"
+                  :min="3"
+                  :max="3"
+                  disabled
+                  style="width: 100%" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="最多品种"
+                ><a-input-number
+                  v-model:value="form.maxSkuKindsPerPallet"
+                  :min="1"
+                  :max="4"
+                  style="width: 100%" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="跨货主混托"
+                ><a-switch v-model:checked="allowCrossOwnerMix" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="利用率"
+                ><a-input-number
+                  v-model:value="form.defaultPalletUtilization"
+                  :min="0.1"
+                  :max="1"
+                  :step="0.05"
+                  :precision="2"
+                  style="width: 100%" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="长(mm)"
+                ><a-input-number
+                  v-model:value="form.defaultPalletLengthMm"
+                  :min="1"
+                  style="width: 100%" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="宽(mm)"
+                ><a-input-number
+                  v-model:value="form.defaultPalletWidthMm"
+                  :min="1"
+                  style="width: 100%" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="高(mm)"
+                ><a-input-number
+                  v-model:value="form.defaultPalletHeightMm"
+                  :min="1"
+                  style="width: 100%" /></a-form-item
+            ></a-col>
+            <a-col :span="6"
+              ><a-form-item label="承重(kg)"
+                ><a-input-number
+                  v-model:value="form.defaultPalletMaxWeightKg"
+                  :min="1"
+                  style="width: 100%" /></a-form-item
+            ></a-col>
           </a-row>
         </a-form>
         <div class="hint">
@@ -114,6 +165,9 @@
         <div class="section-title">
           <span>库位（共 {{ locations.length }} 个）</span>
           <a-space>
+            <a-button v-if="locations.length > 0" size="small" @click="printLocationLabels">
+              打印库位标签
+            </a-button>
             <a-radio-group v-model:value="viewMode" size="small" button-style="solid">
               <a-radio-button value="grid">网格视图</a-radio-button>
               <a-radio-button value="list">列表视图</a-radio-button>
@@ -194,7 +248,8 @@
                           :class="{
                             selected: selectedIds.has(cellMap[`${rn}|${c}`].id),
                             preview: settingMode && inDragRect(ri, c),
-                            locked: settingMode && occupiedCodes.has(cellMap[`${rn}|${c}`].locationCode)
+                            locked:
+                              settingMode && occupiedCodes.has(cellMap[`${rn}|${c}`].locationCode)
                           }"
                           :style="{ background: zoneCellColor(zoneTypeOf(cellMap[`${rn}|${c}`])) }"
                           @mousedown="onCellDown(ri, c, $event)"
@@ -206,7 +261,8 @@
                             :key="slot.slotId"
                             :class="{ occupied: slot.palletId }"
                           >
-                            L{{ slot.levelNo }} {{ slot.palletId ? `${Math.round(slot.capacityPercent || 0)}%` : '空' }}
+                            L{{ slot.levelNo }}
+                            {{ slot.palletId ? `${Math.round(slot.capacityPercent || 0)}%` : '空' }}
                           </span>
                         </div>
                       </a-tooltip>
@@ -251,7 +307,9 @@
             :maxlength="32"
             @press-enter="addVirtual"
           />
-          <a-button type="primary" :loading="addingVirtual" @click="addVirtual">新增虚拟库位</a-button>
+          <a-button type="primary" :loading="addingVirtual" @click="addVirtual"
+            >新增虚拟库位</a-button
+          >
         </div>
         <a-table
           size="small"
@@ -265,7 +323,10 @@
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'op'">
-              <a-popconfirm title="确认删除该虚拟库位？（其上有货则不可删）" @confirm="removeVirtual(record.id)">
+              <a-popconfirm
+                title="确认删除该虚拟库位？（其上有货则不可删）"
+                @confirm="removeVirtual(record.id)"
+              >
                 <a-button type="link" danger size="small" :disabled="!canEdit">删除</a-button>
               </a-popconfirm>
             </template>
@@ -296,6 +357,7 @@ import type { WarehouseStructure, WmsZone, WmsLocation } from '@/api/wms/locatio
 import { useAuthorize } from '@/hooks/permission'
 import { listPalletSlots } from '@/api/wms/pallet'
 import type { PalletSlotVO } from '@/api/wms/inbound-execution'
+import QRCode from 'qrcode'
 
 const emits = defineEmits<{ (e: 'success'): void }>()
 
@@ -368,7 +430,9 @@ const form = reactive({
 })
 const allowCrossOwnerMix = computed({
   get: () => form.allowCrossOwnerMix === 1,
-  set: value => { form.allowCrossOwnerMix = value ? 1 : 0 }
+  set: value => {
+    form.allowCrossOwnerMix = value ? 1 : 0
+  }
 })
 
 const drawerTitle = computed(() =>
@@ -440,6 +504,39 @@ function slotsFor(locationId: number) {
   return palletSlots.value
     .filter(slot => slot.locationId === locationId)
     .sort((a, b) => b.levelNo - a.levelNo)
+}
+
+async function printLocationLabels() {
+  if (!current.value || locations.value.length === 0) return
+  const cards = await Promise.all(
+    locations.value.map(async location => ({
+      location,
+      qr: await QRCode.toDataURL(location.locationCode, { margin: 1, width: 220 })
+    }))
+  )
+  const html = cards
+    .map(
+      ({ location, qr }) => `<section class="label">
+    <img src="${qr}" alt="${location.locationCode}">
+    <div><div class="kind">库位</div><div class="code">${location.locationCode}</div>
+    <div class="sub">${current.value?.warehouseName || ''} · ${zoneNameOf(location)}</div></div>
+  </section>`
+    )
+    .join('')
+  const page = window.open('', '_blank', 'width=700,height=800')
+  if (!page) {
+    message.warning('打印窗口被浏览器拦截，请允许弹出窗口后重试')
+    return
+  }
+  page.document
+    .write(`<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>库位标签</title>
+  <style>@page{size:80mm 50mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:"Microsoft YaHei",sans-serif}
+  .label{width:80mm;height:50mm;padding:4mm;page-break-after:always;display:grid;grid-template-columns:32mm 1fr;gap:4mm;align-items:center}
+  img{width:30mm;height:30mm}.kind{font-size:10pt;color:#555}.code{font-size:19pt;font-weight:700;overflow-wrap:anywhere}.sub{font-size:9pt;color:#555;margin-top:3mm}</style>
+  </head><body>${html}</body></html>`)
+  page.document.close()
+  page.focus()
+  page.onload = () => page.print()
 }
 
 /** 选中一个库位（有货占用的库位锁定，不可选） */
@@ -806,9 +903,17 @@ export default {
   overflow: hidden;
 }
 
-.cell.filled strong { font-size: 11px; }
-.cell.filled span { color: rgba(0, 0, 0, 0.55); line-height: 16px; }
-.cell.filled span.occupied { color: #135200; font-weight: 600; }
+.cell.filled strong {
+  font-size: 11px;
+}
+.cell.filled span {
+  color: rgba(0, 0, 0, 0.55);
+  line-height: 16px;
+}
+.cell.filled span.occupied {
+  color: #135200;
+  font-weight: 600;
+}
 
 .cell.filled {
   border: 1px solid rgba(0, 0, 0, 0.12);

@@ -12,6 +12,7 @@ import com.erp.admin.order.mapper.ErpOrderMapper;
 import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.order.model.enums.ErpOrderStatusEnum;
 import com.erp.admin.order.service.common.model.ConfirmResult;
+import com.erp.admin.order.service.PlatformConfirmGuard;
 import com.erp.admin.platform.PlatformEnum;
 import com.erp.admin.platform.credential.CredentialService;
 import com.erp.admin.platform.yandex.YandexClient;
@@ -57,6 +58,7 @@ public class YdOrderConfirmService {
 	private final YdOrderSyncService ydOrderSyncService;
 	private final ObjectMapper objectMapper;
 	private final CredentialService credentialService;
+	private final PlatformConfirmGuard confirmGuard;
 
 	/**
 	 * 批量确认发货
@@ -151,9 +153,15 @@ public class YdOrderConfirmService {
 	private ConfirmResult.Item confirmSingleOrder(YandexCredential credential, ErpOrder order) {
 		ConfirmResult.Item item = new ConfirmResult.Item();
 		item.setOrderId(order.getId());
+		if (!confirmGuard.tryClaim(order.getId())) {
+			item.setSuccess(false);
+			item.setMessage("该订单正在确认或已提交平台，请先同步订单状态");
+			return item;
+		}
 
 		try {
 			if (!StringUtils.hasText(order.getPlatformOrderId())) {
+				confirmGuard.failure(order.getId());
 				item.setSuccess(false);
 				item.setMessage("缺少平台订单号");
 				return item;
@@ -162,6 +170,7 @@ public class YdOrderConfirmService {
 			try {
 				ydOrderId = Long.parseLong(order.getPlatformOrderId());
 			} catch (NumberFormatException e) {
+				confirmGuard.failure(order.getId());
 				item.setSuccess(false);
 				item.setMessage("平台订单号格式异常: " + order.getPlatformOrderId());
 				return item;
@@ -189,7 +198,9 @@ public class YdOrderConfirmService {
 
 			item.setSuccess(true);
 			item.setMessage("OK");
+			confirmGuard.success(order.getId());
 		} catch (Exception ex) {
+			confirmGuard.failure(order.getId());
 			item.setSuccess(false);
 			item.setMessage(ex.getMessage());
 			log.error("[YANDEX][CONFIRM] 确认失败 orderId={} error={}",

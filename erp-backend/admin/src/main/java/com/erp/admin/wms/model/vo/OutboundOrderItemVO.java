@@ -24,6 +24,12 @@ public class OutboundOrderItemVO {
     @Schema(title = "可用良品库存(GOOD 且 allocatable)")
     private Integer availableQty;
 
+    @Schema(title = "当前订单自己已预留数量")
+    private Integer ownReservedQty;
+
+    @Schema(title = "扣除全部订单预留后的公共可用数量")
+    private Integer publicAvailableQty;
+
     @Schema(title = "缺货标记(availableQty < requiredQty)")
     private Boolean shortage;
 

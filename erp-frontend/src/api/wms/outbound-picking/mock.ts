@@ -80,6 +80,8 @@ function seed() {
     const order: OutboundOrderVO = {
       id: SEQ++,
       outboundNo: `OB${dayjs().format('YYYYMMDD')}${String(1000 + i)}`,
+      sourceType: 'SALES',
+      salesOrderCount: randInt(1, 5),
       erpTenantId: owner.erpTenantId,
       ownerName: owner.ownerName,
       warehouseId: wh.warehouseId,
@@ -196,6 +198,7 @@ export function mockPickList(id: number): PickListVO | undefined {
   const allocations = ALLOCATIONS.get(id) || buildAllocations(order)
   return {
     outboundNo: order.outboundNo,
+    sourceType: order.sourceType,
     ownerName: order.ownerName,
     warehouseName: order.warehouseName,
     pickMode: (order.pickMode || 'BY_ORDER') as PickMode,

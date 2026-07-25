@@ -76,6 +76,8 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 
 	private final SkuMappingMapper skuMappingMapper;
 
+	private final SkuBarcodeService skuBarcodeService;
+
 	private final TenantIdentityService tenantIdentityService;
 
 	private final OssService ossService;
@@ -315,6 +317,9 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 			// 保存文件信息
 			saveSkuFilesFromMap(sku.getId(), createDTO.getFiles());
 		}
+		if (saved && createDTO.getBarcodes() != null) {
+			skuBarcodeService.replace(sku.getId(), sku.getSkuCode(), createDTO.getBarcodes());
+		}
 
 		return saved;
 	}
@@ -340,6 +345,9 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 		if (success && updateDTO.getFiles() != null) {
 			// 智能更新文件信息（对比后增删）
 			updateSkuFilesFromMap(updateDTO.getId(), updateDTO.getFiles());
+		}
+		if (success && updateDTO.getBarcodes() != null) {
+			skuBarcodeService.replace(updateDTO.getId(), updateDTO.getSkuCode(), updateDTO.getBarcodes());
 		}
 
 		return success;
@@ -1009,6 +1017,7 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 		// 添加文件信息（使用Map结构）
 		Map<String, List<SkuFileVO>> filesMap = getSkuFilesMap(skuId);
 		detailVO.setFiles(filesMap);
+		detailVO.setBarcodes(skuBarcodeService.listBySkuId(skuId));
 
 		return detailVO;
 	}
@@ -1101,6 +1110,7 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 
 		// 删除SKU映射
 		this.skuMappingMapper.deleteBySkuCode(sku.getSkuCode());
+		this.skuBarcodeService.deleteBySkuId(id);
 		return true;
 	}
 

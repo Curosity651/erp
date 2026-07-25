@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.order.mapper.ErpOrderMapper;
 import com.erp.admin.order.mapper.OzonShipmentActMapper;
 import com.erp.admin.order.mapper.OzonShipmentActOrderMapper;
@@ -34,6 +35,7 @@ import com.erp.admin.system.service.OssService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -41,8 +43,8 @@ import org.springframework.util.StringUtils;
 /**
  * Ozon 运单（交接单 act）服务。
  * <p>
- * <b>业务定位</b>：仅大仓（仓库名含「大」字）的 Ozon FBS 订单在打完面单后需要生成运单。
- * 小仓订单打完面单与拣货单后流程即结束。
+ * <b>业务定位</b>：Ozon FBS 订单是否需要生成交接单，由货主按「店铺 + 配送方式」显式配置，
+ * 不再根据仓库名称猜测。
  * <p>
  * <b>关键语义</b>：运单由 Ozon 按「物流方式 + 发货日期」汇总当日全部待发货件生成，
  * 其 PDF 内容<b>不等于</b>调用方选中的订单集合。选中订单只用于推导出应向哪几个
@@ -67,11 +69,6 @@ public class OzonActService {
 	/** Ozon 返回的失败状态（大小写不敏感）。其余未知状态一律视为「仍在生成」，继续轮询。 */
 	private static final List<String> FAILED_STATUSES = java.util.Arrays.asList("error", "failed", "cancelled");
 
-	/** 大仓关键字：仓库名含该字即为大仓（大件），只有大仓需要生成运单。 */
-	private static final String BIG_WAREHOUSE_KEYWORD = "大";
-
-	private static final int DEFAULT_CONTAINERS_COUNT = 1;
-
 	private final ErpOrderMapper erpOrderMapper;
 	private final OzonShipmentActMapper actMapper;
 	private final OzonShipmentActOrderMapper actOrderMapper;
@@ -81,6 +78,7 @@ public class OzonActService {
 	private final LabelService labelService;
 	private final OssService ossService;
 	private final ObjectMapper objectMapper;
+	private final OzonDeliveryMethodRuleService deliveryRuleService;
 
 	// ==================================================================
 	// 创建运单
@@ -148,10 +146,15 @@ public class OzonActService {
 
 		Long shopId = sample.getShopId();
 		Long deliveryMethodId = deliveryMethodIdOf(sample);
+		Long tenantId = TenantContext.getCurrentTenant();
+		if (tenantId == null) {
+			throw new IllegalStateException("缺少货主上下文，不能创建 Ozon 交接单");
+		}
+		String requestKey = tenantId + ":" + shopId + ":" + deliveryMethodId + ":" + departureDate;
 
-		// 幂等：同 (店铺, 物流方式, 发货日期) 已有未失败的运单则复用，避免在 Ozon 侧重复创建
-		OzonShipmentAct existing = actMapper.selectReusable(shopId, deliveryMethodId, departureDate);
-		if (existing != null) {
+		// 数据库业务唯一键保证并发请求也只会创建一份交接单。
+		OzonShipmentAct existing = actMapper.selectByRequestKey(requestKey);
+		if (existing != null && !OzonShipmentAct.STATUS_FAILED.equals(existing.getStatus())) {
 			log.info("[OZON][ACT] 复用已存在运单: actId={}, ozonActId={}, status={}",
 					existing.getId(), existing.getOzonActId(), existing.getStatus());
 			linkOrders(existing.getId(), group);
@@ -160,18 +163,41 @@ public class OzonActService {
 
 		OzonDeliveryMethod dm = deliveryMethodOf(sample);
 
-		OzonShipmentAct act = new OzonShipmentAct();
-		act.setBatchNo(batchNo);
-		act.setShopId(shopId);
-		act.setDeliveryMethodId(deliveryMethodId);
-		act.setDeliveryMethodName(dm != null ? dm.getName() : null);
-		act.setWarehouseName(sample.getWarehouseName());
-		act.setDepartureDate(departureDate);
-		act.setContainersCount(DEFAULT_CONTAINERS_COUNT);
-		act.setStatus(OzonShipmentAct.STATUS_CREATING);
-		act.setOrderCount(group.size());
-		act.setCreatedBy(userId);
-		actMapper.insert(act);
+		int containersCount = deliveryRuleService.containersCount(sample);
+		OzonShipmentAct act;
+		if (existing != null) {
+			if (actMapper.retryFailed(requestKey, batchNo, group.size(), userId) != 1) {
+				OzonShipmentAct concurrent = actMapper.selectByRequestKey(requestKey);
+				linkOrders(concurrent.getId(), group);
+				return concurrent;
+			}
+			act = actMapper.selectByRequestKey(requestKey);
+		}
+		else {
+			act = new OzonShipmentAct();
+			act.setRequestKey(requestKey);
+			act.setBatchNo(batchNo);
+			act.setShopId(shopId);
+			act.setDeliveryMethodId(deliveryMethodId);
+			act.setDeliveryMethodName(dm != null ? dm.getName() : sample.getDeliveryMethodName());
+			act.setWarehouseName(sample.getWarehouseName());
+			act.setDepartureDate(departureDate);
+			act.setContainersCount(containersCount);
+			act.setStatus(OzonShipmentAct.STATUS_CREATING);
+			act.setOrderCount(group.size());
+			act.setCreatedBy(userId);
+			try {
+				actMapper.insert(act);
+			}
+			catch (DuplicateKeyException duplicate) {
+				OzonShipmentAct concurrent = actMapper.selectByRequestKey(requestKey);
+				if (concurrent == null) {
+					throw duplicate;
+				}
+				linkOrders(concurrent.getId(), group);
+				return concurrent;
+			}
+		}
 
 		linkOrders(act.getId(), group);
 
@@ -183,7 +209,7 @@ public class OzonActService {
 			OzonCredential credential = credentialService.parseCredential(shop);
 
 			Long ozonActId = ozonPlatformApi.createAct(credential, deliveryMethodId, departureDate,
-					DEFAULT_CONTAINERS_COUNT);
+					containersCount);
 
 			act.setOzonActId(ozonActId);
 			act.setStatus(OzonShipmentAct.STATUS_PENDING);
@@ -319,11 +345,8 @@ public class OzonActService {
 		if (!"SHIPPED".equals(order.getErpStatus())) {
 			return "状态不支持：" + (order.getErpStatus() == null ? "-" : order.getErpStatus());
 		}
-		if (!StringUtils.hasText(order.getWarehouseName())) {
-			return "缺少仓库信息";
-		}
-		if (!order.getWarehouseName().contains(BIG_WAREHOUSE_KEYWORD)) {
-			return "小仓订单无需运单";
+		if (!deliveryRuleService.isActRequired(order)) {
+			return "该店铺和配送方式未配置为需要 Ozon 交接单";
 		}
 		// 强制前置：必须先打印面单（labelBase64 即面单缓存）
 		if (!StringUtils.hasText(order.getLabelBase64())) {
@@ -351,6 +374,9 @@ public class OzonActService {
 	}
 
 	private Long deliveryMethodIdOf(ErpOrder order) {
+		if (order.getDeliveryMethodId() != null) {
+			return order.getDeliveryMethodId();
+		}
 		OzonDeliveryMethod dm = deliveryMethodOf(order);
 		return dm != null ? dm.getId() : null;
 	}
@@ -401,16 +427,14 @@ public class OzonActService {
 		return s.length() > 500 ? s.substring(0, 500) : s;
 	}
 
-	/** 供外部判定仓型（与前端 warehouse-type.ts 同一规则） */
-	public static boolean isBigWarehouse(String warehouseName) {
-		return StringUtils.hasText(warehouseName) && warehouseName.contains(BIG_WAREHOUSE_KEYWORD);
+	public boolean isActRequired(ErpOrder order) {
+		return deliveryRuleService.isActRequired(order);
 	}
 
-	/** 过滤出大仓订单（拣货单等其它场景可复用） */
-	public static List<ErpOrder> filterBigWarehouse(List<ErpOrder> orders) {
-		return orders.stream()
+	public boolean hasReadyAct(Long orderId) {
+		return actOrderMapper.selectByOrderId(orderId).stream()
+				.map(link -> actMapper.selectById(link.getActId()))
 				.filter(Objects::nonNull)
-				.filter(o -> isBigWarehouse(o.getWarehouseName()))
-				.collect(Collectors.toList());
+				.anyMatch(act -> OzonShipmentAct.STATUS_READY.equals(act.getStatus()));
 	}
 }

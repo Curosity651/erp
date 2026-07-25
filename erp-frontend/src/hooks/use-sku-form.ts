@@ -22,6 +22,7 @@ interface SkuFormData extends SkuDTO {
 const DEFAULT_SKU_FORM_DATA: SkuFormData = {
   id: undefined,
   skuCode: '',
+  barcodes: [],
   skuNo: undefined,
   spuCode: '',
   salesCountry: 'RU', // 默认选中俄罗斯

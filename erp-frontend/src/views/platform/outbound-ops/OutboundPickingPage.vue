@@ -55,15 +55,36 @@
     row-key="id"
     :request="tableRequest"
     :columns="columns"
+    :row-selection="rowSelection"
     :scroll="{ x: 1320 }"
     size="middle"
   >
+    <template #toolBarRender>
+      <a-button type="primary" :disabled="selectedOrderIds.length === 0" @click="batchOpen = true">
+        <AppstoreAddOutlined />
+        批量创建拣货任务<span v-if="selectedOrderIds.length">（{{ selectedOrderIds.length }}）</span>
+      </a-button>
+    </template>
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'skuSummary'">
         {{ record.skuKinds }} 种 · {{ record.totalQty }} 件
       </template>
       <template v-else-if="column.key === 'pickMode'">
-        {{ record.pickMode ? PICK_MODE_TEXT[record.pickMode as PickMode] : '—' }}
+        <template v-if="record.pickTaskNo">
+          <a class="task-link" @click="openPickList(record)">
+            <a-tag :color="record.pickMode === 'WAVE' ? 'blue' : 'default'">
+              {{ PICK_MODE_TEXT[record.pickMode as PickMode] || record.pickMode }}
+            </a-tag>
+            <div class="task-no">{{ record.pickTaskNo }}</div>
+            <div class="task-scope">
+              {{ record.pickTaskOutboundOrderCount || 1 }} 张出库单
+              <template v-if="record.sourceType === 'SALES'">
+                · {{ record.pickTaskSalesOrderCount || 0 }} 个销售订单
+              </template>
+            </div>
+          </a>
+        </template>
+        <span v-else>—</span>
       </template>
       <template v-else-if="column.key === 'status'">
         <a-badge
@@ -77,7 +98,7 @@
           <a
             v-else-if="record.status === 'PICKING' || record.status === 'PICKED'"
             @click="openPickList(record)"
-            >拣货单</a
+            >任务详情</a
           >
           <a
             v-else-if="record.status === 'BACKORDER'"
@@ -95,11 +116,18 @@
   <PickModal v-model:open="pickOpen" :order-id="currentId" @success="reloadTable" />
 
   <!-- 拣货单抽屉 -->
-  <PickListDrawer v-model:open="pickListOpen" :order-id="currentId" />
+  <PickListDrawer v-model:open="pickListOpen" :order-id="currentId" @success="reloadTable(false)" />
+
+  <BatchPickModal
+    v-model:open="batchOpen"
+    :order-ids="selectedOrderIds"
+    @success="handleBatchSuccess"
+  />
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import { AppstoreAddOutlined } from '@ant-design/icons-vue'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import { OperationGroup } from '@/components/Operation'
@@ -122,9 +150,19 @@ import {
 } from './constants'
 import PickModal from './PickModal.vue'
 import PickListDrawer from './PickListDrawer.vue'
+import BatchPickModal from './BatchPickModal.vue'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 
 const tableRef = ref<ProTableInstanceExpose>()
+const selectedOrderIds = ref<number[]>([])
+const batchOpen = ref(false)
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedOrderIds.value,
+  onChange: (keys: number[]) => {
+    selectedOrderIds.value = keys
+  },
+  getCheckboxProps: (record: OutboundOrderVO) => ({ disabled: record.status !== 'PENDING' })
+}))
 
 const searchModel = reactive<OutboundPickingQO>({
   outboundNo: undefined,
@@ -146,6 +184,10 @@ const tableRequest: TableRequest = (params, sorter, filter) => {
   return pagePickingOrders(pageParam, searchParams)
 }
 const reloadTable = (resetPageIndex?: boolean) => tableRef.value?.actionRef?.reload(resetPageIndex)
+const handleBatchSuccess = () => {
+  selectedOrderIds.value = []
+  reloadTable(false)
+}
 
 useTableActivateReload(() => reloadTable(false))
 const searchTable = () => {
@@ -171,7 +213,7 @@ const columns: ProColumns[] = [
   { title: '服务商', dataIndex: 'operatorName', key: 'operatorName', width: 140, ellipsis: true },
   { title: '仓库', dataIndex: 'warehouseName', key: 'warehouseName', width: 140 },
   { title: 'SKU/件数', key: 'skuSummary', width: 120 },
-  { title: '下架模式', key: 'pickMode', width: 110 },
+  { title: '拣货任务', key: 'pickMode', width: 245 },
   {
     title: '拣货员',
     dataIndex: 'pickerName',
@@ -219,5 +261,20 @@ export default {
 .outbound-search .search-actions-item {
   margin-left: auto;
   margin-right: 0;
+}
+.task-no {
+  margin-top: 3px;
+  color: #8c8c8c;
+  font-size: 11px;
+}
+.task-link {
+  display: inline-block;
+  line-height: 1.35;
+}
+.task-scope {
+  margin-top: 2px;
+  color: #595959;
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>

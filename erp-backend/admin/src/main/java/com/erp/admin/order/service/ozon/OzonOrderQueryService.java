@@ -122,7 +122,7 @@ public class OzonOrderQueryService {
 			// 物流方式与发货仓库（仅 FBS 订单的 rawJson 含 delivery_method）
 			OzonDeliveryMethod dm = posting.getDeliveryMethod();
 			if (dm != null) {
-				// 仓库名用于前端展示及大仓/小仓判定（仓库名含「大」字即大仓，仅大仓需生成运单）
+				// 仓库名只用于前端展示及仓型标签；交接单要求由店铺与配送方式规则决定。
 				vo.setWarehouseName(dm.getWarehouse());
 				// 物流方式 ID 是生成运单(act)的分组键与入参
 				vo.setDeliveryMethodId(dm.getId());

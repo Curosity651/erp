@@ -45,13 +45,14 @@ public class ErpTenantLineHandler implements TenantLineHandler {
 		// V22 文件隔离(P8) + 日志按租户(P4：写入自动填 tenant_id、读取自动按租户过滤=同租户可见)
 		"sys_file", "export_data", "log_login_log", "log_operation_log", "log_access_log",
 		// A2 商品模块
-		"sku", "category", "brand", "supplier", "sku_mapping", "sku_files",
+		"sku", "category", "brand", "supplier", "sku_mapping", "sku_files", "sku_barcode",
 		// A3 订单
 		"erp_order", "erp_order_item",
 		// A3 贴标
 		"erp_label_batch", "erp_label_batch_file", "erp_label_batch_item",
 		// Ozon 运单(交接单 act)：货主维度隔离，无租户上下文时 fail-closed
 		"ozon_shipment_act", "ozon_shipment_act_order",
+		"ozon_delivery_method_rule",
 		// A3 店铺
 		"shop",
 		// A3 系统辅助

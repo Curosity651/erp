@@ -24,7 +24,7 @@ export const PACK_MODE_OPTIONS = (Object.keys(PACK_MODE_TEXT) as PackMode[]).map
 
 /** 打包签出页状态筛选（只暴露相关状态） */
 export const PACKSHIP_STATUS_OPTIONS: { label: string; value: OutboundStatus }[] = [
-  { label: '拣货中(待打包)', value: 'PICKING' },
+  { label: '拣货完成(待打包)', value: 'PICKED' },
   { label: '已打包(待签出)', value: 'PACKED' },
   { label: '已发货', value: 'SHIPPED' }
 ]

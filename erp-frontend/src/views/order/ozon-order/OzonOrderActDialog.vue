@@ -113,7 +113,6 @@ import dayjs from 'dayjs'
 import { message } from 'ant-design-vue'
 import { createOzonActs, getOzonActBatch } from '@/api/order/ozon-order'
 import type { OzonActVO, OzonActStatus, OzonOrderRejectVO } from '@/api/order/ozon-order/types'
-import { isBigWarehouse } from './warehouse-type'
 import { useLabelFileDownload } from '@/hooks/use-label-file-download'
 
 /** 轮询间隔与总超时 */
@@ -160,7 +159,7 @@ onUnmounted(stopPolling)
 
 /**
  * 可发运判定，与后端 OzonActService 的校验保持一致：
- * Ozon + FBS + 未锁定 + 已发货(SHIPPED) + 已打面单 + 大仓
+ * 是否需要交接单由后端的店铺 + 配送方式规则判定。
  */
 function canShip(row: any): boolean {
   return (
@@ -169,7 +168,7 @@ function canShip(row: any): boolean {
     row?.locked !== 1 &&
     row?.erpStatus === 'SHIPPED' &&
     !!row?.hasLabel &&
-    isBigWarehouse(row?.warehouseName)
+    !!row?.deliveryMethodId
   )
 }
 
@@ -178,9 +177,8 @@ function reasonOf(row: any): string {
   if (row?.fulfillmentType !== 'FBS') return 'FBO 订单不支持发运'
   if (row?.locked === 1) return '订单已锁定'
   if (row?.erpStatus !== 'SHIPPED') return `状态不支持：${row?.erpStatus || '-'}`
-  if (!row?.warehouseName) return '缺少仓库信息'
-  if (!isBigWarehouse(row?.warehouseName)) return '小仓订单无需运单'
   if (!row?.hasLabel) return '未打印面单'
+  if (!row?.deliveryMethodId) return '缺少配送方式'
   return '未知原因'
 }
 

@@ -20,6 +20,12 @@ public class OutboundOrderVO {
     @Schema(title = "出库单号")
     private String outboundNo;
 
+    @Schema(title = "来源类型 SALES/CUSTOM")
+    private String sourceType;
+
+    @Schema(title = "本出库单关联的销售订单数")
+    private Integer salesOrderCount;
+
     @Schema(title = "货主ID")
     private Long erpTenantId;
 
@@ -53,7 +59,19 @@ public class OutboundOrderVO {
     @Schema(title = "拣货员姓名")
     private String pickerName;
 
-    @Schema(title = "状态 PENDING/PICKING/BACKORDER/PACKED/SHIPPED/COMPLETED")
+    @Schema(title = "当前拣货任务ID")
+    private Long pickTaskId;
+
+    @Schema(title = "当前拣货任务号")
+    private String pickTaskNo;
+
+    @Schema(title = "当前拣货任务包含的出库单数")
+    private Integer pickTaskOutboundOrderCount;
+
+    @Schema(title = "当前拣货任务包含的销售订单数")
+    private Integer pickTaskSalesOrderCount;
+
+    @Schema(title = "状态 PENDING/PICKING/PICKED/BACKORDER/PACKED/SHIPPED/COMPLETED")
     private String status;
 
     @Schema(title = "创建时间")

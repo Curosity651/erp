@@ -1,6 +1,8 @@
 package com.erp.admin.wms;
 
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import com.erp.admin.wms.model.entity.SalesOutboundOrder;
+import com.erp.admin.wms.model.entity.WmsOutboundPickTaskLine;
 import com.erp.admin.wms.service.OutboundPickingService;
 import org.junit.jupiter.api.Test;
 
@@ -77,6 +79,38 @@ class OutboundPickingServiceTest {
         assertThat(OutboundPickingService.toViewStatus("PICKING")).isEqualTo("PICKING");
         assertThat(OutboundPickingService.toDbStatus("PENDING")).isEqualTo("CONFIRMED");
         assertThat(OutboundPickingService.toDbStatus("BACKORDER")).isEqualTo("BACKORDER");
+    }
+
+    @Test
+    void sales_order_count_is_distinct_from_outbound_document_count() {
+        SalesOutboundOrder first = new SalesOutboundOrder();
+        first.setOrderCount(4);
+        SalesOutboundOrder second = new SalesOutboundOrder();
+        second.setOrderCount(5);
+
+        assertThat(Arrays.asList(first, second)).hasSize(2);
+        assertThat(OutboundPickingService.salesOrderCount(Arrays.asList(first, second))).isEqualTo(9);
+    }
+
+    @Test
+    void task_cannot_complete_until_every_line_is_actually_picked() {
+        WmsOutboundPickTaskLine complete = new WmsOutboundPickTaskLine();
+        complete.setPlannedQty(5);
+        complete.setPickedQty(5);
+        complete.setLineStatus("COMPLETED");
+        WmsOutboundPickTaskLine incomplete = new WmsOutboundPickTaskLine();
+        incomplete.setPlannedQty(3);
+        incomplete.setPickedQty(2);
+        incomplete.setLineStatus("IN_PROGRESS");
+
+        assertThat(OutboundPickingService.isTaskCompletable(Arrays.asList(complete, incomplete))).isFalse();
+
+        incomplete.setPickedQty(3);
+        incomplete.setLineStatus("COMPLETED");
+        assertThat(OutboundPickingService.isTaskCompletable(Arrays.asList(complete, incomplete))).isTrue();
+
+        incomplete.setLineStatus("EXCEPTION");
+        assertThat(OutboundPickingService.isTaskCompletable(Arrays.asList(complete, incomplete))).isFalse();
     }
 
 }

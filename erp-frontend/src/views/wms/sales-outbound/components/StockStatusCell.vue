@@ -1,6 +1,10 @@
 <template>
   <div class="stock-status-cell" :class="statusClass">
-    <template v-if="status === 'deducted'">
+    <template v-if="status === 'reserved'">
+      <CheckCircleOutlined class="status-icon" />
+      <span>已预留</span>
+    </template>
+    <template v-else-if="status === 'deducted'">
       <CheckCircleOutlined class="status-icon" />
       <span>已扣减</span>
     </template>
@@ -39,6 +43,7 @@ const statusClass = computed(() => {
     'status-sufficient': props.status === 'sufficient',
     'status-insufficient': props.status === 'insufficient',
     'status-zero': props.status === 'zero',
+    'status-reserved': props.status === 'reserved',
     'status-deducted': props.status === 'deducted'
   }
 })
@@ -70,5 +75,9 @@ const statusClass = computed(() => {
 
 .status-deducted {
   color: #8c8c8c;
+}
+
+.status-reserved {
+  color: #1677ff;
 }
 </style>

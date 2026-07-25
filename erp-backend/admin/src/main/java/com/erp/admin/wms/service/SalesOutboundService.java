@@ -32,6 +32,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -117,8 +118,25 @@ public class SalesOutboundService extends ExtendServiceImpl<SalesOutboundMapper,
             return;
         }
 
-        // 已确认的出库单，直接标记为已扣减
-        if (OutboundOrderStatus.CONFIRMED.name().equals(detail.getOrderStatus())) {
+        // 提交仓库后库存属于本单预留；最终签出后才是真正扣减。
+        Set<String> reservedStatuses = new HashSet<>(Arrays.asList(
+                OutboundOrderStatus.CONFIRMED.name(),
+                OutboundOrderStatus.PICKING.name(),
+                OutboundOrderStatus.PICKED.name(),
+                OutboundOrderStatus.PACKED.name(),
+                OutboundOrderStatus.BACKORDER.name()));
+        if (reservedStatuses.contains(detail.getOrderStatus())) {
+            for (SalesOutboundItemVO item : detail.getItems()) {
+                item.setStockStatus(StockStatus.RESERVED.getValue());
+                item.setAvailableStock(null);
+                item.setShortage(0);
+            }
+            detail.setHasStockShortage(false);
+            detail.setShortageSkuCount(0);
+            return;
+        }
+        if (OutboundOrderStatus.SHIPPED.name().equals(detail.getOrderStatus())
+                || OutboundOrderStatus.COMPLETED.name().equals(detail.getOrderStatus())) {
             for (SalesOutboundItemVO item : detail.getItems()) {
                 item.setStockStatus(StockStatus.DEDUCTED.getValue());
                 item.setAvailableStock(null);
@@ -190,6 +208,9 @@ public class SalesOutboundService extends ExtendServiceImpl<SalesOutboundMapper,
         String outboundNo = generateOutboundNo();
 
         SalesOutboundOrder order = SalesOutboundConverter.INSTANCE.dtoToEntity(dto);
+		if (!"OWNER_PROVIDED".equals(order.getDocumentMode())) {
+			order.setDocumentMode("WAREHOUSE_PRINT");
+		}
         order.setOutboundNo(outboundNo);
         // 显式标记来源类型，与自定义出库单（CUSTOM）区分
         order.setSourceType(com.erp.admin.wms.model.enums.OutboundSourceType.SALES.name());
@@ -220,6 +241,8 @@ public class SalesOutboundService extends ExtendServiceImpl<SalesOutboundMapper,
         order.setOutboundDate(dto.getOutboundDate());
         order.setRemark(dto.getRemark());
         order.setLogisticsProductId(dto.getLogisticsProductId());
+		order.setDocumentMode("OWNER_PROVIDED".equals(dto.getDocumentMode())
+				? "OWNER_PROVIDED" : "WAREHOUSE_PRINT");
 
         calculateStatistics(order, dto.getItems());
 

@@ -126,6 +126,17 @@ export interface OzonActBatchVO {
   failed: OzonOrderRejectVO[]
 }
 
+export interface OzonDeliveryMethodRule {
+  id?: number
+  shopId: number
+  shopName?: string
+  deliveryMethodId: number
+  deliveryMethodName?: string
+  actRequired: number
+  containersCount: number
+  enabled: number
+}
+
 /** 单份拣货单（每个店铺一份） */
 export interface OzonPickListFileVO {
   shopId: number

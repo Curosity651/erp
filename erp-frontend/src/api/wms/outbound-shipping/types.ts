@@ -7,6 +7,7 @@
  * 目前前端以 mock 驱动（见 ./mock），后端需按本契约实现（接口清单见 ./index 注释）。
  */
 import type { OutboundStatus } from '@/api/wms/outbound-picking/types'
+import type { OutboundPackageVO } from '@/api/wms/outbound-picking/types'
 
 export type { OutboundStatus }
 
@@ -22,6 +23,8 @@ export interface PackShipItemVO {
   skuCode: string
   skuName?: string
   qty: number
+  sortedQty?: number
+  packedQty?: number
   quality: 'GOOD' | 'DAMAGED'
 }
 
@@ -29,6 +32,10 @@ export interface PackShipItemVO {
 export interface PackShipOrderVO {
   id: number
   outboundNo: string
+  sourceType: 'SALES' | 'CUSTOM'
+  salesOrderCount: number
+  platform?: string
+  documentMode?: 'WAREHOUSE_PRINT' | 'OWNER_PROVIDED'
   erpTenantId: number
   ownerName: string
   // 所属WMS服务商ID
@@ -56,6 +63,7 @@ export interface PackShipOrderVO {
   createTime: string
   // 详情才带
   items?: PackShipItemVO[]
+  packages?: OutboundPackageVO[]
 }
 
 /** 列表查询条件 */
@@ -76,6 +84,34 @@ export interface PackDTO {
   outboundOrderId: number
   packMode: PackMode
   packerName?: string
+}
+
+export interface PackPackageDTO {
+  outboundOrderId: number
+  packageId: number
+  packerName?: string
+}
+
+export interface PackageScanDTO {
+  outboundOrderId: number
+  packageId: number
+  scanCode: string
+  quantity: number
+  manual?: boolean
+}
+
+export interface OzonActVO {
+  actId: number
+  status: 'CREATING' | 'PENDING' | 'READY' | 'FAILED'
+  fileName?: string
+  downloadUrl?: string
+  errorMsg?: string
+}
+
+export interface OzonActBatchVO {
+  batchNo: string
+  acts: OzonActVO[]
+  failed: Array<{ orderId: number; platformOrderId: string; reason: string }>
 }
 
 /** 签出入参 */

@@ -68,6 +68,8 @@ export interface SkuFileVO {
 interface SkuBaseFields {
   // SKU编码
   skuCode: string
+  // 商品条码，一个ERP SKU可绑定多个EAN/UPC或内部条码
+  barcodes?: string[]
   // SKU序号，唯一
   skuNo?: number
   // SPU编码

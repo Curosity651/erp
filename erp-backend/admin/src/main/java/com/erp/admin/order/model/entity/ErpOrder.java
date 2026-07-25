@@ -85,11 +85,17 @@ public class ErpOrder {
 	/**
 	 * 发货仓库名（仅 Ozon FBS，来自 delivery_method.warehouse）
 	 * <p>
-	 * 业务规则：仓库名包含「大」字即为大仓（大件），只有大仓订单需要生成运单(act)。
+	 * 该字段只用于仓型展示；是否需要生成交接单由店铺与配送方式规则决定。
 	 * FBO 订单由 Ozon 仓配，raw_json 中无 delivery_method 节点，该字段为 null。
 	 */
-	@Schema(title="发货仓库名", description="仅 Ozon FBS；含「大」字=大仓")
+	@Schema(title="发货仓库名", description="仅 Ozon FBS，用于仓型展示")
 	private String warehouseName;
+
+	@Schema(title="Ozon配送方式ID")
+	private Long deliveryMethodId;
+
+	@Schema(title="Ozon配送方式名称")
+	private String deliveryMethodName;
 
 	/**
 	 * 发货目的地仓库ID
@@ -163,6 +169,11 @@ public class ErpOrder {
 	 */
 	@Schema(title="锁定标识：1 锁定 / 0 未锁定")
 	private Integer locked;
+
+	@Schema(title="平台确认幂等状态 NONE/PROCESSING/SUCCESS/FAILED")
+	private String confirmState;
+
+	private LocalDateTime confirmStartedAt;
     
 	/**
 	 * 订单总金额

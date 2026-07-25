@@ -39,6 +39,12 @@ public class SalesOutboundOrderItem {
     @Schema(title = "出库数量")
     private Integer quantity;
 
+    @Schema(title = "二次分货已扫描数量")
+    private Integer sortedQuantity;
+
+    @Schema(title = "打包复核已扫描数量")
+    private Integer packedQuantity;
+
     @Schema(title = "备注")
     private String remark;
 

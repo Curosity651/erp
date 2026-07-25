@@ -18,8 +18,7 @@ public class PickDTO {
     @Schema(title = "出库单ID")
     private Long outboundOrderId;
 
-    @NotNull(message = "下架模式不能为空")
-    @Schema(title = "下架模式 CENTRALIZED/BY_ORDER/SECONDARY")
+    @Schema(title = "兼容字段；新流程固定为 SINGLE")
     private String pickMode;
 
     @NotNull(message = "拣货员不能为空")

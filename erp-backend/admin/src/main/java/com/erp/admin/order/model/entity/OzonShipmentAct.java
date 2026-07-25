@@ -39,6 +39,8 @@ public class OzonShipmentAct {
     @TableId
     private Long id;
 
+	private String requestKey;
+
     @Schema(title = "批次号：一次【准备发运】产生的一组运单共用，前端据此轮询")
     private String batchNo;
 

@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -113,7 +114,14 @@ public class ErpOrderService extends ExtendServiceImpl<ErpOrderMapper, ErpOrder>
         for (Long orderId : orderIds) {
             ErpOrder order = this.getById(orderId);
             Assert.notNull(order, "订单不存在，订单ID: " + orderId);
-            Assert.isTrue(platform.equals(order.getPlatform()), "订单平台不匹配，订单ID: " + orderId);
+            Assert.isTrue(platform != null && platform.equalsIgnoreCase(order.getPlatform()),
+					"订单平台不匹配，订单ID: " + orderId);
+			Assert.isTrue("SHIPPED".equals(order.getErpStatus()),
+					"订单尚未在平台确认，订单ID: " + orderId);
+			Assert.isTrue("FBS".equalsIgnoreCase(order.getFulfillmentType()),
+					"仅FBS订单可以创建销售出库单，订单ID: " + orderId);
+			Assert.isTrue(order.getLocked() == null || order.getLocked() == 0,
+					"订单已锁定，订单ID: " + orderId);
             Assert.isTrue("NONE".equals(order.getOutboundStatus()), "订单已被占用，订单ID: " + orderId);
 
             int affected = baseMapper.allocateForOutboundWithVersion(orderId, order.getVersion());
@@ -129,41 +137,76 @@ public class ErpOrderService extends ExtendServiceImpl<ErpOrderMapper, ErpOrder>
      * 将订单状态从 ALLOCATED 更新为 NONE
      *
      * @param orderIds 订单ID列表
+	 * @param outboundOrderId 当前占用所属的销售出库单ID
      */
     @Transactional(rollbackFor = Exception.class)
-    public void releaseOutboundAllocation(List<Long> orderIds) {
+    public void releaseOutboundAllocation(List<Long> orderIds, Long outboundOrderId) {
         if (orderIds == null || orderIds.isEmpty()) {
             return;
         }
+		Assert.notNull(outboundOrderId, "出库单ID不能为空");
 
-        int affected = baseMapper.releaseOutboundAllocation(orderIds);
-        log.info("Released outbound allocation, orderIds={}, affected={}", orderIds, affected);
+        int affected = baseMapper.releaseOutboundAllocation(orderIds, outboundOrderId);
+        log.info("Released outbound allocation, orderIds={}, outboundOrderId={}, affected={}",
+				orderIds, outboundOrderId, affected);
     }
 
-    /**
-     * 校验并确认出库（乐观锁）
-     * <p>
-     * 将订单状态从 ALLOCATED 更新为 COMPLETED
-     *
-     * @param orderIds 订单ID列表
-     * @param outboundOrderId 出库单ID
-     */
+    /** 将已占用订单绑定到销售出库单，仍保持 ALLOCATED，防止重复关联。 */
     @Transactional(rollbackFor = Exception.class)
-    public void validateAndConfirmOutbound(List<Long> orderIds, Long outboundOrderId) {
+    public void bindOutboundAllocation(List<Long> orderIds, Long outboundOrderId) {
         if (orderIds == null || orderIds.isEmpty()) {
             return;
         }
-
+        Assert.notNull(outboundOrderId, "出库单ID不能为空");
         for (Long orderId : orderIds) {
             ErpOrder order = this.getById(orderId);
             Assert.notNull(order, "订单不存在，订单ID: " + orderId);
             Assert.isTrue("ALLOCATED".equals(order.getOutboundStatus()), "订单未处于已分配状态，订单ID: " + orderId);
-
-            int affected = baseMapper.confirmOutboundWithVersion(orderId, outboundOrderId, order.getVersion());
-            Assert.isTrue(affected > 0, "订单确认出库失败（并发冲突），订单ID: " + orderId);
+            if (Objects.equals(outboundOrderId, order.getOutboundOrderId())) {
+                continue;
+            }
+            Assert.isNull(order.getOutboundOrderId(), "订单已关联其他出库单，订单ID: " + orderId);
+            int affected = baseMapper.bindOutboundWithVersion(orderId, outboundOrderId, order.getVersion());
+            Assert.isTrue(affected > 0, "订单绑定出库单失败（并发冲突），订单ID: " + orderId);
         }
+        log.info("Bound orders to outbound, orderIds={}, outboundOrderId={}", orderIds, outboundOrderId);
+    }
 
-        log.info("Validated and confirmed outbound, orderIds={}, outboundOrderId={}", orderIds, outboundOrderId);
+    /** 确认提交前校验订单仍由当前销售出库单占用，不提前完成出库。 */
+    public void validateOutboundAllocation(List<Long> orderIds, Long outboundOrderId) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return;
+        }
+        for (Long orderId : orderIds) {
+            ErpOrder order = this.getById(orderId);
+            Assert.notNull(order, "订单不存在，订单ID: " + orderId);
+            Assert.isTrue("ALLOCATED".equals(order.getOutboundStatus())
+                            && Objects.equals(outboundOrderId, order.getOutboundOrderId()),
+                    "订单未由当前出库单占用，订单ID: " + orderId);
+        }
+    }
+
+    /** 海外仓签出后，将关联订单原子推进为 COMPLETED。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void completeOutbound(List<Long> orderIds, Long outboundOrderId) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return;
+        }
+        for (Long orderId : orderIds) {
+            ErpOrder order = this.getById(orderId);
+            Assert.notNull(order, "订单不存在，订单ID: " + orderId);
+            if ("COMPLETED".equals(order.getOutboundStatus())
+                    && Objects.equals(outboundOrderId, order.getOutboundOrderId())) {
+                continue;
+            }
+            Assert.isTrue("ALLOCATED".equals(order.getOutboundStatus())
+                            && Objects.equals(outboundOrderId, order.getOutboundOrderId()),
+                    "订单未由当前出库单占用，无法签出，订单ID: " + orderId);
+            int affected = baseMapper.completeOutboundWithVersion(orderId, outboundOrderId, order.getVersion());
+            Assert.isTrue(affected > 0, "订单签出确认失败（并发冲突），订单ID: " + orderId);
+        }
+        log.info("Completed outbound orders after warehouse ship, orderIds={}, outboundOrderId={}",
+                orderIds, outboundOrderId);
     }
 
     /**

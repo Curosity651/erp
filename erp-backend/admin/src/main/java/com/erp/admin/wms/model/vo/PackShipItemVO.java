@@ -21,6 +21,10 @@ public class PackShipItemVO {
     @Schema(title = "数量")
     private Integer qty;
 
+    private Integer sortedQty;
+
+    private Integer packedQty;
+
     @Schema(title = "品质 GOOD/DAMAGED")
     private String quality;
 

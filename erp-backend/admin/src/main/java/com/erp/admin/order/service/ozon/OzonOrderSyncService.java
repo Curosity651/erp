@@ -547,6 +547,10 @@ public class OzonOrderSyncService {
 					.warehouseName(warehouseName)
 					.destinationWarehouseId(warehouseId) // FBS: 仓库即发货点
 					.deliveryMethod(deliveryMethod)
+					.deliveryMethodId(posting.getDeliveryMethod() != null
+							? posting.getDeliveryMethod().getId() : null)
+					.deliveryMethodName(posting.getDeliveryMethod() != null
+							? posting.getDeliveryMethod().getName() : null)
 					.inProcessAt(posting.getInProcessAt())
 					.shipmentDate(posting.getShipmentDate())
 					.deliveringDate(posting.getDeliveringDate())
@@ -625,6 +629,8 @@ public class OzonOrderSyncService {
 					.warehouseId(warehouseId) // FBO: 从 analytics_data 获取 Ozon 履约仓库ID
 					.destinationWarehouseId(warehouseId) // FBO: 仓库即发货点
 					.deliveryMethod(null) // FBO 订单没有配送方式
+					.deliveryMethodId(null)
+					.deliveryMethodName(null)
 					.inProcessAt(posting.getInProcessAt())
 					.shipmentDate(posting.getShipmentDate())
 					.deliveringDate(posting.getDeliveringDate())
