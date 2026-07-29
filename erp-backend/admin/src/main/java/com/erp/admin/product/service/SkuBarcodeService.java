@@ -21,6 +21,8 @@ public class SkuBarcodeService {
 
 	private final SkuBarcodeMapper barcodeMapper;
 
+	private final WarehouseSkuCodeService warehouseSkuCodeService;
+
 	@Transactional(rollbackFor = Exception.class)
 	public void replace(Long skuId, String skuCode, List<String> barcodes) {
 		Assert.notNull(skuId, "SKU ID不能为空");
@@ -78,6 +80,9 @@ public class SkuBarcodeService {
 			return false;
 		}
 		if (skuCode != null && skuCode.equalsIgnoreCase(scanCode.trim())) {
+			return true;
+		}
+		if (warehouseSkuCodeService.matches(erpTenantId, skuCode, scanCode)) {
 			return true;
 		}
 		String resolved = resolveSkuCode(erpTenantId, scanCode);

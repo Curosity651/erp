@@ -4,14 +4,14 @@
 
 **Goal:** Add owner-scoped warehouse SKU recognition and post-receipt SKU label/reference-sheet printing.
 
-**Architecture:** Derive the warehouse SKU from the stable owner code and original SKU without changing inventory keys. Reuse the existing inbound detail API for owner, received quantities, names, and images; keep printing entirely read-only.
+**Architecture:** Derive the warehouse SKU from the owner name prefix and original SKU without changing inventory keys. Reuse the existing inbound detail API for owner, received quantities, names, and images; keep printing entirely read-only.
 
 **Tech Stack:** Java 8, Spring Boot, MyBatis-Plus, JUnit 5, Vue 3, TypeScript, Ant Design Vue, qrcode.
 
 ## Global Constraints
 
 - ERP owner screens continue to show the original SKU.
-- Warehouse SKU format is exactly `OWNER_CODE-ORIGINAL_SKU`.
+- Warehouse SKU format is exactly `OWNER_NAME-ORIGINAL_SKU`.
 - Labels print one copy per actually received unit.
 - No batch number is added.
 - Printing never changes inventory or document status.
@@ -62,4 +62,3 @@
 - [ ] Open the print window synchronously, load detail, then render.
 - [ ] Keep `SUBMITTED` behavior unchanged and widen only the operation column as required.
 - [ ] Run Vue type checking and production build.
-

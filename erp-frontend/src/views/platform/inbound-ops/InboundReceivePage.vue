@@ -1,5 +1,5 @@
 <template>
-  <a-card :bordered="false" style="margin-bottom: 16px">
+  <a-card :bordered="false" class="search-card">
     <a-form :model="searchModel" layout="inline" class="inbound-search">
       <a-form-item label="入库单号">
         <a-input
@@ -42,6 +42,15 @@
           :operator-id="searchModel.wmsTenantId"
         />
       </a-form-item>
+      <a-form-item label="操作员">
+        <user-select
+          v-model:value="searchModel.receiveBy"
+          placeholder="全部"
+          :options="userOptions"
+          :loading="usersLoading"
+          style="width: 140px"
+        />
+      </a-form-item>
       <a-form-item class="search-actions-item">
         <search-actions :loading="tableRef?.loading" @search="searchTable" @reset="resetSearch" />
       </a-form-item>
@@ -54,7 +63,7 @@
     row-key="id"
     :request="tableRequest"
     :columns="columns"
-    :scroll="{ x: 1100 }"
+    :scroll="{ x: 1240 }"
     size="middle"
   >
     <template #bodyCell="{ column, record }">
@@ -66,7 +75,10 @@
           <a v-if="record.orderStatus === InboundStatus.SUBMITTED" @click="openReceive(record)">
             收货
           </a>
-          <span v-else style="color: rgba(0, 0, 0, 0.25)">已收货</span>
+          <template v-if="canPrintReceivedGoods(record)">
+            <a @click="printSkuLabels(record)">商品标签</a>
+            <a @click="printGoodsReference(record)">货物对照表</a>
+          </template>
         </operation-group>
       </template>
     </template>
@@ -77,25 +89,37 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Modal } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
+import { isSuccess } from '@/api'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import { OperationGroup } from '@/components/Operation'
 import { SearchActions } from '@/components/Search'
 import { mergePageParam } from '@/utils/page-utils'
-import { pageInboundOps } from '@/api/wms/inbound-execution'
-import type { PurchaseInboundPageVO, PurchaseInboundQO } from '@/api/wms/purchase-inbound/types'
+import { getInboundOpsDetail, pageInboundOps } from '@/api/wms/inbound-execution'
+import type {
+  PurchaseInboundDetailVO,
+  PurchaseInboundPageVO,
+  PurchaseInboundQO
+} from '@/api/wms/purchase-inbound/types'
 import { InboundStatus, InboundStatusMap } from '@/api/wms/purchase-inbound/types'
 import InboundStatusBadge from '@/views/wms/purchase-inbound/components/InboundStatusBadge.vue'
 import WmsOperatorSelect from '@/components/Lov/WmsOperatorSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
+import UserSelect from '@/components/Lov/UserSelect.vue'
+import { useUserData } from '@/hooks/use-user-data'
 import ReceiveScanDrawer from './ReceiveScanDrawer.vue'
+import {
+  printReceivedGoodsReference,
+  printReceivedSkuLabels
+} from './received-goods-print'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 
 const router = useRouter()
 const tableRef = ref<ProTableInstanceExpose>()
+const { allUsers: userOptions, loading: usersLoading, loadAllUsers } = useUserData()
 
 // 收货页覆盖「已提交/已收货/已完成」三个阶段：收货后单据保留在本页（状态变已收货），只是收货动作不再可点
 const RECEIVE_SCOPE = [InboundStatus.SUBMITTED, InboundStatus.RECEIVED, InboundStatus.COMPLETED]
@@ -105,7 +129,8 @@ const searchModel = reactive<PurchaseInboundQO>({
   inboundNo: undefined,
   orderStatus: undefined,
   wmsTenantId: undefined,
-  erpTenantId: undefined
+  erpTenantId: undefined,
+  receiveBy: undefined
 })
 // 日期范围（[开始, 结束]，value-format 已转字符串）
 const dateRange = ref<[string, string]>()
@@ -127,6 +152,7 @@ const tableRequest: TableRequest = (params, sorter, filter) => {
     inboundNo: searchParams.inboundNo,
     wmsTenantId: searchParams.wmsTenantId,
     erpTenantId: searchParams.erpTenantId,
+    receiveBy: searchParams.receiveBy,
     inboundDateStart: searchParams.inboundDateStart,
     inboundDateEnd: searchParams.inboundDateEnd,
     ...statusFilter
@@ -148,6 +174,7 @@ const resetSearch = () => {
   searchModel.orderStatus = undefined
   searchModel.wmsTenantId = undefined
   searchModel.erpTenantId = undefined
+  searchModel.receiveBy = undefined
   dateRange.value = undefined
   searchTable()
 }
@@ -157,13 +184,60 @@ const columns: ProColumns[] = [
   { title: '货主', dataIndex: 'ownerName', key: 'ownerName', width: 140, ellipsis: true },
   { title: '服务商', dataIndex: 'operatorName', key: 'operatorName', width: 140, ellipsis: true },
   { title: '仓库', dataIndex: 'warehouseName', key: 'warehouseName', width: 180 },
+  {
+    title: '操作员',
+    dataIndex: 'receiveByName',
+    key: 'receiveByName',
+    width: 90,
+    ellipsis: true
+  },
   { title: '状态', key: 'status', width: 110, align: 'center' },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
-  { title: '操作', key: 'operate', width: 120, align: 'center', fixed: 'right' }
+  { title: '操作', key: 'operate', width: 230, align: 'center', fixed: 'right' }
 ]
 
 const receiveDrawerRef = ref<InstanceType<typeof ReceiveScanDrawer>>()
 const openReceive = (record: PurchaseInboundPageVO) => receiveDrawerRef.value?.open(record)
+const canPrintReceivedGoods = (record: PurchaseInboundPageVO) =>
+  [InboundStatus.RECEIVED, InboundStatus.COMPLETED].includes(record.orderStatus as InboundStatus)
+
+type ReceivedGoodsPrinter = (
+  detail: PurchaseInboundDetailVO,
+  printPage?: Window | null
+) => Promise<unknown>
+
+const printReceivedGoods = async (
+  record: PurchaseInboundPageVO,
+  title: string,
+  printer: ReceivedGoodsPrinter
+) => {
+  const printPage = window.open('', '_blank', 'width=920,height=760')
+  if (!printPage) {
+    message.error('浏览器阻止了打印窗口，请允许弹出窗口后重试')
+    return
+  }
+  printPage.document.write(
+    `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>${title}</title></head>` +
+      '<body style="font-family:Arial,Microsoft YaHei;padding:24px">正在加载入库单...</body></html>'
+  )
+  printPage.document.close()
+  try {
+    const response = await getInboundOpsDetail(record.id)
+    if (!isSuccess(response) || !response.data) throw new Error('加载入库单详情失败')
+    await printer(response.data, printPage)
+  } catch (error) {
+    printPage.close()
+    message.error(error instanceof Error ? error.message : `${title}生成失败`)
+  }
+}
+
+const printSkuLabels = (record: PurchaseInboundPageVO) =>
+  printReceivedGoods(record, '商品标签', printReceivedSkuLabels)
+
+const printGoodsReference = (record: PurchaseInboundPageVO) =>
+  printReceivedGoods(record, '货物对照表', printReceivedGoodsReference)
+
+onMounted(loadAllUsers)
 
 // 收货完成：单据状态已流转为「已收货」，仍保留在本页；询问是否前往上架
 const onReceived = () => {
@@ -185,18 +259,31 @@ export default {
 </script>
 
 <style scoped>
-/* 搜索栏：所有筛选项一排排列，查询/重置按钮靠右对齐 */
+.search-card {
+  margin-bottom: 16px;
+}
+.search-card :deep(.ant-card-body) {
+  min-width: 0;
+}
+/* 根据可用宽度自然换行；每个“标签 + 控件”始终作为完整单元排列。 */
 .inbound-search {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  row-gap: 8px;
+  gap: 16px 20px;
 }
 .inbound-search :deep(.ant-form-item) {
-  margin-right: 12px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.inbound-search :deep(.ant-form-item-row) {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.inbound-search :deep(.ant-form-item-label) {
+  flex: 0 0 auto;
 }
 .inbound-search .search-actions-item {
-  margin-left: auto;
-  margin-right: 0;
+  margin: 0;
 }
 </style>
