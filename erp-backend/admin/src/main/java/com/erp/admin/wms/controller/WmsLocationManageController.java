@@ -1,8 +1,12 @@
 package com.erp.admin.wms.controller;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.erp.admin.wms.model.dto.LogicalLocationCreateDTO;
+import com.erp.admin.wms.model.dto.LogicalLocationUpdateDTO;
 import com.erp.admin.wms.model.dto.MoveLocationZoneDTO;
 import com.erp.admin.wms.model.dto.WarehousePalletRuleDTO;
 import com.erp.admin.wms.model.dto.WarehouseStructureDTO;
@@ -26,7 +30,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -146,6 +152,47 @@ public class WmsLocationManageController {
 	public ApiResult<List<WmsLocation>> locations(@RequestParam("warehouseId") Long warehouseId) {
 		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		return ApiResult.ok(wmsLocationService.listPhysicalByWarehouse(warehouseId));
+	}
+
+	@Operation(summary = "按排查询逻辑库位")
+	@GetMapping("/locations/grouped")
+	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
+	public ApiResult<Map<String, List<WmsLocation>>> groupedLocations(@RequestParam("warehouseId") Long warehouseId) {
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
+		Map<String, List<WmsLocation>> grouped = wmsLocationService.listByWarehouse(warehouseId).stream()
+			.collect(Collectors.groupingBy(WmsLocation::getRackNo, LinkedHashMap::new, Collectors.toList()));
+		return ApiResult.ok(grouped);
+	}
+
+	@Operation(summary = "新增逻辑库位")
+	@PostMapping("/locations")
+	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
+	public ApiResult<Long> createLocation(@Validated @RequestBody LogicalLocationCreateDTO dto) {
+		warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
+		return ApiResult.ok(wmsLocationService.createLocation(dto));
+	}
+
+	@Operation(summary = "修改逻辑库位属性")
+	@PutMapping("/locations/{id}")
+	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
+	public ApiResult<Void> updateLocation(@PathVariable("id") Long id,
+			@Validated @RequestBody LogicalLocationUpdateDTO dto) {
+		WmsLocation location = wmsLocationService.getById(id);
+		org.springframework.util.Assert.notNull(location, "库位不存在");
+		warehouseService.validateOperableOwnWarehouse(location.getWarehouseId());
+		wmsLocationService.updateLocation(id, dto);
+		return ApiResult.ok();
+	}
+
+	@Operation(summary = "删除空逻辑库位")
+	@DeleteMapping("/locations/{id}")
+	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
+	public ApiResult<Void> deleteLocation(@PathVariable("id") Long id) {
+		WmsLocation location = wmsLocationService.getById(id);
+		org.springframework.util.Assert.notNull(location, "库位不存在");
+		warehouseService.validateOperableOwnWarehouse(location.getWarehouseId());
+		wmsLocationService.deleteEmptyLocation(id);
+		return ApiResult.ok();
 	}
 
 	@Operation(summary = "该仓有货占用的库位编码集合（前端锁定有货格子改分区用）")

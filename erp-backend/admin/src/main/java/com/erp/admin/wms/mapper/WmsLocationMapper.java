@@ -5,6 +5,7 @@ import java.util.List;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 
@@ -14,6 +15,18 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
  * @author erp
  */
 public interface WmsLocationMapper extends ExtendMapper<WmsLocation> {
+
+	@Select("SELECT * FROM wms_location WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+	WmsLocation selectLogicalByIdForUpdate(@Param("id") Long id);
+
+	@Select("SELECT COUNT(*) FROM wms_location WHERE warehouse_id = #{warehouseId} AND location_code = #{locationCode}")
+	long countIncludingDeletedByCode(@Param("warehouseId") Long warehouseId,
+			@Param("locationCode") String locationCode);
+
+	@Select("SELECT COUNT(*) FROM wms_location WHERE warehouse_id = #{warehouseId} "
+			+ "AND rack_no = #{rackNo} AND column_no = #{sequenceNo}")
+	long countIncludingDeletedBySequence(@Param("warehouseId") Long warehouseId,
+			@Param("rackNo") String rackNo, @Param("sequenceNo") Integer sequenceNo);
 
 	/**
 	 * 查询仓库下的库位列表（按排/列）。
