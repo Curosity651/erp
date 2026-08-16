@@ -1,5 +1,6 @@
 import type { PageParam } from '@/api/types'
 import type { SkuBriefVO } from '@/api/common/sku-types'
+import type { PalletSummaryVO } from '@/api/wms/pallet'
 
 // ==================== 状态 ====================
 
@@ -34,6 +35,11 @@ export interface TargetLocationVO {
   columnNo?: number
   /** 1=虚拟库位（收纳积压货用，服务商不可见） */
   isVirtual?: number
+  targetType?: 'EMPTY_SLOT' | 'EXISTING_PALLET' | 'VIRTUAL'
+  slotId?: number
+  slotCode?: string
+  palletId?: number
+  palletNo?: string
 }
 
 // ==================== DTO ====================
@@ -43,6 +49,9 @@ export interface LocationTransferItemDTO {
   physicalInventoryId: number
   quantity: number
   targetLocationCode: string
+  moveMode?: 'PARTIAL' | 'WHOLE_PALLET'
+  targetSlotId?: number
+  targetPalletId?: number
   remark?: string
 }
 
@@ -56,6 +65,82 @@ export interface LocationTransferCreateDTO {
   items: LocationTransferItemDTO[]
 }
 
+export interface LogicalLocationTransferCreateDTO {
+  warehouseId: number
+  erpTenantId: number
+  reasonCode: string
+  reason?: string
+  remark?: string
+  items: Array<{
+    sourceInventoryId: number
+    targetLocationId: number
+    quantity: number
+    remark?: string
+  }>
+}
+
+export interface LogicalTransferSourceVO {
+  inventoryId: number
+  warehouseId: number
+  wmsTenantId: number
+  erpTenantId: number
+  ownerName?: string
+  skuCode: string
+  warehouseSkuCode?: string
+  quality: string
+  quantity: number
+  reservedQuantity: number
+  availableQuantity: number
+  locationId: number
+  locationCode: string
+  rackNo?: string
+  locationType?: string
+  zoneName?: string
+  zoneType?: string
+}
+
+export interface LogicalTransferLocationVO {
+  locationId: number
+  locationCode: string
+  rackNo?: string
+  columnNo?: number
+  locationType?: string
+  zoneName?: string
+  zoneType?: string
+  publicShared?: number
+  utilizationPercent?: number
+}
+
+export interface LocationTransferBatchCreateDTO {
+  warehouseId: number
+  reasonCode: string
+  reason?: string
+  remark?: string
+  items: LocationTransferItemDTO[]
+}
+
+export interface LocationTransferSourceBatchVO {
+  id: number
+  warehouseId: number
+  wmsTenantId?: number
+  erpTenantId: number
+  ownerName?: string
+  skuCode: string
+  warehouseSkuCode?: string
+  quantity: number
+  reservedQty: number
+  quality: string
+  inboundDate?: string
+  locationCode: string
+  zoneId?: number
+  palletId?: number
+  palletNo?: string
+  palletStatus?: string
+  palletType?: string
+  slotId?: number
+  slotCode?: string
+}
+
 // ==================== 查询/VO ====================
 
 export interface LocationTransferQO {
@@ -65,6 +150,7 @@ export interface LocationTransferQO {
   wmsTenantId?: number
   orderStatus?: LocationTransferStatus
   sourceType?: string
+  operatorUserId?: number
   /** 创建日期起始 YYYY-MM-DD */
   createTimeStart?: string
   /** 创建日期结束 YYYY-MM-DD */
@@ -93,6 +179,10 @@ export interface LocationTransferPageVO {
   itemCount: number
   totalQuantity: number
   completeTime?: string
+  createBy?: number
+  createByName?: string
+  completeBy?: number
+  operatorUserName?: string
   createTime: string
 }
 
@@ -100,11 +190,25 @@ export interface LocationTransferPageVO {
 export interface LocationTransferItemVO {
   id: number
   skuCode: string
+  warehouseSkuCode?: string
   skuBrief?: SkuBriefVO
   physicalInventoryId?: number
+  sourceInventoryId?: number
   sourceLocationCode?: string
+  sourceZoneName?: string
   sourceQuality?: string
+  moveMode?: 'PARTIAL' | 'WHOLE_PALLET'
+  sourcePalletId?: number
+  sourcePalletNo?: string
+  sourceSlotId?: number
+  sourceSlotCode?: string
   targetLocationCode?: string
+  targetLocationId?: number
+  targetZoneName?: string
+  targetSlotId?: number
+  targetSlotCode?: string
+  targetPalletId?: number
+  targetPalletNo?: string
   quantity: number
   toGood?: number
   remark?: string
@@ -113,6 +217,7 @@ export interface LocationTransferItemVO {
 /** 库位调整单详情视图对象 */
 export interface LocationTransferDetailVO extends LocationTransferPageVO {
   items: LocationTransferItemVO[]
+  printablePallets?: PalletSummaryVO[]
 }
 
 export interface LocationTransferPlanDTO {

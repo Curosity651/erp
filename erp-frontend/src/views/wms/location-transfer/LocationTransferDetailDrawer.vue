@@ -1,5 +1,5 @@
 <template>
-  <a-drawer v-model:open="visible" title="库位调整单详情" :width="760">
+  <a-drawer v-model:open="visible" title="库位调整单详情" :width="980">
     <a-spin :spinning="loading">
       <template v-if="detail">
         <a-descriptions :column="2" size="small" bordered style="margin-bottom: 16px">
@@ -7,9 +7,17 @@
           <a-descriptions-item label="状态">
             <a-badge :status="badge(detail.orderStatus)" :text="statusText(detail.orderStatus)" />
           </a-descriptions-item>
-          <a-descriptions-item label="所属服务商">{{ detail.operatorName || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="所属服务商">
+            {{ detail.operatorName || '-' }}
+          </a-descriptions-item>
           <a-descriptions-item label="货主">{{ detail.ownerName || '-' }}</a-descriptions-item>
           <a-descriptions-item label="仓库">{{ detail.warehouseName || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="操作员">
+            {{ detail.operatorUserName || detail.createByName || '-' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="调整原因">
+            {{ reasonText(detail.reasonCode, detail.reason) }}
+          </a-descriptions-item>
           <a-descriptions-item label="创建时间">{{ detail.createTime || '-' }}</a-descriptions-item>
           <a-descriptions-item v-if="detail.completeTime" label="完成时间">
             {{ detail.completeTime }}
@@ -23,16 +31,23 @@
           :pagination="false"
           row-key="id"
           size="small"
+          :scroll="{ x: 900 }"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'quality'">
-              <a-tag :color="record.sourceQuality === 'DAMAGED' ? 'red' : 'green'">
-                {{ record.sourceQuality === 'DAMAGED' ? '次品' : '良品' }}
-              </a-tag>
+            <template v-if="column.key === 'sku'">
+              <div>{{ record.warehouseSkuCode || record.skuCode }}</div>
+              <div class="subtle">ERP SKU：{{ record.skuCode }}</div>
             </template>
-            <template v-else-if="column.key === 'move'">
-              {{ record.sourceLocationCode }} → {{ record.targetLocationCode }}
-              <a-tag v-if="record.toGood === 1" color="green" style="margin-left: 4px">置良品</a-tag>
+            <template v-else-if="column.key === 'source'">
+              <div>{{ record.sourceLocationCode || '-' }}</div>
+              <div class="subtle">{{ record.sourceZoneName || '未设置分区' }}</div>
+            </template>
+            <template v-else-if="column.key === 'target'">
+              <div>{{ record.targetLocationCode || '-' }}</div>
+              <div class="subtle">{{ record.targetZoneName || '未设置分区' }}</div>
+            </template>
+            <template v-else-if="column.key === 'quality'">
+              <a-tag color="green">良品</a-tag>
             </template>
           </template>
         </a-table>
@@ -45,8 +60,14 @@
 import { ref } from 'vue'
 import { isSuccess } from '@/api'
 import { getLocationTransferDetail } from '@/api/wms/location-transfer'
-import { LocationTransferStatusList } from '@/api/wms/location-transfer/types'
-import type { LocationTransferDetailVO, LocationTransferStatus } from '@/api/wms/location-transfer/types'
+import {
+  LocationTransferReasonList,
+  LocationTransferStatusList
+} from '@/api/wms/location-transfer/types'
+import type {
+  LocationTransferDetailVO,
+  LocationTransferStatus
+} from '@/api/wms/location-transfer/types'
 
 defineOptions({ name: 'LocationTransferDetailDrawer' })
 
@@ -55,16 +76,23 @@ const loading = ref(false)
 const detail = ref<LocationTransferDetailVO | null>(null)
 
 const columns = [
-  { title: 'SKU', dataIndex: 'skuCode', width: 150, ellipsis: true },
-  { title: '品质', key: 'quality', width: 70, align: 'center' as const },
-  { title: '移库（源→目标）', key: 'move', ellipsis: true },
-  { title: '数量', dataIndex: 'quantity', width: 80, align: 'right' as const }
+  { title: 'SKU', key: 'sku', width: 240, fixed: 'left' as const },
+  { title: '品质', key: 'quality', width: 90 },
+  { title: '源库位', key: 'source', width: 190 },
+  { title: '目标库位', key: 'target', width: 190 },
+  { title: '数量', dataIndex: 'quantity', width: 100, align: 'right' as const },
+  { title: '备注', dataIndex: 'remark', width: 160, ellipsis: true }
 ]
 
-const statusText = (s: LocationTransferStatus) =>
-  LocationTransferStatusList.find(x => x.value === s)?.label || s
-const badge = (s: LocationTransferStatus) =>
-  (LocationTransferStatusList.find(x => x.value === s)?.badge as any) || 'default'
+const statusText = (status: LocationTransferStatus) =>
+  LocationTransferStatusList.find(item => item.value === status)?.label || status
+const badge = (status: LocationTransferStatus) =>
+  (LocationTransferStatusList.find(item => item.value === status)?.badge as any) || 'default'
+
+function reasonText(code?: string, reason?: string) {
+  if (reason) return reason
+  return LocationTransferReasonList.find(item => item.value === code)?.label || code || '-'
+}
 
 async function open(id: number) {
   visible.value = true
@@ -80,3 +108,10 @@ async function open(id: number) {
 
 defineExpose({ open })
 </script>
+
+<style scoped>
+.subtle {
+  color: rgb(0 0 0 / 45%);
+  font-size: 12px;
+}
+</style>

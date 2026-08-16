@@ -1,8 +1,13 @@
 <template>
-  <a-card :bordered="false" style="margin-bottom: 16px" :body-style="{ padding: '20px 24px' }">
-    <a-form layout="inline" class="location-transfer-search" :label-col="{ style: { lineHeight: '32px' } }">
+  <a-card :bordered="false" class="search-card">
+    <a-form :model="search" layout="inline" class="location-transfer-search">
       <a-form-item label="调整单号">
-        <a-input v-model:value="search.transferNo" placeholder="请输入" allow-clear style="width: 150px" />
+        <a-input
+          v-model:value="search.transferNo"
+          placeholder="请输入"
+          allow-clear
+          style="width: 150px"
+        />
       </a-form-item>
       <a-form-item label="状态">
         <a-select
@@ -38,11 +43,17 @@
           allow-clear
         />
       </a-form-item>
+      <a-form-item label="操作员">
+        <user-select
+          v-model:value="search.operatorUserId"
+          placeholder="全部"
+          :options="userOptions"
+          :loading="usersLoading"
+          style="width: 140px"
+        />
+      </a-form-item>
       <a-form-item class="search-actions-item">
-        <a-space>
-          <a-button type="primary" @click="searchTable">查询</a-button>
-          <a-button @click="resetSearch">重置</a-button>
-        </a-space>
+        <search-actions :loading="tableRef?.loading" @search="searchTable" @reset="resetSearch" />
       </a-form-item>
     </a-form>
   </a-card>
@@ -53,7 +64,7 @@
     row-key="id"
     :request="tableRequest"
     :columns="columns"
-    :scroll="{ x: 1550 }"
+    :scroll="{ x: 1640 }"
     size="middle"
   >
     <template #toolBarRender>
@@ -88,13 +99,19 @@
             text="取消"
             @confirm="handleCancel(record)"
           />
-          <template v-if="record.orderStatus === 'PENDING' && hasPermission('wms:location:transfer')">
+          <template
+            v-if="record.orderStatus === 'PENDING' && hasPermission('wms:location:transfer')"
+          >
             <confirm-text-button
               title="确认执行该调整单吗？将按明细逐条移库并置为已完成，不可撤销。"
               text="调整完成"
               @confirm="handleComplete(record)"
             />
-            <confirm-text-button title="确认撤销该调整单吗？" text="撤销" @confirm="handleCancel(record)" />
+            <confirm-text-button
+              title="确认撤销该调整单吗？"
+              text="撤销"
+              @confirm="handleCancel(record)"
+            />
           </template>
         </operation-group>
       </template>
@@ -107,19 +124,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { onMounted, ref, reactive } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import { OperationGroup } from '@/components/Operation'
 import { ConfirmTextButton } from '@/components/Button'
+import { SearchActions } from '@/components/Search'
 import WmsOperatorSelect from '@/components/Lov/WmsOperatorSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
+import UserSelect from '@/components/Lov/UserSelect.vue'
+import { useUserData } from '@/hooks/use-user-data'
 import { useAuthorize } from '@/hooks/permission'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 import { mergePageParam } from '@/utils/page-utils'
 import { doRequest } from '@/utils/axios/request'
-import { pageLocationTransfer, completeLocationTransfer, cancelLocationTransfer } from '@/api/wms/location-transfer'
+import {
+  pageLocationTransfer,
+  completeLocationTransfer,
+  cancelLocationTransfer
+} from '@/api/wms/location-transfer'
 import {
   LocationTransferReasonList,
   LocationTransferStatusList
@@ -140,6 +164,7 @@ const tableRef = ref<ProTableInstanceExpose>()
 const createRef = ref<InstanceType<typeof LocationTransferCreateDrawer>>()
 const detailRef = ref<InstanceType<typeof LocationTransferDetailDrawer>>()
 const planRef = ref<InstanceType<typeof LocationTransferPlanModal>>()
+const { allUsers: userOptions, loading: usersLoading, loadAllUsers } = useUserData()
 
 const statusOptions = LocationTransferStatusList.map(s => ({ label: s.label, value: s.value }))
 const statusText = (s: LocationTransferStatus) =>
@@ -151,6 +176,7 @@ const search = reactive<LocationTransferQO>({
   transferNo: undefined,
   wmsTenantId: undefined,
   erpTenantId: undefined,
+  operatorUserId: undefined,
   orderStatus: undefined
 })
 // 日期范围（[开始, 结束]，按创建时间过滤）
@@ -176,6 +202,7 @@ const resetSearch = () => {
   search.transferNo = undefined
   search.wmsTenantId = undefined
   search.erpTenantId = undefined
+  search.operatorUserId = undefined
   search.orderStatus = undefined
   dateRange.value = undefined
   searchTable()
@@ -193,6 +220,7 @@ const columns: ProColumns[] = [
   { title: '所属服务商', dataIndex: 'operatorName', width: 130, ellipsis: true },
   { title: '货主', dataIndex: 'ownerName', width: 130, ellipsis: true },
   { title: '仓库', dataIndex: 'warehouseName', width: 120, ellipsis: true },
+  { title: '操作员', dataIndex: 'operatorUserName', width: 90, ellipsis: true },
   { title: '明细', key: 'statistics', width: 130 },
   { title: '状态', key: 'status', width: 110 },
   {
@@ -216,27 +244,52 @@ const handlePlan = (r: LocationTransferPageVO) => planRef.value?.open(r.id)
 const handleComplete = (r: LocationTransferPageVO) => {
   doRequest(completeLocationTransfer(r.id), {
     successMessage: '库位调整已完成',
-    onSuccess: () => reloadTable()
+    onSuccess: () => {
+      reloadTable()
+    }
   })
 }
 const handleCancel = (r: LocationTransferPageVO) => {
-  doRequest(cancelLocationTransfer(r.id), { successMessage: '已撤销', onSuccess: () => reloadTable() })
+  doRequest(cancelLocationTransfer(r.id), {
+    successMessage: '已撤销',
+    onSuccess: () => reloadTable()
+  })
 }
+
+onMounted(loadAllUsers)
 </script>
 
 <style scoped>
-/* 搜索栏：所有筛选项一排排列，查询/重置按钮靠右对齐 */
+.search-card {
+  margin-bottom: 16px;
+}
+
+.search-card :deep(.ant-card-body) {
+  min-width: 0;
+}
+
 .location-transfer-search {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  row-gap: 8px;
+  gap: 16px 20px;
 }
+
 .location-transfer-search :deep(.ant-form-item) {
-  margin-right: 12px;
+  flex: 0 0 auto;
+  margin: 0;
 }
+
+.location-transfer-search :deep(.ant-form-item-row) {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.location-transfer-search :deep(.ant-form-item-label) {
+  flex: 0 0 auto;
+}
+
 .location-transfer-search .search-actions-item {
-  margin-left: auto;
-  margin-right: 0;
+  margin: 0;
 }
 </style>

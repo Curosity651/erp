@@ -7,6 +7,8 @@ import com.erp.admin.wms.model.vo.LocationTransferDetailVO;
 import com.erp.admin.wms.model.vo.LocationTransferPageVO;
 import com.erp.admin.wms.model.vo.LocationTransferStatsVO;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 
@@ -19,6 +21,15 @@ import java.util.List;
  * @author erp
  */
 public interface LocationTransferOrderMapper extends ExtendMapper<LocationTransferOrder> {
+
+	@Select("SELECT * FROM wms_location_transfer_order WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+	LocationTransferOrder selectByIdForUpdate(@Param("id") Long id);
+
+	@Update("UPDATE wms_location_transfer_order SET order_status = #{toStatus}, "
+			+ "complete_by = #{completeBy}, complete_time = NOW(), update_time = NOW() "
+			+ "WHERE id = #{id} AND order_status = #{fromStatus} AND deleted = 0")
+	int casComplete(@Param("id") Long id, @Param("fromStatus") String fromStatus,
+			@Param("toStatus") String toStatus, @Param("completeBy") Long completeBy);
 
 	/**
 	 * 分页查询（联表出所属服务商/货主/仓库名）。

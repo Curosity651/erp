@@ -1,6 +1,7 @@
 package com.erp.admin.wms.service;
 
 import com.erp.admin.product.service.SkuBriefService;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.wms.mapper.LocationTransferItemMapper;
 import com.erp.admin.wms.model.entity.LocationTransferItem;
 import com.erp.admin.wms.model.vo.LocationTransferItemVO;
@@ -22,6 +23,8 @@ public class LocationTransferItemService
 		extends ExtendServiceImpl<LocationTransferItemMapper, LocationTransferItem> {
 
 	private final SkuBriefService skuBriefService;
+
+	private final WarehouseSkuCodeService warehouseSkuCodeService;
 
 	/**
 	 * 按调整单ID查询明细实体。
@@ -47,10 +50,23 @@ public class LocationTransferItemService
 			LocationTransferItemVO vo = new LocationTransferItemVO();
 			vo.setId(e.getId());
 			vo.setSkuCode(e.getSkuCode());
+			vo.setWarehouseSkuCode(warehouseSkuCodeService.build(
+					e.getErpTenantId(), e.getSkuCode()));
 			vo.setPhysicalInventoryId(e.getPhysicalInventoryId());
+			vo.setSourceInventoryId(e.getSourceInventoryId());
 			vo.setSourceLocationCode(e.getSourceLocationCode());
 			vo.setSourceQuality(e.getSourceQuality());
+			vo.setMoveMode(e.getMoveMode());
+			vo.setSourcePalletId(e.getSourcePalletId());
+			vo.setSourcePalletNo(e.getSourcePalletNo());
+			vo.setSourceSlotId(e.getSourceSlotId());
+			vo.setSourceSlotCode(e.getSourceSlotCode());
 			vo.setTargetLocationCode(e.getTargetLocationCode());
+			vo.setTargetLocationId(e.getTargetLocationId());
+			vo.setTargetSlotId(e.getTargetSlotId());
+			vo.setTargetSlotCode(e.getTargetSlotCode());
+			vo.setTargetPalletId(e.getTargetPalletId());
+			vo.setTargetPalletNo(e.getTargetPalletNo());
 			vo.setQuantity(e.getQuantity());
 			vo.setToGood(e.getToGood());
 			vo.setRemark(e.getRemark());

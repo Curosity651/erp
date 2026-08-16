@@ -19,6 +19,7 @@ import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.mapper.PurchaseInboundItemMapper;
 import com.erp.admin.wms.mapper.PurchaseInboundMapper;
 import com.erp.admin.wms.mapper.WmsPutawayReceiptLineMapper;
+import com.erp.admin.wms.mapper.WmsLocationMapper;
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.LocationInventoryKey;
 import com.erp.admin.wms.model.entity.PurchaseInboundOrder;
@@ -67,6 +68,8 @@ public class LogicalInboundPutawayService {
 	private final LocationInventoryService inventoryService;
 
 	private final WmsPutawayReceiptLineMapper receiptMapper;
+
+	private final WmsLocationMapper locationMapper;
 
 	private final WarehouseBillingService billingService;
 
@@ -135,6 +138,11 @@ public class LogicalInboundPutawayService {
 		Map<String, Sku> skus = skuByCode(received.keySet());
 		Map<Long, List<InboundPutawayDTO.PutawayLine>> byLocation = lines.stream()
 				.collect(Collectors.groupingBy(InboundPutawayDTO.PutawayLine::getLocationId));
+		for (Long locationId : byLocation.keySet().stream().sorted().collect(Collectors.toList())) {
+			WmsLocation locked = locationMapper.selectLogicalByIdForUpdate(locationId);
+			Assert.notNull(locked, "目标库位不存在：" + locationId);
+			locations.put(locationId, locked);
+		}
 
 		for (Map.Entry<Long, List<InboundPutawayDTO.PutawayLine>> entry : byLocation.entrySet()) {
 			WmsLocation location = locations.get(entry.getKey());

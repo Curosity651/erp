@@ -2,47 +2,71 @@
   <a-drawer
     v-model:open="visible"
     title="新建库位调整单"
-    :width="960"
+    :width="1180"
     :mask-closable="false"
     @close="handleClose"
   >
     <a-alert
       type="info"
       show-icon
-      style="margin-bottom: 12px"
-      message="支持物理库位与虚拟库位之间的四向移库。移入物理库位时会校验服务商租赁范围、分区和容量；创建后为“待调整”，点击“调整完成”才真正移动库存。"
+      message="只移动可用库存。已被销售出库预占的数量不能移动；不良品只能通过报废流程处理。"
+      style="margin-bottom: 16px"
     />
 
     <a-form layout="vertical">
-      <a-row :gutter="16">
-        <a-col :span="8">
-          <a-form-item label="货主" required>
-            <platform-owner-select
-              v-model:value="erpTenantId"
-              placeholder="请选择货主"
-              width="100%"
-              @change="reloadBatches"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
+      <a-row :gutter="12">
+        <a-col :span="5">
           <a-form-item label="仓库" required>
             <warehouse-select
               v-model:value="warehouseId"
               placeholder="请选择仓库"
               width="100%"
-              @change="reloadBatches"
+              @change="handleWarehouseChange"
             />
           </a-form-item>
         </a-col>
-        <a-col :span="8">
+        <a-col :span="5">
+          <a-form-item label="货主" required>
+            <platform-owner-select
+              v-model:value="erpTenantId"
+              placeholder="请选择货主"
+              width="100%"
+              @change="handleOwnerChange"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="5">
+          <a-form-item label="源库位">
+            <a-select
+              v-model:value="sourceLocationId"
+              :options="sourceLocationOptions"
+              :loading="targetsLoading"
+              placeholder="全部库位"
+              show-search
+              allow-clear
+              :filter-option="filterOption"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="5">
+          <a-form-item label="SKU">
+            <a-input v-model:value="skuKeyword" placeholder="内部SKU或ERP SKU" allow-clear />
+          </a-form-item>
+        </a-col>
+        <a-col :span="4" class="query-column">
+          <a-space>
+            <a-button type="primary" :loading="loading" @click="searchSources">查询</a-button>
+            <a-button @click="resetFilters">重置</a-button>
+          </a-space>
+        </a-col>
+      </a-row>
+      <a-row :gutter="12">
+        <a-col :span="6">
           <a-form-item label="调整原因" required>
             <a-select v-model:value="reasonCode" :options="reasonOptions" placeholder="请选择" />
           </a-form-item>
         </a-col>
-      </a-row>
-      <a-row :gutter="16">
-        <a-col :span="12">
+        <a-col :span="9">
           <a-form-item :label="reasonCode === 'OTHER' ? '原因说明' : '原因说明（选填）'">
             <a-input
               v-model:value="reason"
@@ -51,68 +75,76 @@
             />
           </a-form-item>
         </a-col>
-        <a-col :span="12">
+        <a-col :span="9">
           <a-form-item label="备注">
-            <a-input v-model:value="remark" placeholder="可选" :maxlength="500" />
+            <a-input v-model:value="remark" placeholder="选填" :maxlength="500" />
           </a-form-item>
         </a-col>
       </a-row>
     </a-form>
 
-    <a-spin :spinning="loading">
-      <a-table
-        :data-source="batches"
-        :columns="columns"
-        :pagination="false"
-        row-key="id"
-        size="small"
-        :row-selection="{
-          selectedRowKeys: selectedKeys,
-          onChange: onSelectChange,
-          getCheckboxProps: (r: any) => ({ disabled: available(r) <= 0 })
-        }"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'quality'">
-            <a-tag :color="record.quality === 'DAMAGED' ? 'red' : 'green'">
-              {{ record.quality === 'DAMAGED' ? '次品' : '良品' }}
-            </a-tag>
-          </template>
-          <template v-else-if="column.key === 'available'">
-            {{ available(record) }}
-          </template>
-          <template v-else-if="column.key === 'moveQty'">
-            <a-input-number
-              v-model:value="record.moveQty"
-              :min="1"
-              :max="available(record)"
-              :precision="0"
-              :disabled="!selectedKeys.includes(record.id) || available(record) <= 0"
-              style="width: 100%"
-            />
-          </template>
-          <template v-else-if="column.key === 'target'">
-            <a-select
-              v-model:value="record.targetCode"
-              :options="targetOptions(record.id)"
-              :loading="targetLoading[record.id]"
-              :disabled="!selectedKeys.includes(record.id)"
-              placeholder="选择目标库位"
-              show-search
-              style="width: 100%"
-              :not-found-content="targetLoading[record.id] ? undefined : '无可用目标库位'"
-            />
-          </template>
+    <a-table
+      :data-source="sources"
+      :columns="columns"
+      :pagination="{ pageSize: 10, showSizeChanger: true }"
+      :loading="loading"
+      row-key="inventoryId"
+      size="small"
+      :scroll="{ x: 1080 }"
+      :row-selection="{
+        selectedRowKeys,
+        onChange: onSelectChange,
+        getCheckboxProps: (record: EditableSource) => ({ disabled: record.availableQuantity <= 0 })
+      }"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'source'">
+          <div>{{ record.locationCode }}</div>
+          <div class="subtle">{{ record.zoneName || zoneText(record.zoneType) }}</div>
         </template>
-        <template #emptyText>
-          <span>{{ erpTenantId && warehouseId ? '该货主在本仓无可移库批次' : '请先选择货主与仓库' }}</span>
+        <template v-else-if="column.key === 'sku'">
+          <div>{{ record.warehouseSkuCode || record.skuCode }}</div>
+          <div class="subtle">ERP SKU：{{ record.skuCode }}</div>
         </template>
-      </a-table>
-    </a-spin>
+        <template v-else-if="column.key === 'quality'">
+          <a-tag color="green">良品</a-tag>
+        </template>
+        <template v-else-if="column.key === 'quantity'">
+          <span>{{ record.quantity }}</span>
+          <span v-if="record.reservedQuantity" class="subtle quantity-note">
+            （预占 {{ record.reservedQuantity }}）
+          </span>
+        </template>
+        <template v-else-if="column.key === 'moveQuantity'">
+          <a-input-number
+            v-model:value="record.moveQuantity"
+            :min="1"
+            :max="record.availableQuantity"
+            :precision="0"
+            :disabled="!selectedRowKeys.includes(record.inventoryId)"
+            style="width: 100px"
+          />
+        </template>
+        <template v-else-if="column.key === 'target'">
+          <a-select
+            v-model:value="record.targetLocationId"
+            :options="targetOptions(record)"
+            :disabled="!selectedRowKeys.includes(record.inventoryId)"
+            placeholder="选择目标库位"
+            show-search
+            :filter-option="filterOption"
+            style="width: 100%"
+          />
+        </template>
+      </template>
+      <template #emptyText>
+        {{ searched ? '没有符合条件的可移动库存' : '选择仓库和货主后查询库存' }}
+      </template>
+    </a-table>
 
     <template #footer>
-      <div style="display: flex; justify-content: space-between; align-items: center">
-        <span>已选 {{ selectedKeys.length }} 个批次</span>
+      <div class="drawer-footer">
+        <span>已选 {{ selectedRowKeys.length }} 条库存</span>
         <a-space>
           <a-button @click="handleClose">取消</a-button>
           <a-button type="primary" :loading="submitting" @click="submit">创建调整单</a-button>
@@ -123,106 +155,152 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import WarehouseSelect from '@/components/Lov/WarehouseSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
 import { isSuccess } from '@/api'
 import { doRequest } from '@/utils/axios/request'
-import { listOwnerBatches } from '@/api/wms/adjustment'
-import type { PhysicalBatchVO } from '@/api/wms/adjustment/types'
-import { createLocationTransfer, listTargetCandidates } from '@/api/wms/location-transfer'
+import {
+  createLogicalLocationTransfer,
+  listLogicalTransferSources,
+  listLogicalTransferTargets
+} from '@/api/wms/location-transfer'
 import {
   LocationTransferReasonList,
-  type TargetLocationVO
+  type LogicalTransferLocationVO,
+  type LogicalTransferSourceVO
 } from '@/api/wms/location-transfer/types'
 
 defineOptions({ name: 'LocationTransferCreateDrawer' })
 const emit = defineEmits<{ (e: 'success'): void }>()
 
+interface EditableSource extends LogicalTransferSourceVO {
+  moveQuantity: number
+  targetLocationId?: number
+}
+
 const visible = ref(false)
 const loading = ref(false)
+const targetsLoading = ref(false)
 const submitting = ref(false)
-const erpTenantId = ref<number>()
+const searched = ref(false)
 const warehouseId = ref<number>()
+const erpTenantId = ref<number>()
+const sourceLocationId = ref<number>()
+const skuKeyword = ref<string>()
 const reasonCode = ref<string>()
 const reason = ref<string>()
 const remark = ref<string>()
+const sources = ref<EditableSource[]>([])
+const targets = ref<LogicalTransferLocationVO[]>([])
+const selectedRowKeys = ref<number[]>([])
 const reasonOptions = LocationTransferReasonList.map(item => ({ ...item }))
 
-interface BatchRow extends PhysicalBatchVO {
-  moveQty?: number
-  targetCode?: string
-}
-const batches = ref<BatchRow[]>([])
-const selectedKeys = ref<number[]>([])
-
-// 每个批次的目标库位候选与加载态
-const candidatesMap = reactive<Record<number, TargetLocationVO[]>>({})
-const targetLoading = reactive<Record<number, boolean>>({})
-
 const columns = [
-  { title: 'SKU', dataIndex: 'skuCode', width: 150, ellipsis: true },
-  { title: '源库位', dataIndex: 'locationCode', width: 100 },
-  { title: '品质', key: 'quality', width: 70, align: 'center' as const },
-  { title: '现存', dataIndex: 'quantity', width: 60, align: 'right' as const },
-  { title: '可用', key: 'available', width: 60, align: 'right' as const },
-  { title: '移动数量', key: 'moveQty', width: 110 },
-  { title: '目标库位', key: 'target', width: 200 }
+  { title: '源库位', key: 'source', width: 150, fixed: 'left' as const },
+  { title: '货主', dataIndex: 'ownerName', width: 110, ellipsis: true },
+  { title: 'SKU', key: 'sku', width: 230 },
+  { title: '品质', key: 'quality', width: 80 },
+  { title: '库存/预占', key: 'quantity', width: 130 },
+  { title: '可移动', dataIndex: 'availableQuantity', width: 90, align: 'right' as const },
+  { title: '本次移动', key: 'moveQuantity', width: 130 },
+  { title: '目标库位', key: 'target', width: 260 }
 ]
 
-const available = (r: BatchRow) => (r.quantity || 0) - (r.reservedQty || 0)
+const zoneText = (type?: string) =>
+  ({ STANDARD: '标准区', TEMP: '暂存区', RETURN: '退货区' })[type || ''] || type || '未设置分区'
 
-const targetOptions = (batchId: number) =>
-  (candidatesMap[batchId] || []).map(t => ({
-    label:
-      (t.isVirtual === 1 ? '虚拟 · ' : '') +
-      (t.zoneName ? `${t.locationCode}（${t.zoneName}）` : t.locationCode),
-    value: t.locationCode
-  }))
+function filterOption(input: string, option: any) {
+  return String(option?.label || '')
+    .toLowerCase()
+    .includes(input.toLowerCase())
+}
 
-async function loadCandidates(batchId: number) {
-  if (candidatesMap[batchId]) return
-  targetLoading[batchId] = true
+function locationLabel(location: LogicalTransferLocationVO) {
+  const usage = location.utilizationPercent == null ? '' : ` · 已用 ${location.utilizationPercent}%`
+  return `${location.locationCode} · ${location.zoneName || zoneText(location.zoneType)}${usage}`
+}
+
+const sourceLocationOptions = computed(() =>
+  targets.value.map(location => ({ label: locationLabel(location), value: location.locationId }))
+)
+
+function targetOptions(source: EditableSource) {
+  return targets.value
+    .filter(target => target.locationId !== source.locationId)
+    .map(target => ({ label: locationLabel(target), value: target.locationId }))
+}
+
+async function loadTargets() {
+  targets.value = []
+  if (!warehouseId.value || !erpTenantId.value) return
+  targetsLoading.value = true
   try {
-    const res = await listTargetCandidates(batchId)
-    if (isSuccess(res) && res.data) candidatesMap[batchId] = res.data
-    else candidatesMap[batchId] = []
+    const res = await listLogicalTransferTargets({
+      warehouseId: warehouseId.value,
+      erpTenantId: erpTenantId.value
+    })
+    if (isSuccess(res)) targets.value = res.data || []
   } finally {
-    targetLoading[batchId] = false
+    targetsLoading.value = false
   }
 }
 
-const onSelectChange = (keys: (string | number)[]) => {
-  const next = keys as number[]
-  selectedKeys.value = next
-  batches.value.forEach(b => {
-    if (next.includes(b.id)) {
-      if (!b.moveQty) b.moveQty = available(b)
-      loadCandidates(b.id)
-    }
-  })
+function handleWarehouseChange() {
+  erpTenantId.value = undefined
+  sourceLocationId.value = undefined
+  sources.value = []
+  targets.value = []
+  selectedRowKeys.value = []
 }
 
-async function reloadBatches() {
-  selectedKeys.value = []
-  batches.value = []
-  Object.keys(candidatesMap).forEach(k => delete candidatesMap[Number(k)])
-  if (!erpTenantId.value || !warehouseId.value) return
+async function handleOwnerChange() {
+  sourceLocationId.value = undefined
+  sources.value = []
+  selectedRowKeys.value = []
+  await loadTargets()
+}
+
+async function searchSources() {
+  if (!warehouseId.value || !erpTenantId.value) {
+    message.warning('请先选择仓库和货主')
+    return
+  }
   loading.value = true
+  searched.value = true
+  selectedRowKeys.value = []
   try {
-    const res = await listOwnerBatches(erpTenantId.value, warehouseId.value)
-    if (isSuccess(res) && res.data) {
-      batches.value = res.data.filter(b => (b.quantity || 0) > 0).map(b => ({ ...b }))
-    }
+    const res = await listLogicalTransferSources({
+      warehouseId: warehouseId.value,
+      erpTenantId: erpTenantId.value,
+      locationId: sourceLocationId.value,
+      skuKeyword: skuKeyword.value?.trim()
+    })
+    sources.value = (isSuccess(res) ? res.data || [] : []).map(row => ({
+      ...row,
+      moveQuantity: row.availableQuantity
+    }))
   } finally {
     loading.value = false
   }
 }
 
+function onSelectChange(keys: (string | number)[]) {
+  selectedRowKeys.value = keys.map(Number)
+}
+
+function resetFilters() {
+  sourceLocationId.value = undefined
+  skuKeyword.value = undefined
+  sources.value = []
+  selectedRowKeys.value = []
+  searched.value = false
+}
+
 function submit() {
-  if (!erpTenantId.value || !warehouseId.value) {
-    message.warning('请选择货主与仓库')
+  if (!warehouseId.value || !erpTenantId.value) {
+    message.warning('请选择仓库和货主')
     return
   }
   if (!reasonCode.value) {
@@ -233,37 +311,38 @@ function submit() {
     message.warning('选择“其他”时请填写原因说明')
     return
   }
-  const rows = batches.value.filter(b => selectedKeys.value.includes(b.id))
-  if (rows.length === 0) {
-    message.warning('请勾选要移库的批次')
+  const selected = sources.value.filter(row => selectedRowKeys.value.includes(row.inventoryId))
+  if (!selected.length) {
+    message.warning('请选择需要移动的库存')
     return
   }
-  const badQty = rows.find(b => !b.moveQty || b.moveQty <= 0 || b.moveQty > available(b))
-  if (badQty) {
-    message.warning(`批次[${badQty.locationCode}]移动数量不合法（需在 1~${available(badQty)} 之间）`)
-    return
-  }
-  const noTarget = rows.find(b => !b.targetCode)
-  if (noTarget) {
-    message.warning(`批次[${noTarget.locationCode}]未选择目标库位`)
+  const invalid = selected.find(
+    row =>
+      !row.targetLocationId ||
+      !row.moveQuantity ||
+      row.moveQuantity < 1 ||
+      row.moveQuantity > row.availableQuantity
+  )
+  if (invalid) {
+    message.warning(`请检查 ${invalid.warehouseSkuCode || invalid.skuCode} 的目标库位和移动数量`)
     return
   }
   submitting.value = true
   doRequest(
-    createLocationTransfer({
+    createLogicalLocationTransfer({
       warehouseId: warehouseId.value,
       erpTenantId: erpTenantId.value,
       reasonCode: reasonCode.value,
       reason: reason.value?.trim(),
-      remark: remark.value,
-      items: rows.map(b => ({
-        physicalInventoryId: b.id,
-        quantity: b.moveQty as number,
-        targetLocationCode: b.targetCode as string
+      remark: remark.value?.trim(),
+      items: selected.map(row => ({
+        sourceInventoryId: row.inventoryId,
+        targetLocationId: row.targetLocationId!,
+        quantity: row.moveQuantity
       }))
     }),
     {
-      successMessage: '已创建库位调整单（待调整）',
+      successMessage: '库位调整单已创建',
       onSuccess: () => {
         visible.value = false
         emit('success')
@@ -275,21 +354,51 @@ function submit() {
   )
 }
 
+function reset() {
+  warehouseId.value = undefined
+  erpTenantId.value = undefined
+  sourceLocationId.value = undefined
+  skuKeyword.value = undefined
+  reasonCode.value = undefined
+  reason.value = undefined
+  remark.value = undefined
+  sources.value = []
+  targets.value = []
+  selectedRowKeys.value = []
+  searched.value = false
+}
+
 function handleClose() {
   visible.value = false
 }
 
 function open() {
+  reset()
   visible.value = true
-  erpTenantId.value = undefined
-  warehouseId.value = undefined
-  reasonCode.value = undefined
-  reason.value = undefined
-  remark.value = undefined
-  batches.value = []
-  selectedKeys.value = []
-  Object.keys(candidatesMap).forEach(k => delete candidatesMap[Number(k)])
 }
 
 defineExpose({ open })
 </script>
+
+<style scoped>
+.query-column {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 24px;
+}
+
+.drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.subtle {
+  color: rgb(0 0 0 / 45%);
+  font-size: 12px;
+}
+
+.quantity-note {
+  margin-left: 4px;
+}
+</style>

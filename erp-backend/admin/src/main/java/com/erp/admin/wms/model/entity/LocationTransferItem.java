@@ -36,14 +36,47 @@ public class LocationTransferItem {
 	@Schema(title = "源批次ID（wms_physical_inventory.id）")
 	private Long physicalInventoryId;
 
+	@Schema(title = "源逻辑库位库存ID（wms_location_inventory.id）")
+	private Long sourceInventoryId;
+
 	@Schema(title = "源库位编码（冗余展示，取自批次）")
 	private String sourceLocationCode;
 
 	@Schema(title = "源品质 GOOD/DAMAGED（冗余展示，取自批次）")
 	private String sourceQuality;
 
+	@Schema(title = "调整方式：PARTIAL/WHOLE_PALLET")
+	private String moveMode;
+
+	@Schema(title = "源托盘ID")
+	private Long sourcePalletId;
+
+	@Schema(title = "源托盘号快照")
+	private String sourcePalletNo;
+
+	@Schema(title = "源托位ID快照")
+	private Long sourceSlotId;
+
+	@Schema(title = "源托位编码快照")
+	private String sourceSlotCode;
+
 	@Schema(title = "目标库位编码")
 	private String targetLocationCode;
+
+	@Schema(title = "目标逻辑库位ID")
+	private Long targetLocationId;
+
+	@Schema(title = "目标托位ID")
+	private Long targetSlotId;
+
+	@Schema(title = "目标托位编码快照")
+	private String targetSlotCode;
+
+	@Schema(title = "目标托盘ID；拆零合并时使用")
+	private Long targetPalletId;
+
+	@Schema(title = "目标托盘号快照")
+	private String targetPalletNo;
 
 	@Schema(title = "目标库位分区ID（执行时按目标解析）")
 	private Long targetZoneId;

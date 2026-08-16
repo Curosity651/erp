@@ -2,14 +2,22 @@ package com.erp.admin.wms.controller;
 
 import java.util.List;
 
+import com.erp.admin.wms.model.dto.LocationTransferBatchCreateDTO;
 import com.erp.admin.wms.model.dto.LocationTransferCreateDTO;
 import com.erp.admin.wms.model.dto.LocationTransferPlanDTO;
+import com.erp.admin.wms.model.dto.LogicalLocationTransferCreateDTO;
+import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.qo.LocationTransferQO;
 import com.erp.admin.wms.model.vo.AvailableLocationVO;
 import com.erp.admin.wms.model.vo.LocationTransferDetailVO;
 import com.erp.admin.wms.model.vo.LocationTransferPageVO;
+import com.erp.admin.wms.model.vo.LocationTransferSourceBatchVO;
+import com.erp.admin.wms.model.vo.LogicalTransferLocationVO;
+import com.erp.admin.wms.model.vo.LogicalTransferSourceVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.service.LocationTransferOrderService;
 import com.erp.admin.wms.service.LocationTransferService;
+import com.erp.admin.wms.service.LogicalLocationTransferService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +51,8 @@ public class LocationTransferController {
 
 	private final LocationTransferService locationTransferService;
 
+	private final LogicalLocationTransferService logicalTransferService;
+
 	@Operation(summary = "库位调整单分页")
 	@GetMapping("/page")
 	@PreAuthorize("@per.hasPermission('wms:location:read')")
@@ -65,6 +75,22 @@ public class LocationTransferController {
 		return ApiResult.ok(orderService.create(dto));
 	}
 
+	@Operation(summary = "新建逻辑库位调整单")
+	@OperationLog(bizType = "库位调整", successMessage = "新建库位调整单成功")
+	@PostMapping("/logical")
+	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
+	public ApiResult<Long> createLogical(@Validated @RequestBody LogicalLocationTransferCreateDTO dto) {
+		return ApiResult.ok(logicalTransferService.create(dto));
+	}
+
+	@Operation(summary = "按库位批量新建调整单（自动按货主拆单）")
+	@OperationLog(bizType = "库位调整", successMessage = "批量新建库位调整单成功")
+	@PostMapping("/batch")
+	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
+	public ApiResult<List<Long>> createBatch(@Validated @RequestBody LocationTransferBatchCreateDTO dto) {
+		return ApiResult.ok(orderService.createBatch(dto));
+	}
+
 	@Operation(summary = "完善系统生成的库位调整计划")
 	@PatchMapping("/plan")
 	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
@@ -78,8 +104,16 @@ public class LocationTransferController {
 	@OperationLog(bizType = "库位调整", successMessage = "库位调整完成")
 	@PatchMapping("/complete")
 	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
-	public ApiResult<Void> complete(@RequestParam("id") Long id) {
-		orderService.complete(id);
+	public ApiResult<List<PalletSummaryVO>> complete(@RequestParam("id") Long id) {
+		return ApiResult.ok(orderService.complete(id));
+	}
+
+	@Operation(summary = "完成逻辑库位调整")
+	@OperationLog(bizType = "库位调整", successMessage = "库位调整完成")
+	@PatchMapping("/logical-complete")
+	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
+	public ApiResult<Void> completeLogical(@RequestParam("id") Long id) {
+		logicalTransferService.complete(id);
 		return ApiResult.ok();
 	}
 
@@ -104,8 +138,56 @@ public class LocationTransferController {
 	@Operation(summary = "目标库位候选")
 	@GetMapping("/candidates")
 	@PreAuthorize("@per.hasPermission('wms:location:read')")
-	public ApiResult<List<AvailableLocationVO>> candidates(@RequestParam("physicalInventoryId") Long physicalInventoryId) {
-		return ApiResult.ok(locationTransferService.listCandidateTargets(physicalInventoryId));
+	public ApiResult<List<AvailableLocationVO>> candidates(
+			@RequestParam("physicalInventoryId") Long physicalInventoryId,
+			@RequestParam(value = "moveMode", required = false, defaultValue = "PARTIAL") String moveMode,
+			@RequestParam(value = "targetLocationCode", required = false) String targetLocationCode) {
+		return ApiResult.ok(locationTransferService.listCandidateTargets(
+				physicalInventoryId, moveMode, targetLocationCode));
+	}
+
+	@Operation(summary = "按源库位查询可调整库存")
+	@GetMapping("/sources")
+	@PreAuthorize("@per.hasPermission('wms:location:read')")
+	public ApiResult<List<LocationTransferSourceBatchVO>> sources(
+			@RequestParam("warehouseId") Long warehouseId,
+			@RequestParam(value = "locationCode", required = false) String locationCode,
+			@RequestParam(value = "erpTenantId", required = false) Long erpTenantId,
+			@RequestParam(value = "skuKeyword", required = false) String skuKeyword,
+			@RequestParam(value = "palletNo", required = false) String palletNo) {
+		return ApiResult.ok(locationTransferService.listSources(
+				warehouseId, locationCode, erpTenantId, skuKeyword, palletNo));
+	}
+
+	@Operation(summary = "查询逻辑库位可调整库存")
+	@GetMapping("/logical-sources")
+	@PreAuthorize("@per.hasPermission('wms:location:read')")
+	public ApiResult<List<LogicalTransferSourceVO>> logicalSources(
+			@RequestParam("warehouseId") Long warehouseId,
+			@RequestParam(value = "locationId", required = false) Long locationId,
+			@RequestParam(value = "erpTenantId", required = false) Long erpTenantId,
+			@RequestParam(value = "skuKeyword", required = false) String skuKeyword) {
+		return ApiResult.ok(logicalTransferService.listSources(warehouseId, locationId, erpTenantId, skuKeyword));
+	}
+
+	@Operation(summary = "查询逻辑库位调整目标")
+	@GetMapping("/logical-targets")
+	@PreAuthorize("@per.hasPermission('wms:location:read')")
+	public ApiResult<List<LogicalTransferLocationVO>> logicalTargets(
+			@RequestParam("warehouseId") Long warehouseId,
+			@RequestParam("erpTenantId") Long erpTenantId) {
+		return ApiResult.ok(logicalTransferService.listTargets(warehouseId, erpTenantId));
+	}
+
+	@Operation(summary = "创建调整单可选库位（服务商自有物理库位及全部虚拟库位）")
+	@GetMapping("/selectable-locations")
+	@PreAuthorize("@per.hasPermission('wms:location:read')")
+	public ApiResult<List<WmsLocation>> selectableLocations(
+			@RequestParam("warehouseId") Long warehouseId,
+			@RequestParam(value = "erpTenantId", required = false) Long erpTenantId,
+			@RequestParam(value = "sourceLocationCode", required = false) String sourceLocationCode) {
+		return ApiResult.ok(locationTransferService.listSelectableLocations(
+				warehouseId, erpTenantId, sourceLocationCode));
 	}
 
 }
