@@ -23,4 +23,74 @@
 		FOR UPDATE
 	</select>
 
+	<select id="selectByKeyForUpdate" resultType="com.erp.admin.wms.model.entity.WmsLocationInventory">
+		SELECT *
+		FROM wms_location_inventory
+		WHERE tenant_id = #{key.tenantId}
+		  AND wms_tenant_id = #{key.wmsTenantId}
+		  AND erp_tenant_id = #{key.erpTenantId}
+		  AND warehouse_id = #{key.warehouseId}
+		  AND location_id = #{key.locationId}
+		  AND sku_code = #{key.skuCode}
+		  AND quality = #{key.quality}
+		  AND deleted = 0
+		FOR UPDATE
+	</select>
+
+	<select id="selectOwnedAvailableForUpdate" resultType="com.erp.admin.wms.model.entity.WmsLocationInventory">
+		SELECT *
+		FROM wms_location_inventory
+		WHERE tenant_id = #{tenantId}
+		  AND wms_tenant_id = #{wmsTenantId}
+		  AND erp_tenant_id = #{erpTenantId}
+		  AND warehouse_id = #{warehouseId}
+		  AND sku_code = #{skuCode}
+		  AND quality = #{quality}
+		  AND quantity &gt; reserved_quantity
+		  AND deleted = 0
+		ORDER BY id
+		FOR UPDATE
+	</select>
+
+	<update id="increaseQuantity">
+		UPDATE wms_location_inventory
+		SET quantity = quantity + #{quantity}, version = version + 1
+		WHERE id = #{id} AND version = #{version}
+	</update>
+
+	<update id="decreaseAvailableQuantity">
+		UPDATE wms_location_inventory
+		SET quantity = quantity - #{quantity}, version = version + 1
+		WHERE id = #{id}
+		  AND quantity - reserved_quantity &gt;= #{quantity}
+		  AND version = #{version}
+	</update>
+
+	<update id="reserveQuantity">
+		UPDATE wms_location_inventory
+		SET reserved_quantity = reserved_quantity + #{quantity}, version = version + 1
+		WHERE id = #{id}
+		  AND quantity - reserved_quantity &gt;= #{quantity}
+		  AND version = #{version}
+	</update>
+
+	<update id="releaseQuantity">
+		UPDATE wms_location_inventory
+		SET reserved_quantity = reserved_quantity - #{quantity}, version = version + 1
+		WHERE id = #{id}
+		  AND reserved_quantity &gt;= #{quantity}
+		  AND version = #{version}
+	</update>
+
+	<update id="shipQuantity">
+		UPDATE wms_location_inventory
+		SET quantity = quantity - #{quantity},
+		    reserved_quantity = reserved_quantity - #{quantity},
+		    version = version + 1
+		WHERE id = #{id}
+		  AND quantity &gt;= #{quantity}
+		  AND reserved_quantity &gt;= #{quantity}
+		  AND version = #{version}
+	</update>
+
 </mapper>

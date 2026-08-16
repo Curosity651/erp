@@ -34,3 +34,19 @@ CREATE TABLE wms_location_inventory (
         CHECK (quantity >= 0 AND reserved_quantity >= 0 AND reserved_quantity <= quantity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='batch-free inventory by logical location';
+
+CREATE TABLE wms_inventory_reservation (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    fulfillment_order_id BIGINT NOT NULL COMMENT 'order-level fulfillment id',
+    inventory_id BIGINT NOT NULL COMMENT 'reserved logical location inventory id',
+    quantity INT NOT NULL COMMENT 'reserved quantity',
+    reservation_status VARCHAR(20) NOT NULL DEFAULT 'RESERVED' COMMENT 'RESERVED/RELEASED/SHIPPED',
+    version INT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_fulfillment_inventory (fulfillment_order_id, inventory_id),
+    KEY idx_reservation_fulfillment_status (fulfillment_order_id, reservation_status),
+    CONSTRAINT chk_inventory_reservation_quantity CHECK (quantity > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='fulfillment reservation slices';
