@@ -22,6 +22,7 @@ export interface ShopVO {
 
 export interface ShopDetailVO extends ShopVO {
   credentialMask?: Record<string, string>
+  defaultWmsWarehouseId?: number
 }
 
 export interface TestCredentialRequest {
@@ -44,6 +45,7 @@ export interface CreateOrUpdateShopRequest {
   erpShopName: string
   platformShopId: string
   testToken?: string
+  defaultWmsWarehouseId: number
 }
 
 // ===== Status Constants & Enums =====

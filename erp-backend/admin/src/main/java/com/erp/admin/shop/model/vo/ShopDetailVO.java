@@ -26,4 +26,6 @@ public class ShopDetailVO {
 
 	private Map<String, String> credentialMask;
 
+	private Long defaultWmsWarehouseId;
+
 }

@@ -56,6 +56,9 @@ public class Shop {
 	@Schema(title = "Erp显示的店铺名称")
 	private String erpShopName;
 
+	@Schema(title = "默认内部WMS仓库ID")
+	private Long defaultWmsWarehouseId;
+
 	/**
 	 * 1 启用 / 0 禁用
 	 */

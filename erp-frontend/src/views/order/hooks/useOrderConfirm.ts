@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { message } from 'ant-design-vue'
-import { doRequest } from '@/utils/axios/request.ts'
 import type { BaseOrderVO } from '@/api/order/types.ts'
+import { submitOrderFulfillment } from '@/api/order/fulfillment'
 
 export interface UseOrderConfirmOptions<T extends BaseOrderVO> {
   /** 判断订单是否可确认 */
@@ -58,35 +58,30 @@ export function useOrderConfirm<T extends BaseOrderVO>(
       return
     }
 
-    const ids = confirmModal.eligible.map(x => x.id)
     confirmModal.loading = true
-
-    if (options.onConfirmSuccess) {
-      // Yandex 模式：直接 await，自定义响应处理
-      try {
-        const res = await options.confirmApi(ids)
-        options.onConfirmSuccess(res)
-        confirmModal.open = false
-        options.reloadTable()
-      } catch (e: any) {
-        message.error(e?.message || '确认发货失败')
-      } finally {
-        confirmModal.loading = false
+    try {
+      const results = await Promise.allSettled(
+        confirmModal.eligible.map(order => submitOrderFulfillment(order.id))
+      )
+      const failures = results
+        .map((result, index) => ({ result, order: confirmModal.eligible[index] }))
+        .filter(item => item.result.status === 'rejected')
+      const successCount = results.length - failures.length
+      if (successCount > 0) message.success(`${successCount} 个订单已提交海外仓，状态为待下架`)
+      if (failures.length > 0) {
+        const summary = failures
+          .slice(0, 3)
+          .map(item => {
+            const reason = (item.result as PromiseRejectedResult).reason
+            return `${item.order.platformOrderId || item.order.id}：${reason?.message || '提交失败'}`
+          })
+          .join('；')
+        message.error(`${failures.length} 个订单提交失败。${summary}`)
       }
-    } else {
-      // WB/Ozon 模式：doRequest 处理
-      // 注意：doRequest 不返回 Promise，不能 await。loading 重置放 onFinally；
-      // 关窗与刷新只在成功时执行，失败保留弹窗以便重试
-      doRequest(options.confirmApi(ids), {
-        successMessage: '确认任务已提交',
-        onSuccess: () => {
-          confirmModal.open = false
-          options.reloadTable()
-        },
-        onFinally: () => {
-          confirmModal.loading = false
-        }
-      })
+      confirmModal.open = failures.length > 0
+      options.reloadTable()
+    } finally {
+      confirmModal.loading = false
     }
   }
 

@@ -84,6 +84,7 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 		shop.setPlatformShopId(item.getPlatformShopId());
 		shop.setName(item.getShopName());
 		shop.setErpShopName(req.getErpShopName());
+		shop.setDefaultWmsWarehouseId(req.getDefaultWmsWarehouseId());
 		shop.setStatus(ShopStatusEnum.ENABLED.getCode());
 		shop.setCredential(JsonUtils.toJson(item.getCredential()));
 		shop.setLastTestedAt(LocalDateTime.now());
@@ -113,6 +114,7 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 		}
 
 		db.setErpShopName(req.getErpShopName());
+		db.setDefaultWmsWarehouseId(req.getDefaultWmsWarehouseId());
 		db.setUpdateTime(LocalDateTime.now());
 		this.updateById(db);
 	}
@@ -146,6 +148,7 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 		Map<String, String> credMap = JsonUtils.toObj(db.getCredential(), new TypeReference<Map<String, String>>() {
 		});
 		vo.setCredentialMask(credentialService.mask(db.getPlatform(), credMap));
+		vo.setDefaultWmsWarehouseId(db.getDefaultWmsWarehouseId());
 		return vo;
 	}
 

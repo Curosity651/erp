@@ -145,6 +145,15 @@ public class ErpOrder {
 	@Schema(title="关联的出库单ID")
 	private Long outboundOrderId;
 
+	@Schema(title = "新履约单ID")
+	private Long fulfillmentOrderId;
+
+	@Schema(title = "内部WMS仓库ID")
+	private Long wmsWarehouseId;
+
+	@Schema(title = "仓库内部履约状态")
+	private String warehouseFulfillmentStatus;
+
 	/**
 	 * 出库时间
 	 */
@@ -234,6 +243,12 @@ public class ErpOrder {
 	 */
 	@Schema(title="面单数据")
 	private String labelBase64;
+
+	/**
+	 * 面单上允许用于仓库贴单复核的条码集合（JSON 数组）。
+	 */
+	@Schema(title = "面单复核码集合")
+	private String labelVerifyCodes;
     
 	/**
 	 * 平台订单创建时间

@@ -19,4 +19,6 @@ public class CreateOrUpdateShopRequest {
 
 	private String testToken;
 
+	private Long defaultWmsWarehouseId;
+
 }
