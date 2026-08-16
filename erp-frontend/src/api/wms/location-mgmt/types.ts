@@ -89,4 +89,54 @@ export interface WmsLocation {
   pickType?: string
   /** 1=虚拟库位（收纳积压货用，服务商不可见） */
   isVirtual?: number
+  lengthMm?: number
+  widthMm?: number
+  heightMm?: number
+  maxVolumeCbm?: number
+  maxWeightKg?: number
+  maxSkuKinds?: number
+  publicShared?: number
+}
+
+export interface LogicalLocationSave {
+  warehouseId?: number
+  zoneId: number
+  rackNo?: string
+  sequenceNo?: number
+  locationCode?: string
+  locationType: string
+  lengthMm: number
+  widthMm: number
+  heightMm: number
+  maxWeightKg: number
+  maxSkuKinds: number
+  publicShared: number
+}
+
+export interface LocationSlotLevelSummary {
+  locationId: number
+  levelNo: number
+  totalCount: number
+  occupiedCount: number
+  blocked?: number
+}
+
+export interface LocationSlotSummary {
+  locationId: number
+  totalSlots: number
+  occupiedSlots: number
+  blocked?: boolean
+  levels: LocationSlotLevelSummary[]
+}
+
+export interface StructureLockInfo {
+  locked: boolean
+  occupied: boolean
+  occupiedLocationCount: number
+  assigned: boolean
+  assignedRackCount: number
+  assignedOperatorNames: string[]
+  activePalletCount: number
+  unfinishedTransferCount: number
+  inProgressStocktakeCount: number
 }

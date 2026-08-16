@@ -27,8 +27,8 @@
 
       <!-- 结构 -->
       <template v-else-if="column.key === 'structure'">
-        <span v-if="record.rackRows && record.rackColumns">
-          {{ record.rackRows }} 排 × {{ record.rackColumns }} 列
+        <span v-if="record.rackRows">
+          {{ record.rackRows }} 排 · {{ record.actualPhysicalLocationCount || 0 }} 库位
         </span>
         <span v-else class="muted">未设计</span>
       </template>
@@ -54,7 +54,7 @@
     </template>
   </pro-table>
 
-  <warehouse-location-drawer ref="drawerRef" @success="reloadTable" />
+  <logical-location-drawer ref="drawerRef" @success="reloadTable" />
 </template>
 
 <script setup lang="ts">
@@ -68,18 +68,18 @@ import { listStructureWarehouses } from '@/api/wms/location-mgmt'
 import type { WarehouseStructure } from '@/api/wms/location-mgmt/types'
 import LocationMgmtSearch from './LocationMgmtSearch.vue'
 import type { LocationMgmtQuery } from './LocationMgmtSearch.vue'
-import WarehouseLocationDrawer from './WarehouseLocationDrawer.vue'
+import LogicalLocationDrawer from './LogicalLocationDrawer.vue'
 
 defineOptions({ name: 'LocationMgmtPage' })
 
 const tableRef = ref<ProTableInstanceExpose>()
-const drawerRef = ref<InstanceType<typeof WarehouseLocationDrawer>>()
+const drawerRef = ref<InstanceType<typeof LogicalLocationDrawer>>()
 const router = useRouter()
 
 let searchParams: LocationMgmtQuery = {}
 
 const locationCount = (w: WarehouseStructure): number =>
-  w.locationGenerated === 1 ? (w.rackRows || 0) * (w.rackColumns || 0) : 0
+  w.actualPhysicalLocationCount || 0
 
 // 仓库数量很少，一次性取回后本地筛选 + 分页，保证生成/改结构后立即刷新
 const tableRequest: TableRequest = async params => {

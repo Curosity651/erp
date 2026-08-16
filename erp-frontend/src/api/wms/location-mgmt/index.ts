@@ -5,7 +5,10 @@ import type {
   WarehouseStructure,
   WarehouseStructureUpdate,
   WmsZone,
-  WmsLocation
+  WmsLocation,
+  LocationSlotSummary,
+  StructureLockInfo,
+  LogicalLocationSave
 } from './types'
 
 /** 自有仓库列表（含结构参数） */
@@ -20,7 +23,7 @@ export function updateWarehouseStructure(data: WarehouseStructureUpdate) {
 
 /** 更新托盘规则，不重新生成库位或托位 */
 export function updateWarehousePalletRules(data: WarehousePalletRuleUpdate) {
-  return httpClient.patch<ApiResult<void>>('/wms/location-mgmt/pallet-rules', data)
+  return httpClient.patch<ApiResult<number>>('/wms/location-mgmt/pallet-rules', data)
 }
 
 /** 仓库分区列表 */
@@ -47,6 +50,36 @@ export function generateLocations(warehouseId: number) {
 /** 仓库库位列表 */
 export function listLocations(warehouseId: number) {
   return httpClient.get<ApiResult<WmsLocation[]>>('/wms/location-mgmt/locations', {
+    params: { warehouseId }
+  })
+}
+
+export function listGroupedLocations(warehouseId: number) {
+  return httpClient.get<ApiResult<Record<string, WmsLocation[]>>>('/wms/location-mgmt/locations/grouped', {
+    params: { warehouseId }
+  })
+}
+
+export function createLogicalLocation(data: LogicalLocationSave) {
+  return httpClient.post<ApiResult<number>>('/wms/location-mgmt/locations', data)
+}
+
+export function updateLogicalLocation(id: number, data: LogicalLocationSave) {
+  return httpClient.put<ApiResult<void>>(`/wms/location-mgmt/locations/${id}`, data)
+}
+
+export function deleteLogicalLocation(id: number) {
+  return httpClient.delete<ApiResult<void>>(`/wms/location-mgmt/locations/${id}`)
+}
+
+export function listLocationSlotSummary(warehouseId: number) {
+  return httpClient.get<ApiResult<LocationSlotSummary[]>>('/wms/location-mgmt/slot-summary', {
+    params: { warehouseId }
+  })
+}
+
+export function getStructureLock(warehouseId: number) {
+  return httpClient.get<ApiResult<StructureLockInfo>>('/wms/location-mgmt/structure-lock', {
     params: { warehouseId }
   })
 }

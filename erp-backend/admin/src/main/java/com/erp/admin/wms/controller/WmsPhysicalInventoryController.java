@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.wms.enums.WmsResultCode;
+import com.erp.admin.wms.config.WmsCoreModeGuard;
 import com.erp.admin.wms.model.dto.PutawayDTO;
 import com.erp.admin.wms.model.entity.Inventory;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
@@ -42,10 +43,13 @@ public class WmsPhysicalInventoryController {
 
 	private final ErpOwnerScopeService erpOwnerScopeService;
 
+	private final WmsCoreModeGuard coreModeGuard;
+
 	@Operation(summary = "上架写入批次(仅海外仓平台)")
 	@PostMapping("/putaway")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<WmsPhysicalInventory> putaway(@Validated @RequestBody PutawayDTO dto) {
+		coreModeGuard.assertLegacyWriteAllowed("旧物理批次上架");
 		assertOverseasPlatform();
 		return ApiResult.ok(physicalInventoryService.putaway(dto));
 	}

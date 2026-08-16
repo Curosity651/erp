@@ -85,7 +85,12 @@ public enum WmsResultCode implements ResultCode {
     /**
      * 上架库位所在货架未租给本货主的服务商
      */
-    PUTAWAY_RACK_NOT_OWNED(40023, "该库位所在货架未租给本货主的服务商，不能上架；请选择本服务商租用货架上的库位");
+	PUTAWAY_RACK_NOT_OWNED(40023, "该库位所在货架未租给本货主的服务商，不能上架；请选择本服务商租用货架上的库位"),
+
+	/**
+	 * 新库位库存模式下禁止继续写入旧托盘/批次库存。
+	 */
+	LEGACY_INVENTORY_WRITE_DISABLED(40024, "旧托盘库存写入已停用");
 
     private final int code;
 

@@ -29,7 +29,9 @@ const COMPONENT_OVERRIDES: Record<string, () => Promise<unknown>> = {
   'inbound-ops': () => import('@/views/platform/inbound-ops/InboundReceivePage.vue'),
   // putaway(170502)：海外仓平台「入库上架」
   putaway: () => import('@/views/platform/inbound-ops/InboundPutawayPage.vue'),
-  pallets: () => import('@/views/platform/pallet/PalletPage.vue'),
+  'location-inventory': () => import('@/views/platform/location-inventory/index.vue'),
+  // Compatible with databases that have not applied the menu cutover migration yet.
+  pallets: () => import('@/views/platform/location-inventory/index.vue'),
   // rack-inventory(180400)：WMS 服务商「仓储概览」（原“货架库存(只读)”占位，改真实只读页）
   'rack-inventory': () => import('@/views/wms/storage-overview/index.vue')
 }
