@@ -48,6 +48,7 @@
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a @click="handleManage(record)">管理库位</a>
+          <a @click="handleInventory(record)">库存</a>
         </operation-group>
       </template>
     </template>
@@ -58,6 +59,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import { isSuccess } from '@/api'
@@ -72,6 +74,7 @@ defineOptions({ name: 'LocationMgmtPage' })
 
 const tableRef = ref<ProTableInstanceExpose>()
 const drawerRef = ref<InstanceType<typeof WarehouseLocationDrawer>>()
+const router = useRouter()
 
 let searchParams: LocationMgmtQuery = {}
 
@@ -121,12 +124,16 @@ const handleManage = (record: WarehouseStructure) => {
   drawerRef.value?.open(record)
 }
 
+const handleInventory = (record: WarehouseStructure) => {
+  router.push({ path: '/warehouse-mgmt/location-inventory', query: { warehouseId: record.id } })
+}
+
 const columns: ProColumns[] = [
   { title: '仓库信息', key: 'warehouseInfo', width: 220, fixed: 'left' },
   { title: '结构', key: 'structure', width: 140 },
   { title: '库位数', key: 'locationCount', width: 90, align: 'center' },
   { title: '状态', key: 'genStatus', width: 100, align: 'center' },
-  { title: '操作', key: 'operate', width: 120, align: 'center', fixed: 'right' }
+  { title: '操作', key: 'operate', width: 150, align: 'center', fixed: 'right' }
 ]
 </script>
 
