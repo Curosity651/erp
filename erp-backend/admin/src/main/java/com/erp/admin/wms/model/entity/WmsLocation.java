@@ -56,6 +56,21 @@ public class WmsLocation {
 	@Schema(title = "承重上限(千克)")
 	private BigDecimal maxWeightKg;
 
+	@Schema(title = "库位内部长度(毫米)")
+	private Integer lengthMm;
+
+	@Schema(title = "库位内部宽度(毫米)")
+	private Integer widthMm;
+
+	@Schema(title = "库位内部高度(毫米)")
+	private Integer heightMm;
+
+	@Schema(title = "最大SKU种类数，0表示不限制")
+	private Integer maxSkuKinds;
+
+	@Schema(title = "是否为公共共享库位")
+	private Integer publicShared;
+
 	@Schema(title = "创建人")
 	private Long createBy;
 

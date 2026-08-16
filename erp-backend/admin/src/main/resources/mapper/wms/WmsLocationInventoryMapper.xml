@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.WmsLocationInventoryMapper">
+
+	<select id="selectForUpdate" resultType="com.erp.admin.wms.model.entity.WmsLocationInventory">
+		SELECT *
+		FROM wms_location_inventory
+		WHERE id = #{id}
+		  AND deleted = 0
+		FOR UPDATE
+	</select>
+
+	<select id="selectAvailableForUpdate" resultType="com.erp.admin.wms.model.entity.WmsLocationInventory">
+		SELECT *
+		FROM wms_location_inventory
+		WHERE warehouse_id = #{warehouseId}
+		  AND erp_tenant_id = #{erpTenantId}
+		  AND sku_code = #{skuCode}
+		  AND quality = #{quality}
+		  AND quantity &gt; reserved_quantity
+		  AND deleted = 0
+		ORDER BY location_id, id
+		FOR UPDATE
+	</select>
+
+</mapper>
