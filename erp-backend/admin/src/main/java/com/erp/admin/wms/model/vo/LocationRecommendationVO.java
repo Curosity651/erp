@@ -15,6 +15,8 @@ public class LocationRecommendationVO {
 
 	private String locationType;
 
+	private String zoneType;
+
 	private Integer publicShared;
 
 	private int recommendedQuantity;

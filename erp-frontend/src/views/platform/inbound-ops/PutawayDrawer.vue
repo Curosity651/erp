@@ -1,316 +1,291 @@
 <template>
-  <a-drawer v-model:open="open" :title="`入库上架 · ${currentNo}`" :width="980" destroy-on-close>
+  <a-drawer v-model:open="open" :title="`入库上架 · ${currentNo}`" :width="1040" destroy-on-close>
     <a-steps :current="loading ? 0 : 1" size="small" class="steps">
       <a-step title="读取实收商品" />
-      <a-step title="分托与层位确认" />
-      <a-step title="写入库存" />
+      <a-step title="分配逻辑库位" />
+      <a-step title="生成上架单" />
     </a-steps>
 
     <a-spin :spinning="loading">
-      <a-result
-        v-if="loadError && !loading"
-        status="error"
-        title="上架数据加载失败"
-        :sub-title="loadError"
-      >
-        <template #extra>
-          <a-button type="primary" @click="retryLoad">重新加载</a-button>
-        </template>
+      <a-result v-if="loadError && !loading" status="error" title="上架数据加载失败" :sub-title="loadError">
+        <template #extra><a-button type="primary" @click="retryLoad">重新加载</a-button></template>
       </a-result>
 
-      <template v-else>
-      <a-alert
-        v-for="warning in plan?.warnings || []"
-        :key="warning"
-        type="warning"
-        show-icon
-        :message="warning"
-        class="warning"
-      />
+      <template v-else-if="plan">
+        <a-alert :type="totalsMatch ? 'success' : 'error'" show-icon class="quantity-alert">
+          <template #message>
+            数量核对：实收 {{ receivedGrandTotal }} 件，上架分配 {{ allocatedGrandTotal }} 件
+          </template>
+          <template #description>
+            {{ totalsMatch ? '各 SKU 数量一致，可以提交上架。' : differenceText }}
+          </template>
+        </a-alert>
 
-      <section v-if="sourceItems.length" class="source-band">
-        <div class="section-title">待上架商品</div>
-        <div class="source-list">
-          <span v-for="item in sourceItems" :key="item.skuCode" class="source-item">
-            <strong>{{ item.skuCode }}</strong>
-            <span>{{ item.quantity }} 件</span>
-          </span>
-        </div>
-      </section>
-
-      <section v-if="pallets.length" class="plan-section">
-        <div class="plan-header">
-          <div>
-            <div class="section-title">人工分托与位置确认</div>
-            <div class="subtle">共 {{ pallets.length }} 托，仓库人员按现场情况拆托、混托并选择实际托位</div>
-          </div>
-          <a-tag color="blue">位置由员工确认</a-tag>
-        </div>
-
-        <div v-for="(pallet, index) in pallets" :key="pallet.palletKey" class="pallet-card">
-          <div class="pallet-head">
-            <div class="pallet-name">
-              <span class="sequence">{{ index + 1 }}</span>
-              <strong>{{ pallet.palletNo || `新托盘 ${index + 1}` }}</strong>
-              <a-tag :color="typeColor(pallet.palletType)">{{ typeText(pallet.palletType) }}</a-tag>
-              <a-tag v-if="pallet.existingPallet" color="cyan">合并现有托盘</a-tag>
-              <a-button v-if="!pallet.existingPallet" size="small" @click="splitPallet(index)">
-                拆出一托
-              </a-button>
-              <label class="head-full-toggle">
-                <span>人工满托</span>
-                <a-switch v-model:checked="pallet.manualFull" size="small" />
-              </label>
-              <a-button
-                v-if="index > 0 && !pallet.existingPallet"
-                size="small"
-                @click="mergePrevious(index)"
-              >
-                合并到上一托
-              </a-button>
+        <section v-for="item in plan.items" :key="item.skuCode" class="sku-card">
+          <div class="sku-head">
+            <div>
+              <a class="sku-link" @click="showSkuDetail(item)">{{ item.skuCode }}</a>
+              <span class="sku-name">{{ item.skuName || '未命名商品' }}</span>
             </div>
-            <span class="capacity-text">{{ capacityText(pallet) }}</span>
-          </div>
-
-          <div class="pallet-body">
-            <div class="goods-column">
-              <span class="field-label">托盘</span>
-              <div class="goods-toolbar">
-                <a-select
-                  :value="pallet.palletId || 0"
-                  :options="existingPalletOptions(pallet)"
-                  style="width: 100%"
-                  @change="value => selectPallet(pallet, Number(value))"
-                />
-                <a-popover trigger="click" placement="bottomLeft" :overlay-style="{ width: '460px' }">
-                  <template #content>
-                    <div class="goods-detail-panel">
-                      <div v-if="pallet.existingPallet" class="goods-detail-section">
-                        <div class="goods-detail-title">原托已有</div>
-                        <div
-                          v-for="item in selectedExisting(pallet)?.items || []"
-                          :key="`existing-${item.skuCode}`"
-                          class="existing-goods-row"
-                        >
-                          <span class="sku">{{ item.skuCode }}</span>
-                          <span>{{ item.quantity }} 件</span>
-                        </div>
-                      </div>
-                      <div class="goods-detail-section">
-                        <div class="goods-detail-title">本次上架</div>
-                        <div v-for="item in pallet.items" :key="item.skuCode" class="goods-row">
-                          <span class="sku">{{ item.skuCode }}</span>
-                          <a-input-number
-                            v-model:value="item.quantity"
-                            :min="1"
-                            :precision="0"
-                            addon-after="件"
-                          />
-                          <span v-if="item.quantityPerPallet" class="subtle">
-                            标准 {{ item.quantityPerPallet }} 件/托
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-                  <a-button class="goods-detail-button">
-                    货物详情 · {{ pallet.items.length }} 种 · {{ palletItemQuantity(pallet) }} 件
-                  </a-button>
-                </a-popover>
-              </div>
-            </div>
-
-            <div class="control-grid">
-              <label>
-                <span>品质</span>
-                <a-select
-                  v-model:value="pallet.quality"
-                  :disabled="pallet.existingPallet"
-                  :options="qualityOptions"
-                  @change="changeQuality(pallet)"
-                />
-              </label>
-              <label>
-                <span>层位</span>
-                <a-select
-                  v-model:value="pallet.slotCode"
-                  show-search
-                  :disabled="pallet.existingPallet"
-                  :options="slotOptions(pallet)"
-                  :filter-option="filterOption"
-                  @change="value => applySlot(pallet, value as string)"
-                />
-              </label>
-              <label>
-                <span>容量</span>
-                <a-input-number
-                  v-model:value="pallet.capacityPercent"
-                  :min="1"
-                  :max="100"
-                  :precision="0"
-                  addon-after="%"
-                />
-              </label>
-              <label>
-                <span>实际重量</span>
-                <a-input-number
-                  v-model:value="pallet.actualWeightKg"
-                  :min="0"
-                  :precision="2"
-                  addon-after="kg"
-                  placeholder="选填"
-                />
-              </label>
+            <div class="sku-meta">
+              <span>实收 {{ item.receivedQuantity }} 件</span>
+              <span>{{ dimensionsText(item) }}</span>
+              <span>{{ weightText(item) }}</span>
             </div>
           </div>
 
-          <a-progress
-            :percent="Math.min(pallet.capacityPercent || 0, 100)"
-            :status="pallet.capacityPercent ? 'normal' : 'exception'"
-            size="small"
-            :show-info="false"
-          />
-          <div v-if="!pallet.capacityPercent" class="capacity-required">
-            当前 SKU 缺少可计算容量的数据，请仓库人员按现场托盘占用情况填写。
+          <div class="allocation-head">
+            <span>品质</span><span>目标库位</span><span>本次数量</span>
+            <span>推荐与容量</span><span>人工覆盖原因</span><span></span>
           </div>
-        </div>
-      </section>
-
-      <a-empty v-if="!loading && !pallets.length" description="没有可上架的实收商品" />
-
-      <section v-if="pallets.length" class="billing-section">
-        <div class="section-title">入库计费依据</div>
-        <a-form layout="inline">
-          <a-form-item label="确认体积">
-            <a-input-number
-              v-model:value="confirmedVolumeCbm"
-              :disabled="!volumeNeedsConfirmation"
-              :min="0.0001"
-              :precision="4"
-              addon-after="m³"
-              style="width: 190px"
+          <div v-for="(row, index) in rowsFor(item.skuCode)" :key="row.key" class="allocation-row">
+            <a-select v-model:value="row.quality" :options="qualityOptions" @change="resetLocation(row)" />
+            <a-select
+              v-model:value="row.locationId"
+              show-search
+              placeholder="选择库位"
+              :options="locationOptions(item, row)"
+              :filter-option="filterLocation"
             />
-          </a-form-item>
-          <a-form-item label="客户原因加班">
-            <a-switch v-model:checked="afterHours" />
-          </a-form-item>
-          <a-form-item v-if="afterHours" label="加班原因">
-            <a-input v-model:value="afterHoursReason" placeholder="请填写客户或服务商原因" />
-          </a-form-item>
-        </a-form>
-        <div class="subtle">
-          费率：50元/m³；只有勾选客户原因加班时才加收基础操作费的50%。
-        </div>
-      </section>
+            <a-input-number v-model:value="row.quantity" :min="1" :precision="0" addon-after="件" />
+            <div class="capacity-cell" :class="{ warning: needsOverride(item, row) }">
+              {{ recommendationText(item, row) }}
+            </div>
+            <a-input
+              v-model:value="row.overrideReason"
+              :disabled="!needsOverride(item, row)"
+              :placeholder="needsOverride(item, row) ? '必填：说明现场判断' : '无需填写'"
+            />
+            <a-space :size="4">
+              <a-button size="small" title="拆分到另一个库位" @click="splitRow(item.skuCode, index)">拆分</a-button>
+              <a-button size="small" danger :disabled="rowsFor(item.skuCode).length === 1" @click="removeRow(item.skuCode, index)">
+                删除
+              </a-button>
+            </a-space>
+          </div>
+
+          <div class="sku-summary" :class="skuAllocated(item) === item.receivedQuantity ? 'ok' : 'bad'">
+            已分配 {{ skuAllocated(item) }} / {{ item.receivedQuantity }} 件
+          </div>
+        </section>
+
+        <section class="billing-section">
+          <div class="section-title">入库计费依据</div>
+          <a-form layout="inline">
+            <a-form-item label="确认体积">
+              <a-input-number v-model:value="confirmedVolumeCbm" :min="0" :precision="4" addon-after="m³" />
+            </a-form-item>
+            <a-form-item label="客户原因加班"><a-switch v-model:checked="afterHours" /></a-form-item>
+            <a-form-item v-if="afterHours" label="加班原因">
+              <a-input v-model:value="afterHoursReason" placeholder="请填写原因" />
+            </a-form-item>
+          </a-form>
+        </section>
       </template>
     </a-spin>
 
     <template #footer>
       <div class="footer-row">
-        <span :class="allValid ? 'ready' : 'not-ready'">
-          {{ allValid ? '数量、分托和托位已确认' : validationText }}
-        </span>
+        <span :class="allValid ? 'ready' : 'not-ready'">{{ validationText }}</span>
         <a-space>
           <a-button @click="open = false">取消</a-button>
-          <a-button type="primary" :loading="submitting" :disabled="!allValid" @click="submit">
-            确认上架
-          </a-button>
+          <a-button type="primary" :loading="submitting" :disabled="!allValid" @click="submit">确认上架</a-button>
         </a-space>
       </div>
     </template>
   </a-drawer>
+
+  <a-modal v-model:open="detailOpen" title="SKU 详情" :footer="null" width="680">
+    <a-spin :spinning="detailLoading">
+      <div v-if="detailItem" class="detail-layout">
+        <a-image v-if="detailImage" :src="detailImage" :width="220" :height="180" class="product-image" />
+        <div v-else class="image-placeholder">暂无商品图片</div>
+        <a-descriptions :column="1" size="small" bordered class="detail-info">
+          <a-descriptions-item label="内部 SKU">{{ detailItem.skuCode }}</a-descriptions-item>
+          <a-descriptions-item label="商品名称">{{ detailItem.skuName || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="外箱尺寸">{{ dimensionsText(detailItem) }}</a-descriptions-item>
+          <a-descriptions-item label="单箱毛重">{{ weightText(detailItem) }}</a-descriptions-item>
+          <a-descriptions-item label="本次实收">{{ detailItem.receivedQuantity }} 件</a-descriptions-item>
+        </a-descriptions>
+      </div>
+    </a-spin>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { isSuccess } from '@/api'
-import { doRequest } from '@/utils/axios/request'
+import { getSkuByCode } from '@/api/product/sku'
 import { getPutawayPlan, putawayInbound } from '@/api/wms/inbound-execution'
-import { listPallets, listPalletSlots } from '@/api/wms/pallet'
 import type {
-  InboundPutawayPlanVO,
-  PalletPlan,
-  PalletSlotVO,
+  InboundPutawayDTO,
+  LocationRecommendationVO,
+  LogicalInboundPutawayPlanVO,
+  LogicalPutawaySkuPlanVO,
   PutawayLine
 } from '@/api/wms/inbound-execution'
 import type { PurchaseInboundPageVO } from '@/api/wms/purchase-inbound/types'
-import type { PalletSummaryVO } from '@/api/wms/pallet'
+import { printPutawayReceipt } from './putaway-receipt-print'
+
+interface AllocationRow {
+  key: string
+  skuCode: string
+  quality: 'GOOD' | 'DAMAGED'
+  locationId?: number
+  quantity: number
+  overrideReason?: string
+}
 
 const emits = defineEmits<{ (e: 'success'): void }>()
-
 const open = ref(false)
 const loading = ref(false)
 const loadError = ref('')
 const submitting = ref(false)
-const currentId = ref<number>()
 const currentNo = ref('')
-const plan = ref<InboundPutawayPlanVO>()
-const receivedTotals = ref(new Map<string, number>())
+const currentRecord = ref<PurchaseInboundPageVO>()
+const plan = ref<LogicalInboundPutawayPlanVO>()
+const allocations = ref<Record<string, AllocationRow[]>>({})
 const confirmedVolumeCbm = ref<number>()
 const afterHours = ref(false)
 const afterHoursReason = ref('')
-const existingPallets = ref<PalletSummaryVO[]>([])
-const allSlots = ref<PalletSlotVO[]>([])
-let manualSequence = 1
-
-const pallets = computed(() => plan.value?.pallets || [])
-const sourceItems = computed(() =>
-  Array.from(receivedTotals.value.entries()).map(([skuCode, quantity]) => ({ skuCode, quantity }))
-)
-
-const chosenSlots = computed(() => {
-  const values = new Set<string>()
-  pallets.value.forEach(pallet => pallet.slotCode && values.add(pallet.slotCode))
-  return values
-})
+const detailOpen = ref(false)
+const detailLoading = ref(false)
+const detailItem = ref<LogicalPutawaySkuPlanVO>()
+const detailImage = ref('')
+let rowSequence = 1
 
 const qualityOptions = [
   { value: 'GOOD', label: '良品' },
-  { value: 'DAMAGED', label: '残次品' }
+  { value: 'DAMAGED', label: '不良品' }
 ]
 
-const allocatedTotals = computed(() => {
-  const totals = new Map<string, number>()
-  pallets.value.forEach(pallet =>
-    pallet.items.forEach(item => totals.set(item.skuCode, (totals.get(item.skuCode) || 0) + Number(item.quantity || 0)))
+const receivedGrandTotal = computed(() =>
+  (plan.value?.items || []).reduce((sum, item) => sum + item.receivedQuantity, 0)
+)
+const allocatedGrandTotal = computed(() =>
+  Object.values(allocations.value).flat().reduce((sum, row) => sum + Number(row.quantity || 0), 0)
+)
+const totalsMatch = computed(() =>
+  (plan.value?.items || []).every(item => skuAllocated(item) === item.receivedQuantity)
+)
+const differenceText = computed(() =>
+  (plan.value?.items || [])
+    .filter(item => skuAllocated(item) !== item.receivedQuantity)
+    .map(item => `${item.skuCode}：实收 ${item.receivedQuantity}，已分配 ${skuAllocated(item)}`)
+    .join('；')
+)
+const allValid = computed(() =>
+  !!plan.value &&
+  plan.value.items.length > 0 &&
+  totalsMatch.value &&
+  (!afterHours.value || !!afterHoursReason.value.trim()) &&
+  plan.value.items.every(item =>
+    rowsFor(item.skuCode).every(row =>
+      !!row.locationId && row.quantity > 0 && (!needsOverride(item, row) || !!row.overrideReason?.trim())
+    )
   )
-  return totals
+)
+const validationText = computed(() => {
+  if (!totalsMatch.value) return '各 SKU 分配数量必须与实收数量一致'
+  if (!allValid.value) return '请补齐目标库位和必要的人工覆盖原因'
+  return '数量与库位已核对，可以完成上架'
 })
 
-const totalsMatch = computed(() =>
-  Array.from(receivedTotals.value.entries()).every(
-    ([sku, quantity]) => allocatedTotals.value.get(sku) === quantity
-  )
-)
+function rowsFor(skuCode: string) {
+  return allocations.value[skuCode] || []
+}
 
-const volumeNeedsConfirmation = computed(() => (plan.value?.volumeMissingSkuCodes || []).length > 0)
+function skuAllocated(item: LogicalPutawaySkuPlanVO) {
+  return rowsFor(item.skuCode).reduce((sum, row) => sum + Number(row.quantity || 0), 0)
+}
 
-const allValid = computed(
-  () =>
-    pallets.value.length > 0 &&
-    totalsMatch.value &&
-    (!volumeNeedsConfirmation.value || Number(confirmedVolumeCbm.value || 0) > 0) &&
-    (!afterHours.value || !!afterHoursReason.value.trim()) &&
-    pallets.value.every(
-      pallet =>
-        pallet.items.length > 0 &&
-        new Set(pallet.items.map(item => item.skuCode)).size <= 4 &&
-        !!pallet.slotCode &&
-        !!pallet.capacityPercent &&
-        pallet.capacityPercent > 0 &&
-        pallet.capacityPercent <= 100
-    )
-)
+function candidateFor(item: LogicalPutawaySkuPlanVO, row: AllocationRow) {
+  return item.recommendations.find(value => value.locationId === row.locationId)
+}
 
-const validationText = computed(() =>
-  totalsMatch.value ? '请补齐托位及托盘容量' : '各SKU分配数量必须与实收数量一致'
-)
+function isDefective(candidate: LocationRecommendationVO) {
+  return candidate.zoneType === 'DEFECTIVE' || candidate.locationType === 'DEFECTIVE'
+}
+
+function locationOptions(item: LogicalPutawaySkuPlanVO, row: AllocationRow) {
+  return item.recommendations
+    .filter(candidate => row.quality === 'DAMAGED' ? isDefective(candidate) : !isDefective(candidate))
+    .map(candidate => ({
+      value: candidate.locationId,
+      label: `${candidate.locationCode} · 推荐 ${candidate.recommendedQuantity} 件${candidate.publicShared === 1 ? ' · 公共暂存' : ''}`,
+      disabled: !candidate.weightAllowed || !candidate.skuKindsAllowed
+    }))
+}
+
+function recommendationText(item: LogicalPutawaySkuPlanVO, row: AllocationRow) {
+  const candidate = candidateFor(item, row)
+  if (!candidate) return '请选择库位'
+  return `推荐 ${candidate.recommendedQuantity} 件 · 剩余 ${(candidate.remainingVolumeMm3 / 1_000_000_000).toFixed(3)} m³`
+}
+
+function needsOverride(item: LogicalPutawaySkuPlanVO, row: AllocationRow) {
+  const candidate = candidateFor(item, row)
+  return !!candidate && row.quantity > candidate.recommendedQuantity
+}
+
+function resetLocation(row: AllocationRow) {
+  row.locationId = undefined
+  row.overrideReason = undefined
+}
+
+function splitRow(skuCode: string, index: number) {
+  const rows = rowsFor(skuCode)
+  const source = rows[index]
+  if (!source || source.quantity < 2) {
+    message.warning('当前分配至少需要 2 件才能拆分')
+    return
+  }
+  const moved = Math.floor(source.quantity / 2)
+  source.quantity -= moved
+  rows.splice(index + 1, 0, {
+    key: `row-${rowSequence++}`,
+    skuCode,
+    quality: source.quality,
+    quantity: moved
+  })
+}
+
+function removeRow(skuCode: string, index: number) {
+  rowsFor(skuCode).splice(index, 1)
+}
+
+function initialRows(item: LogicalPutawaySkuPlanVO) {
+  const rows: AllocationRow[] = []
+  let remaining = item.receivedQuantity
+  for (const candidate of item.recommendations.filter(value => !isDefective(value) && value.recommendedQuantity > 0)) {
+    if (remaining <= 0) break
+    const quantity = Math.min(remaining, candidate.recommendedQuantity)
+    rows.push({
+      key: `row-${rowSequence++}`,
+      skuCode: item.skuCode,
+      quality: 'GOOD',
+      locationId: candidate.locationId,
+      quantity
+    })
+    remaining -= quantity
+  }
+  if (remaining > 0 || rows.length === 0) {
+    rows.push({
+      key: `row-${rowSequence++}`,
+      skuCode: item.skuCode,
+      quality: 'GOOD',
+      quantity: remaining || item.receivedQuantity
+    })
+  }
+  return rows
+}
 
 async function openPutaway(record: PurchaseInboundPageVO) {
-  currentId.value = record.id
+  currentRecord.value = record
   currentNo.value = record.inboundNo
   plan.value = undefined
+  allocations.value = {}
   confirmedVolumeCbm.value = undefined
   afterHours.value = false
   afterHoursReason.value = ''
@@ -319,37 +294,16 @@ async function openPutaway(record: PurchaseInboundPageVO) {
   loading.value = true
   try {
     const response = await getPutawayPlan(record.id)
-    if (isSuccess(response) && response.data) {
-      plan.value = response.data
-      receivedTotals.value = new Map()
-      confirmedVolumeCbm.value = response.data.calculatedVolumeCbm
-      plan.value.pallets.forEach(pallet => {
-        pallet.items.forEach(item =>
-          receivedTotals.value.set(
-            item.skuCode,
-            (receivedTotals.value.get(item.skuCode) || 0) + item.quantity
-          )
-        )
-        pallet.actualWeightKg = pallet.estimatedWeightKg
-        pallet.manualFull = false
-      })
-      const ownerId = plan.value.pallets[0]?.items[0]?.erpTenantId
-      const [palletResponse, slotResponse] = await Promise.all([
-        listPallets({
-          warehouseId: plan.value.warehouseId,
-          erpTenantId: ownerId,
-          status: 'PARTIAL'
-        }),
-        listPalletSlots(plan.value.warehouseId)
-      ])
-      existingPallets.value =
-        isSuccess(palletResponse) && palletResponse.data
-          ? palletResponse.data.filter(item => item.erpTenantId === ownerId)
-          : []
-      allSlots.value = isSuccess(slotResponse) && slotResponse.data ? slotResponse.data : []
-    } else {
-      loadError.value = response.message || '没有取得上架计划，请稍后重试'
+    if (!isSuccess(response) || !response.data) {
+      loadError.value = response.message || '没有取得上架计划'
+      return
     }
+    plan.value = response.data
+    response.data.items.forEach(item => { allocations.value[item.skuCode] = initialRows(item) })
+    confirmedVolumeCbm.value = response.data.items.reduce(
+      (sum, item) => sum + item.outerLengthMm * item.outerWidthMm * item.outerHeightMm * item.receivedQuantity / 1_000_000_000,
+      0
+    )
   } catch (error: any) {
     loadError.value = error?.message || '网络或服务器异常，请重新加载'
   } finally {
@@ -358,216 +312,96 @@ async function openPutaway(record: PurchaseInboundPageVO) {
 }
 
 function retryLoad() {
-  if (!currentId.value) return
-  openPutaway({ id: currentId.value, inboundNo: currentNo.value } as PurchaseInboundPageVO)
-}
-
-function selectedExisting(pallet: PalletPlan) {
-  return existingPallets.value.find(item => item.id === pallet.palletId)
-}
-
-function existingPalletOptions(pallet: PalletPlan) {
-  const incomingKinds = new Set(pallet.items.map(item => item.skuCode))
-  const options = existingPallets.value
-    .filter(item => {
-      const qualities = new Set(item.items.map(value => value.quality || 'GOOD'))
-      const kinds = new Set([...item.items.map(value => value.skuCode), ...incomingKinds])
-      return qualities.size === 1 && qualities.has(pallet.quality) && kinds.size <= 4
-    })
-    .map(item => ({
-      value: item.id,
-      label: `并入 ${item.palletNo} · ${item.slotCode} · 已占 ${item.capacityPercent || '?'}%`
-    }))
-  return [{ value: 0, label: '使用新托盘（人工选择空托位）' }, ...options]
-}
-
-function selectPallet(pallet: PalletPlan, palletId: number) {
-  if (!palletId) {
-    pallet.palletId = undefined
-    pallet.palletNo = undefined
-    pallet.existingPallet = false
-    pallet.slotCode = ''
-    pallet.locationCode = ''
-    pallet.levelNo = 0
-    pallet.capacityPercent = undefined
-    pallet.actualWeightKg = undefined
-    pallet.manualFull = false
-    return
-  }
-  const existing = existingPallets.value.find(item => item.id === palletId)
-  const slot = allSlots.value.find(item => item.palletId === palletId)
-  if (!existing || !slot) {
-    message.warning('现有托盘位置已变化，请重新打开上架页面')
-    return
-  }
-  pallet.palletId = existing.id
-  pallet.palletNo = existing.palletNo
-  pallet.existingPallet = true
-  pallet.slotCode = slot.slotCode
-  pallet.locationCode = slot.locationCode
-  pallet.levelNo = slot.levelNo
-  pallet.capacityPercent = existing.capacityPercent
-  pallet.actualWeightKg = existing.actualWeightKg
-  pallet.manualFull = false
-}
-
-function slotOptions(pallet: PalletPlan) {
-  const candidates = plan.value?.slotCandidates || []
-  const zoneType = pallet.quality === 'DAMAGED' ? 'DEFECTIVE' : 'STANDARD'
-  return candidates
-    .filter(slot => slot.zoneType === zoneType)
-    .filter(slot => slot.slotCode === pallet.slotCode || !chosenSlots.value.has(slot.slotCode))
-    .map(slot => ({
-      value: slot.slotCode,
-      label: `${slot.slotCode} · ${slot.zoneName || '标准区'}`
-    }))
-}
-
-function changeQuality(pallet: PalletPlan) {
-  const options = slotOptions(pallet)
-  const currentValid = options.some(option => option.value === pallet.slotCode)
-  if (!currentValid) {
-    pallet.slotCode = options[0]?.value || ''
-  }
-  if (pallet.slotCode) applySlot(pallet, pallet.slotCode)
-}
-
-function applySlot(pallet: PalletPlan, slotCode: string) {
-  const slot = (plan.value?.slotCandidates || []).find(candidate => candidate.slotCode === slotCode)
-  if (!slot) return
-  pallet.locationCode = slot.locationCode
-  pallet.levelNo = slot.levelNo
-}
-
-function splitPallet(index: number) {
-  const source = pallets.value[index]
-  if (!source || source.existingPallet || source.items.length !== 1 || source.items[0].quantity < 2) {
-    message.warning('单品托盘数量至少为2件时才能拆托')
-    return
-  }
-  const item = source.items[0]
-  const moved = Math.max(1, Math.floor(item.quantity / 2))
-  item.quantity -= moved
-  const copy: PalletPlan = {
-    ...source,
-    palletKey: `MANUAL-UI-${Date.now()}-${manualSequence++}`,
-    palletId: undefined,
-    palletNo: undefined,
-    existingPallet: false,
-    palletType: 'SINGLE_PARTIAL',
-    slotCode: '',
-    locationCode: '',
-    levelNo: 0,
-    capacityPercent: undefined,
-    actualWeightKg: undefined,
-    manualFull: false,
-    wholePalletEligible: false,
-    items: [{ ...item, quantity: moved }]
-  }
-  plan.value?.pallets.splice(index + 1, 0, copy)
-}
-
-function mergePrevious(index: number) {
-  const current = pallets.value[index]
-  const target = pallets.value[index - 1]
-  if (!current || !target || target.existingPallet || current.existingPallet) return
-  const kinds = new Set([...target.items, ...current.items].map(item => item.skuCode))
-  if (kinds.size > 4) {
-    message.warning('同一托盘最多允许4种SKU')
-    return
-  }
-  current.items.forEach(item => {
-    const existing = target.items.find(value => value.skuCode === item.skuCode)
-    if (existing) existing.quantity += item.quantity
-    else target.items.push({ ...item })
-  })
-  target.palletType = target.items.length > 1 ? 'MIXED' : 'SINGLE_PARTIAL'
-  target.capacityPercent = undefined
-  target.manualFull = false
-  plan.value?.pallets.splice(index, 1)
-}
-
-const filterOption = (input: string, option: { value: string }) =>
-  option.value.toLowerCase().includes(input.toLowerCase())
-
-function typeText(type: PalletPlan['palletType']) {
-  return { SINGLE_FULL: '单品满托', SINGLE_PARTIAL: '单品半托', MIXED: '混托' }[type]
-}
-
-function typeColor(type: PalletPlan['palletType']) {
-  return { SINGLE_FULL: 'green', SINGLE_PARTIAL: 'blue', MIXED: 'orange' }[type]
-}
-
-function palletItemQuantity(pallet: PalletPlan) {
-  return pallet.items.reduce((total, item) => total + Number(item.quantity || 0), 0)
-}
-
-function capacityText(pallet: PalletPlan) {
-  if (!pallet.capacityPercent) return '待人工确认容量'
-  return `预计占用 ${Math.round(pallet.capacityPercent)}%`
+  if (currentRecord.value) void openPutaway(currentRecord.value)
 }
 
 function buildLines(): PutawayLine[] {
-  return pallets.value.flatMap(pallet =>
-    pallet.items.map(item => ({
-      skuCode: item.skuCode,
-      locationCode: pallet.locationCode,
-      palletKey: pallet.palletKey,
-      palletId: pallet.palletId,
-      slotCode: pallet.slotCode,
-      quantity: item.quantity,
-      quality: pallet.quality,
-      capacityPercent: pallet.capacityPercent,
-      capacitySource: pallet.capacitySource,
-      actualWeightKg: pallet.actualWeightKg,
-      manualFull: pallet.manualFull
-    }))
-  )
+  return Object.values(allocations.value).flat().map(row => ({
+    skuCode: row.skuCode,
+    locationId: row.locationId as number,
+    quantity: row.quantity,
+    quality: row.quality,
+    overrideReason: row.overrideReason?.trim() || undefined
+  }))
 }
 
 function submit() {
-  if (!allValid.value || !currentId.value) {
-    message.warning('请先确认全部托盘的层位和容量')
-    return
-  }
-  submitting.value = true
-  doRequest(putawayInbound({
-    inboundOrderId: currentId.value,
-    lines: buildLines(),
-    confirmedVolumeCbm: confirmedVolumeCbm.value,
-    afterHours: afterHours.value,
-    afterHoursReason: afterHoursReason.value.trim() || undefined
-  }), {
-    successMessage: '上架成功，托盘与库存已同步',
-    onSuccess: response => {
-      const created = (response.data || []) as PalletSummaryVO[]
-      if (created.length) printLabels(created)
-      open.value = false
-      emits('success')
-    },
-    onFinally: () => {
-      submitting.value = false
-    }
+  if (!currentRecord.value || !allValid.value) return
+  Modal.confirm({
+    title: '确认完成上架',
+    content: `请确认现场共 ${receivedGrandTotal.value} 件货物已经按页面所列库位放置完成。提交后将写入库存并生成上架单。`,
+    okText: '确认上架',
+    cancelText: '返回核对',
+    onOk: executePutaway
   })
 }
 
-function printLabels(created: PalletSummaryVO[]) {
-  const printable = window.open('', '_blank', 'width=760,height=680')
-  if (!printable) return
-  printable.document.write(`<!doctype html><html><head><title>托盘标签</title><style>
-    body{font-family:Arial,"Microsoft YaHei",sans-serif;margin:24px}.label{width:420px;min-height:250px;border:2px solid #111;padding:20px;margin:0 0 24px;page-break-after:always;box-sizing:border-box}
-    h1{font-size:28px;margin:0 0 10px;letter-spacing:0}.owner{font-size:18px;font-weight:700}.meta{margin-top:12px;font-size:15px;line-height:1.7}.barcode{font-family:monospace;font-size:22px;letter-spacing:1px;margin-top:12px}
-  </style></head><body>${created
-    .map(
-      pallet => `<div class="label"><h1>${pallet.palletNo}</h1><div class="owner">货主：${pallet.ownerName || pallet.erpTenantId || '-'}</div><div>服务商：${pallet.wmsTenantName || pallet.wmsTenantId || '-'}</div><div class="meta">${pallet.items
-        .map(item => `${item.skuCode} × ${item.quantity}`)
-        .join('<br>')}</div><div class="barcode">*${pallet.palletNo}*</div></div>`
-    )
-    .join('')}</body></html>`)
-  printable.document.close()
-  printable.focus()
-  printable.print()
+async function executePutaway() {
+  if (!currentRecord.value) return
+  submitting.value = true
+  try {
+    const dto: InboundPutawayDTO = {
+      inboundOrderId: currentRecord.value.id,
+      lines: buildLines(),
+      confirmedVolumeCbm: confirmedVolumeCbm.value,
+      afterHours: afterHours.value,
+      afterHoursReason: afterHoursReason.value.trim() || undefined
+    }
+    const response = await putawayInbound(dto)
+    if (!isSuccess(response)) {
+      message.error(response.message || '上架失败')
+      throw new Error(response.message || '上架失败')
+    }
+    message.success('上架成功，库存与上架单已生成')
+    open.value = false
+    emits('success')
+    if (response.data?.length) {
+      Modal.confirm({
+        title: '上架完成',
+        content: '是否立即打印本次上架单？',
+        okText: '打印上架单',
+        cancelText: '稍后打印',
+        onOk: () => {
+          if (currentRecord.value && !printPutawayReceipt(currentRecord.value, response.data || [])) {
+            message.warning('浏览器阻止了打印窗口，请允许本站弹出窗口后重试')
+          }
+        }
+      })
+    }
+  } finally {
+    submitting.value = false
+  }
 }
+
+async function showSkuDetail(item: LogicalPutawaySkuPlanVO) {
+  detailItem.value = item
+  detailImage.value = ''
+  detailOpen.value = true
+  detailLoading.value = true
+  try {
+    const response = await getSkuByCode(item.skuCode)
+    if (isSuccess(response) && response.data?.files) {
+      const files = [
+        ...(response.data.files.actual_image || []),
+        ...(response.data.files.platform_image || [])
+      ]
+      detailImage.value = files[0]?.fileUrl || ''
+    }
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function dimensionsText(item: LogicalPutawaySkuPlanVO) {
+  return `${(item.outerLengthMm / 10).toFixed(1)} × ${(item.outerWidthMm / 10).toFixed(1)} × ${(item.outerHeightMm / 10).toFixed(1)} cm`
+}
+
+function weightText(item: LogicalPutawaySkuPlanVO) {
+  return `${(item.outerGrossWeightG / 1000).toFixed(2)} kg/箱`
+}
+
+const filterLocation = (input: string, option: { label?: string }) =>
+  String(option.label || '').toLowerCase().includes(input.toLowerCase())
 
 defineExpose({ open: openPutaway })
 </script>
@@ -578,38 +412,26 @@ export default { name: 'PutawayDrawer' }
 
 <style scoped>
 .steps { margin-bottom: 20px; }
-.warning { margin-bottom: 10px; }
-.source-band { padding: 14px 0 18px; border-bottom: 1px solid #f0f0f0; }
-.section-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
-.source-list { display: flex; flex-wrap: wrap; gap: 10px; }
-.source-item { display: inline-flex; gap: 12px; padding: 6px 10px; background: #f5f5f5; border-radius: 4px; }
-.plan-section { padding-top: 18px; }
-.plan-header, .pallet-head, .pallet-body, .footer-row { display: flex; justify-content: space-between; align-items: center; }
-.plan-header { margin-bottom: 12px; }
-.subtle { color: rgba(0,0,0,.45); font-size: 12px; }
-.pallet-card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; margin-bottom: 10px; }
-.pallet-head { margin-bottom: 12px; }
-.pallet-name { display: flex; align-items: center; gap: 8px; }
-.head-full-toggle { display: inline-flex; align-items: center; gap: 6px; color: rgba(0,0,0,.65); font-size: 12px; white-space: nowrap; }
-.sequence { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: #1677ff; color: #fff; }
-.capacity-text { color: rgba(0,0,0,.65); }
-.pallet-body { align-items: flex-start; gap: 20px; }
-.goods-column { flex: 1; min-width: 240px; display: grid; gap: 5px; }
-.field-label { font-size: 12px; color: rgba(0,0,0,.65); }
-.goods-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
-.goods-detail-button { white-space: nowrap; }
-.goods-detail-panel { width: 410px; max-width: calc(100vw - 64px); }
-.goods-detail-section + .goods-detail-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
-.goods-detail-title { margin-bottom: 8px; color: #8c8c8c; font-size: 12px; }
-.existing-goods-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 28px; }
-.goods-row { display: grid; grid-template-columns: minmax(110px,1fr) 120px 112px; gap: 8px; min-height: 30px; align-items: center; }
-.goods-row :deep(.ant-input-number-group-wrapper) { width: 100%; }
-.sku { font-weight: 600; overflow-wrap: anywhere; }
-.control-grid { flex: 0 0 480px; display: grid; grid-template-columns: 1.2fr 1.15fr 1fr 1.1fr; gap: 10px; }
-.control-grid label { display: grid; gap: 5px; font-size: 12px; color: rgba(0,0,0,.65); }
-.control-grid :deep(.ant-input-number), .control-grid :deep(.ant-select) { width: 100%; }
-.capacity-required { color: #d46b08; font-size: 12px; margin-top: 4px; }
-.billing-section { border-top: 1px solid #f0f0f0; margin-top: 16px; padding-top: 16px; }
-.ready { color: #389e0d; }
-.not-ready { color: #cf1322; }
+.quantity-alert { margin-bottom: 14px; }
+.sku-card { border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 12px; padding: 14px; }
+.sku-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+.sku-link { font-size: 15px; font-weight: 600; }
+.sku-name { margin-left: 10px; color: rgba(0, 0, 0, .65); }
+.sku-meta { display: flex; gap: 16px; color: rgba(0, 0, 0, .55); font-size: 12px; white-space: nowrap; }
+.allocation-head, .allocation-row { display: grid; grid-template-columns: 92px minmax(220px, 1.3fr) 120px minmax(180px, 1fr) minmax(180px, 1fr) 116px; gap: 8px; align-items: center; }
+.allocation-head { color: rgba(0, 0, 0, .55); font-size: 12px; padding-bottom: 5px; }
+.allocation-row + .allocation-row { margin-top: 8px; }
+.allocation-row :deep(.ant-input-number), .allocation-row :deep(.ant-input-number-group-wrapper) { width: 100%; }
+.capacity-cell { font-size: 12px; color: rgba(0, 0, 0, .55); }
+.capacity-cell.warning { color: #d46b08; }
+.sku-summary { text-align: right; margin-top: 8px; font-size: 12px; }
+.sku-summary.ok, .ready { color: #389e0d; }
+.sku-summary.bad, .not-ready { color: #cf1322; }
+.billing-section { border-top: 1px solid #f0f0f0; padding-top: 16px; margin-top: 18px; }
+.section-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.footer-row { display: flex; align-items: center; justify-content: space-between; }
+.detail-layout { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
+.product-image { object-fit: contain; }
+.image-placeholder { height: 180px; display: flex; align-items: center; justify-content: center; background: #f5f5f5; color: rgba(0, 0, 0, .35); }
+.detail-info { min-width: 0; }
 </style>

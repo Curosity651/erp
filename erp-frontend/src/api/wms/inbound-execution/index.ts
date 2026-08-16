@@ -5,9 +5,11 @@ import type {
   PurchaseInboundPageVO,
   PurchaseInboundDetailVO
 } from '@/api/wms/purchase-inbound/types'
+import type { PalletSummaryVO } from '@/api/wms/pallet'
 
 /** 收货明细项 */
 export interface ReceiveItem {
+  inboundOrderItemId: number
   skuCode: string
   actualQuantity: number
 }
@@ -21,10 +23,12 @@ export interface InboundReceiveDTO {
 /** 上架分配行 */
 export interface PutawayLine {
   skuCode: string
-  locationCode: string
+  locationId: number
+  overrideReason?: string
+  locationCode?: string
   palletKey?: string
   palletId?: number
-  slotCode: string
+  slotCode?: string
   quantity: number
   quality?: string
   zoneId?: number
@@ -113,6 +117,54 @@ export interface InboundPutawayPlanVO {
   volumeMissingSkuCodes: string[]
 }
 
+export interface PutawayReceiptLineVO {
+  palletId?: number
+  locationId?: number
+  locationCode?: string
+  palletNo?: string
+  slotCode?: string
+  skuCode: string
+  erpTenantId?: number
+  warehouseSkuCode?: string
+  quality: string
+  quantity: number
+  overrideReason?: string
+}
+
+export interface LocationRecommendationVO {
+  locationId: number
+  locationCode: string
+  rackNo?: string
+  sequenceNo?: number
+  locationType?: string
+  zoneType?: string
+  publicShared?: number
+  recommendedQuantity: number
+  maxByGeometry: number
+  maxByVolume: number
+  maxByWeight: number
+  remainingVolumeMm3: number
+  weightAllowed: boolean
+  skuKindsAllowed: boolean
+}
+
+export interface LogicalPutawaySkuPlanVO {
+  skuCode: string
+  skuName?: string
+  receivedQuantity: number
+  outerLengthMm: number
+  outerWidthMm: number
+  outerHeightMm: number
+  outerGrossWeightG: number
+  recommendations: LocationRecommendationVO[]
+}
+
+export interface LogicalInboundPutawayPlanVO {
+  inboundOrderId: number
+  warehouseId: number
+  items: LogicalPutawaySkuPlanVO[]
+}
+
 /** 平台待作业入库单分页（采购 + 自定义全来源，平台看全部） */
 export function pageInboundOps(pageParams: PurchaseInboundPageParam) {
   return httpClient.get<ApiResult<PageResult<PurchaseInboundPageVO>>>(
@@ -128,6 +180,12 @@ export function getInboundOpsDetail(id: number) {
   })
 }
 
+export function scanInboundOrder(inboundNo: string) {
+  return httpClient.get<ApiResult<PurchaseInboundDetailVO>>('/wms/inbound-execution/scan', {
+    params: { inboundNo }
+  })
+}
+
 /** 平台收货（录实收数量） */
 export function receiveInbound(dto: InboundReceiveDTO) {
   return httpClient.post<ApiResult<void>>('/wms/inbound-execution/receive', dto)
@@ -135,13 +193,33 @@ export function receiveInbound(dto: InboundReceiveDTO) {
 
 /** 平台上架（分配库位写批次） */
 export function putawayInbound(dto: InboundPutawayDTO) {
-  return httpClient.post<ApiResult<unknown[]>>('/wms/inbound-execution/putaway', dto)
+  return httpClient.post<ApiResult<PutawayReceiptLineVO[]>>(
+    '/wms/inbound-execution/logical-putaway',
+    dto
+  )
 }
 
 export function getPutawayPlan(inboundOrderId: number) {
-  return httpClient.get<ApiResult<InboundPutawayPlanVO>>('/wms/inbound-execution/putaway-plan', {
-    params: { inboundOrderId }
-  })
+  return httpClient.get<ApiResult<LogicalInboundPutawayPlanVO>>(
+    '/wms/inbound-execution/logical-putaway-plan',
+    { params: { inboundOrderId } }
+  )
+}
+
+/** 查询已完成入库单本次上架关联的托盘，用于详情与标签补打。 */
+export function getPutawayPallets(inboundOrderId: number) {
+  return httpClient.get<ApiResult<PalletSummaryVO[]>>(
+    '/wms/inbound-execution/putaway-pallets',
+    { params: { inboundOrderId } }
+  )
+}
+
+/** 查询本张入库单实际写入的上架明细，用于上架单补打。 */
+export function getPutawayReceiptLines(inboundOrderId: number) {
+  return httpClient.get<ApiResult<PutawayReceiptLineVO[]>>(
+    '/wms/inbound-execution/putaway-receipt-lines',
+    { params: { inboundOrderId } }
+  )
 }
 
 /** 上架可选库位（本货主服务商租用货架上、空闲 + 分区匹配品质；quality: GOOD/DAMAGED） */

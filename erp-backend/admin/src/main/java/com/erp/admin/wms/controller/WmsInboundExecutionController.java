@@ -2,14 +2,18 @@ package com.erp.admin.wms.controller;
 
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.InboundReceiveDTO;
+import com.erp.admin.wms.model.entity.PurchaseInboundOrder;
 import com.erp.admin.wms.model.qo.PurchaseInboundQO;
 import com.erp.admin.wms.model.vo.AvailableLocationVO;
 import com.erp.admin.wms.model.vo.PurchaseInboundDetailVO;
+import com.erp.admin.wms.model.vo.PutawayReceiptLineVO;
 import com.erp.admin.wms.model.vo.PurchaseInboundPageVO;
 import com.erp.admin.wms.model.vo.InboundPutawayPlanVO;
+import com.erp.admin.wms.model.vo.LogicalInboundPutawayPlanVO;
 import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.service.PurchaseInboundService;
 import com.erp.admin.wms.service.WmsInboundExecutionService;
+import com.erp.admin.wms.service.LogicalInboundPutawayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +46,8 @@ public class WmsInboundExecutionController {
 
 	private final WmsInboundExecutionService inboundExecutionService;
 
+	private final LogicalInboundPutawayService logicalPutawayService;
+
 	private final PurchaseInboundService purchaseInboundService;
 
 	@Operation(summary = "平台待作业入库单分页(采购+自定义全来源, 平台看全部)")
@@ -61,6 +67,14 @@ public class WmsInboundExecutionController {
 		return ApiResult.ok(this.purchaseInboundService.getDetail(id));
 	}
 
+	@Operation(summary = "Find a submitted inbound order by its printed number")
+	@GetMapping("/scan")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<PurchaseInboundDetailVO> scan(@RequestParam String inboundNo) {
+		PurchaseInboundOrder order = inboundExecutionService.findSubmittedByInboundNo(inboundNo);
+		return ApiResult.ok(purchaseInboundService.getDetail(order.getId()));
+	}
+
 	@Operation(summary = "上架可选库位(本货主服务商租用货架上、空闲且分区匹配品质, 库位独占)")
 	@GetMapping("/available-locations")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
@@ -76,6 +90,12 @@ public class WmsInboundExecutionController {
 		return ApiResult.ok(inboundExecutionService.planPutaway(inboundOrderId));
 	}
 
+	@GetMapping("/logical-putaway-plan")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<LogicalInboundPutawayPlanVO> logicalPutawayPlan(@RequestParam Long inboundOrderId) {
+		return ApiResult.ok(logicalPutawayService.plan(inboundOrderId));
+	}
+
 	@Operation(summary = "收货(录实收数量)")
 	@PostMapping("/receive")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
@@ -89,6 +109,26 @@ public class WmsInboundExecutionController {
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
 	public ApiResult<List<PalletSummaryVO>> putaway(@Validated @RequestBody InboundPutawayDTO dto) {
 		return ApiResult.ok(inboundExecutionService.putaway(dto));
+	}
+
+	@PostMapping("/logical-putaway")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<List<PutawayReceiptLineVO>> logicalPutaway(@Validated @RequestBody InboundPutawayDTO dto) {
+		return ApiResult.ok(logicalPutawayService.putaway(dto));
+	}
+
+	@Operation(summary = "查询已上架入库单关联托盘")
+	@GetMapping("/putaway-pallets")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<List<PalletSummaryVO>> getPutawayPallets(@RequestParam Long inboundOrderId) {
+		return ApiResult.ok(inboundExecutionService.getPutawayPallets(inboundOrderId));
+	}
+
+	@Operation(summary = "查询已上架入库单的本次上架明细")
+	@GetMapping("/putaway-receipt-lines")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<List<PutawayReceiptLineVO>> getPutawayReceiptLines(@RequestParam Long inboundOrderId) {
+		return ApiResult.ok(inboundExecutionService.getPutawayReceiptLines(inboundOrderId));
 	}
 
 }

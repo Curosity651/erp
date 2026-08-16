@@ -47,8 +47,14 @@ public class InboundPutawayDTO {
 		@Schema(title = "SKU编码")
 		private String skuCode;
 
-		@NotBlank(message = "库位编码不能为空")
-		@Schema(title = "库位编码")
+		@NotNull(message = "目标库位不能为空")
+		@Schema(title = "目标逻辑库位ID")
+		private Long locationId;
+
+		@Schema(title = "人工覆盖体积推荐的原因")
+		private String overrideReason;
+
+		@Schema(title = "旧库位编码，仅兼容历史接口")
 		private String locationCode;
 
 		@Schema(title = "Client-side pallet grouping key")
@@ -57,7 +63,6 @@ public class InboundPutawayDTO {
 		@Schema(title = "Existing pallet ID when merging")
 		private Long palletId;
 
-		@NotBlank(message = "slot code cannot be blank")
 		@Schema(title = "Three-level slot code, for example A1-03-L3")
 		private String slotCode;
 
