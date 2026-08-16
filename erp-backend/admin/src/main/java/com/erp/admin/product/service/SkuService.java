@@ -309,6 +309,8 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public boolean saveSku(SkuCreateDTO createDTO) {
+		validateOuterBoxData(createDTO.getOuterLengthMm(), createDTO.getOuterWidthMm(),
+				createDTO.getOuterHeightMm(), createDTO.getOuterGrossWeightG());
 		// 转换DTO为实体
 		Sku sku = SkuConverter.INSTANCE.createDtoToPo(createDTO);
 		boolean saved = this.save(sku);
@@ -332,6 +334,8 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public boolean updateSku(SkuUpdateDTO updateDTO) {
+		validateOuterBoxData(updateDTO.getOuterLengthMm(), updateDTO.getOuterWidthMm(),
+				updateDTO.getOuterHeightMm(), updateDTO.getOuterGrossWeightG());
 		// 更新前验证关键属性（编码和序号的唯一性）
 		validateSkuUpdateDTOKeyAttributes(updateDTO);
 
@@ -351,6 +355,13 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 		}
 
 		return success;
+	}
+
+	private void validateOuterBoxData(Integer lengthMm, Integer widthMm, Integer heightMm, Integer grossWeightG) {
+		Assert.isTrue(lengthMm != null && lengthMm > 0, "外箱长度必须大于0");
+		Assert.isTrue(widthMm != null && widthMm > 0, "外箱宽度必须大于0");
+		Assert.isTrue(heightMm != null && heightMm > 0, "外箱高度必须大于0");
+		Assert.isTrue(grossWeightG != null && grossWeightG > 0, "单箱毛重必须大于0");
 	}
 
 	/**

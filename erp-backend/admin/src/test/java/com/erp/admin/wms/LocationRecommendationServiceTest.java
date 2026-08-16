@@ -34,7 +34,7 @@ class LocationRecommendationServiceTest {
 		when(locationMapper.selectById(1L)).thenReturn(standard);
 		when(locationMapper.selectById(2L)).thenReturn(temp);
 		when(inventoryMapper.selectList(any(Wrapper.class))).thenReturn(Collections.emptyList());
-		when(skuMapper.selectBySkuCode("SKU-A")).thenReturn(sku("SKU-A", 400, 500, 500, "MM", 50, "KG"));
+		when(skuMapper.selectBySkuCode("SKU-A")).thenReturn(sku("SKU-A", 400, 500, 500, 50_000));
 		LocationCapacityService capacityService = new LocationCapacityService(locationMapper, inventoryMapper, skuMapper);
 		LocationRecommendationService service = new LocationRecommendationService(locationMapper, skuMapper,
 				capacityService);
@@ -65,16 +65,13 @@ class LocationRecommendationServiceTest {
 		return location;
 	}
 
-	private Sku sku(String code, int length, int width, int height, String packageUnit, int weight,
-			String weightUnit) {
+	private Sku sku(String code, int length, int width, int height, int weightGrams) {
 		Sku sku = new Sku();
 		sku.setSkuCode(code);
-		sku.setPackageLength(BigDecimal.valueOf(length));
-		sku.setPackageWidth(BigDecimal.valueOf(width));
-		sku.setPackageHeight(BigDecimal.valueOf(height));
-		sku.setPackageUnit(packageUnit);
-		sku.setWeight(BigDecimal.valueOf(weight));
-		sku.setWeightUnit(weightUnit);
+		sku.setOuterLengthMm(length);
+		sku.setOuterWidthMm(width);
+		sku.setOuterHeightMm(height);
+		sku.setOuterGrossWeightG(weightGrams);
 		return sku;
 	}
 

@@ -421,117 +421,68 @@
                       </a-col>
                     </a-row>
 
-                    <!-- 重量和体积参数 -->
+                    <!-- 外箱尺寸与单箱毛重 -->
                     <div class="dimensions-section">
                       <h4 class="subsection-title">
                         <BoxPlotOutlined style="margin-right: 8px; color: #1890ff" />
-                        体积重量参数
+                        外箱尺寸与单箱毛重
                       </h4>
 
                       <a-row :gutter="16">
-                        <a-col :span="12">
-                          <a-form-item label="重量">
-                            <a-input-group compact>
-                              <a-form-item name="weight" style="width: 70%; margin-bottom: 0">
-                                <a-input-number
-                                  v-model:value="formData.weight"
-                                  placeholder="请输入重量"
-                                  :min="0"
-                                  :precision="3"
-                                  style="width: 100%"
-                                  size="large"
-                                  @change="updateCalculatorDimensions"
-                                />
-                              </a-form-item>
-                              <a-form-item name="weightUnit" style="width: 30%; margin-bottom: 0">
-                                <a-select
-                                  v-model:value="formData.weightUnit"
-                                  style="width: 100%"
-                                  size="large"
-                                  @change="updateCalculatorDimensions"
-                                >
-                                  <a-select-option value="kg">KG (千克)</a-select-option>
-                                  <a-select-option value="g">G (克)</a-select-option>
-                                </a-select>
-                              </a-form-item>
-                            </a-input-group>
-                          </a-form-item>
-                        </a-col>
-                        <a-col :span="12">
-                          <a-form-item label="每托数量">
+                        <a-col :xs="24" :sm="12" :lg="6">
+                          <a-form-item label="外箱长度" name="outerLengthMm" required>
                             <a-input-number
-                              v-model:value="formData.quantityPerPallet"
-                              placeholder="请输入每托数量"
-                              :min="1"
-                              :precision="0"
+                              v-model:value="outerLengthCm"
+                              placeholder="请输入长度"
+                              :min="0.1"
+                              :precision="1"
                               style="width: 100%"
                               size="large"
                             >
-                              <template #addonAfter>件</template>
+                              <template #addonAfter>cm</template>
                             </a-input-number>
                           </a-form-item>
                         </a-col>
-                      </a-row>
-
-                      <a-row :gutter="0">
-                        <a-col :span="24">
-                          <a-form-item
-                            label="包装尺寸 (长 × 宽 × 高)"
-                            class="package-dimensions-wrapper"
-                          >
-                            <div class="package-dimensions-group">
-                              <div class="dimension-input-wrapper">
-                                <a-form-item name="packageLength" class="dimension-input">
-                                  <a-input-number
-                                    v-model:value="formData.packageLength"
-                                    placeholder="长度"
-                                    :min="0"
-                                    :precision="2"
-                                    size="large"
-                                    @change="updateCalculatorDimensions"
-                                  />
-                                </a-form-item>
-                              </div>
-                              <span class="dimension-separator">×</span>
-                              <div class="dimension-input-wrapper">
-                                <a-form-item name="packageWidth" class="dimension-input">
-                                  <a-input-number
-                                    v-model:value="formData.packageWidth"
-                                    placeholder="宽度"
-                                    :min="0"
-                                    :precision="2"
-                                    size="large"
-                                    @change="updateCalculatorDimensions"
-                                  />
-                                </a-form-item>
-                              </div>
-                              <span class="dimension-separator">×</span>
-                              <div class="dimension-input-wrapper">
-                                <a-form-item name="packageHeight" class="dimension-input">
-                                  <a-input-number
-                                    v-model:value="formData.packageHeight"
-                                    placeholder="高度"
-                                    :min="0"
-                                    :precision="2"
-                                    size="large"
-                                    @change="updateCalculatorDimensions"
-                                  />
-                                </a-form-item>
-                              </div>
-                              <div class="dimension-unit-wrapper">
-                                <a-form-item name="packageUnit" class="dimension-unit-select">
-                                  <a-select
-                                    v-model:value="formData.packageUnit"
-                                    size="large"
-                                    @change="updateCalculatorDimensions"
-                                  >
-                                    <a-select-option value="MM">MM (毫米)</a-select-option>
-                                    <a-select-option value="CM">CM (厘米)</a-select-option>
-                                    <a-select-option value="M">M (米)</a-select-option>
-                                  </a-select>
-                                </a-form-item>
-                              </div>
-                            </div>
+                        <a-col :xs="24" :sm="12" :lg="6">
+                          <a-form-item label="外箱宽度" name="outerWidthMm" required>
+                            <a-input-number
+                              v-model:value="outerWidthCm"
+                              placeholder="请输入宽度"
+                              :min="0.1"
+                              :precision="1"
+                              style="width: 100%"
+                              size="large"
+                            >
+                              <template #addonAfter>cm</template>
+                            </a-input-number>
+                          </a-form-item>
+                        </a-col>
+                        <a-col :xs="24" :sm="12" :lg="6">
+                          <a-form-item label="外箱高度" name="outerHeightMm" required>
+                            <a-input-number
+                              v-model:value="outerHeightCm"
+                              placeholder="请输入高度"
+                              :min="0.1"
+                              :precision="1"
+                              style="width: 100%"
+                              size="large"
+                            >
+                              <template #addonAfter>cm</template>
+                            </a-input-number>
+                          </a-form-item>
+                        </a-col>
+                        <a-col :xs="24" :sm="12" :lg="6">
+                          <a-form-item label="单箱毛重" name="outerGrossWeightG" required>
+                            <a-input-number
+                              v-model:value="outerGrossWeightKg"
+                              placeholder="请输入毛重"
+                              :min="0.001"
+                              :precision="3"
+                              style="width: 100%"
+                              size="large"
+                            >
+                              <template #addonAfter>kg</template>
+                            </a-input-number>
                           </a-form-item>
                         </a-col>
                       </a-row>
@@ -1038,6 +989,32 @@ const {
 
 // 单独获取格式化值以保持响应性
 const formattedValues = skuCalculator.formattedValues
+
+const dimensionModel = (field: 'outerLengthMm' | 'outerWidthMm' | 'outerHeightMm') =>
+  computed<number | undefined>({
+    get: () => (formData[field] ? formData[field]! / 10 : undefined),
+    set: value => {
+      formData[field] = value && value > 0 ? Math.round(value * 10) : undefined
+      if (field === 'outerLengthMm') formData.packageLength = value
+      if (field === 'outerWidthMm') formData.packageWidth = value
+      if (field === 'outerHeightMm') formData.packageHeight = value
+      formData.packageUnit = 'CM'
+      updateCalculatorDimensions()
+    }
+  })
+
+const outerLengthCm = dimensionModel('outerLengthMm')
+const outerWidthCm = dimensionModel('outerWidthMm')
+const outerHeightCm = dimensionModel('outerHeightMm')
+const outerGrossWeightKg = computed<number | undefined>({
+  get: () => (formData.outerGrossWeightG ? formData.outerGrossWeightG / 1000 : undefined),
+  set: value => {
+    formData.outerGrossWeightG = value && value > 0 ? Math.round(value * 1000) : undefined
+    formData.weight = value
+    formData.weightUnit = 'KG'
+    updateCalculatorDimensions()
+  }
+})
 
 // 页面状态
 const submitLoading = ref(false)

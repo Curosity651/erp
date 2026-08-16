@@ -134,6 +134,14 @@ interface SkuBaseFields {
   packageHeight?: number
   // 包装尺寸单位
   packageUnit?: string
+  // 外箱长度（毫米，接口存储单位）
+  outerLengthMm?: number
+  // 外箱宽度（毫米，接口存储单位）
+  outerWidthMm?: number
+  // 外箱高度（毫米，接口存储单位）
+  outerHeightMm?: number
+  // 单箱毛重（克，接口存储单位）
+  outerGrossWeightG?: number
   // 功能性能要求
   functionalRequirements?: string
   // 供应商编码

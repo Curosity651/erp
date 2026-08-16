@@ -104,11 +104,16 @@ public class LocationCapacityService {
 
 	static PlacementLine fromSku(Sku sku, int quantity) {
 		Assert.notNull(sku, "SKU不存在");
-		return new PlacementLine(sku.getSkuCode(), quantity,
-				toMillimetres(sku.getPackageLength(), sku.getPackageUnit()),
-				toMillimetres(sku.getPackageWidth(), sku.getPackageUnit()),
-				toMillimetres(sku.getPackageHeight(), sku.getPackageUnit()),
-				toGrams(sku.getWeight(), sku.getWeightUnit()));
+		Assert.isTrue(sku.getOuterLengthMm() != null && sku.getOuterLengthMm() > 0,
+				"SKU外箱长度未维护");
+		Assert.isTrue(sku.getOuterWidthMm() != null && sku.getOuterWidthMm() > 0,
+				"SKU外箱宽度未维护");
+		Assert.isTrue(sku.getOuterHeightMm() != null && sku.getOuterHeightMm() > 0,
+				"SKU外箱高度未维护");
+		Assert.isTrue(sku.getOuterGrossWeightG() != null && sku.getOuterGrossWeightG() > 0,
+				"SKU单箱毛重未维护");
+		return new PlacementLine(sku.getSkuCode(), quantity, sku.getOuterLengthMm(), sku.getOuterWidthMm(),
+				sku.getOuterHeightMm(), sku.getOuterGrossWeightG());
 	}
 
 	static long volume(int lengthMm, int widthMm, int heightMm) {

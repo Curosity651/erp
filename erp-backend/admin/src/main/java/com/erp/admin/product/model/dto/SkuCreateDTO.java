@@ -255,6 +255,26 @@ public class SkuCreateDTO implements TaxRateValidatable {
 	@Schema(title = "包装单位", description = "默认M")
 	private String packageUnit = "M";
 
+	@NotNull(message = "外箱长度不能为空")
+	@Min(value = 1, message = "外箱长度必须大于0")
+	@Schema(title = "外箱长度（毫米）")
+	private Integer outerLengthMm;
+
+	@NotNull(message = "外箱宽度不能为空")
+	@Min(value = 1, message = "外箱宽度必须大于0")
+	@Schema(title = "外箱宽度（毫米）")
+	private Integer outerWidthMm;
+
+	@NotNull(message = "外箱高度不能为空")
+	@Min(value = 1, message = "外箱高度必须大于0")
+	@Schema(title = "外箱高度（毫米）")
+	private Integer outerHeightMm;
+
+	@NotNull(message = "单箱毛重不能为空")
+	@Min(value = 1, message = "单箱毛重必须大于0")
+	@Schema(title = "单箱毛重（克）")
+	private Integer outerGrossWeightG;
+
 	/**
 	 * 每托数量（件）.
 	 */

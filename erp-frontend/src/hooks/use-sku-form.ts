@@ -54,6 +54,10 @@ const DEFAULT_SKU_FORM_DATA: SkuFormData = {
   packageWidth: undefined, // 使用数字类型
   packageHeight: undefined, // 使用数字类型
   packageUnit: 'mm', // 默认为毫米
+  outerLengthMm: undefined,
+  outerWidthMm: undefined,
+  outerHeightMm: undefined,
+  outerGrossWeightG: undefined,
   functionalRequirements: '',
   supplierCode: '',
   supplierName: '',
@@ -127,6 +131,10 @@ export function useSkuForm() {
     packageLength: SkuValidationRules.packageDimensionRules(),
     packageWidth: SkuValidationRules.packageDimensionRules(),
     packageHeight: SkuValidationRules.packageDimensionRules(),
+    outerLengthMm: SkuValidationRules.requiredPositiveRules('外箱长度'),
+    outerWidthMm: SkuValidationRules.requiredPositiveRules('外箱宽度'),
+    outerHeightMm: SkuValidationRules.requiredPositiveRules('外箱高度'),
+    outerGrossWeightG: SkuValidationRules.requiredPositiveRules('单箱毛重'),
     supplierCode: SkuValidationRules.supplierCodeRules(),
     taxRate: SkuValidationRules.taxRateRules(!!formData.includeTax),
     purchasePrice: SkuValidationRules.purchasePriceRules(),

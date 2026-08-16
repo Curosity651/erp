@@ -438,6 +438,10 @@ public interface SkuMapper extends ExtendMapper<Sku> {
 		updateWrapper.set(Sku::getPackageWidth, updateDTO.getPackageWidth());
 		updateWrapper.set(Sku::getPackageHeight, updateDTO.getPackageHeight());
 		updateWrapper.set(Sku::getPackageUnit, updateDTO.getPackageUnit());
+		updateWrapper.set(Sku::getOuterLengthMm, updateDTO.getOuterLengthMm());
+		updateWrapper.set(Sku::getOuterWidthMm, updateDTO.getOuterWidthMm());
+		updateWrapper.set(Sku::getOuterHeightMm, updateDTO.getOuterHeightMm());
+		updateWrapper.set(Sku::getOuterGrossWeightG, updateDTO.getOuterGrossWeightG());
 		updateWrapper.set(Sku::getQuantityPerPallet, updateDTO.getQuantityPerPallet());
 		updateWrapper.set(Sku::getFunctionalRequirements, updateDTO.getFunctionalRequirements());
 		updateWrapper.set(Sku::getSupplierCode, updateDTO.getSupplierCode());

@@ -164,6 +164,13 @@ export class SkuValidationRules {
     return [{ type: 'number', min: 0, message: '尺寸必须大于等于0' }]
   }
 
+  static requiredPositiveRules(label: string): Rule[] {
+    return [
+      { required: true, message: `${label}不能为空` },
+      { type: 'integer', min: 1, message: `${label}必须大于0` }
+    ]
+  }
+
   /**
    * 供应商编码验证规则
    */
@@ -342,6 +349,19 @@ export class SkuFormValidator {
     if (dimensionError) {
       errors.packageDimensions = dimensionError
     }
+
+    const requiredOuterFields = [
+      ['outerLengthMm', '外箱长度'],
+      ['outerWidthMm', '外箱宽度'],
+      ['outerHeightMm', '外箱高度'],
+      ['outerGrossWeightG', '单箱毛重']
+    ] as const
+    requiredOuterFields.forEach(([field, label]) => {
+      const value = formData[field]
+      if (!Number.isInteger(value) || value <= 0) {
+        errors[field] = `${label}必须填写且大于0`
+      }
+    })
 
     // 验证含税和税率关系
     const taxError = this.validateTaxRelation(formData.includeTax, formData.taxRate)

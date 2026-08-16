@@ -220,6 +220,18 @@ public class Sku implements TaxRateValidatable {
 	@Schema(title = "包装尺寸单位")
 	private String packageUnit;
 
+	@Schema(title = "外箱长度（毫米）")
+	private Integer outerLengthMm;
+
+	@Schema(title = "外箱宽度（毫米）")
+	private Integer outerWidthMm;
+
+	@Schema(title = "外箱高度（毫米）")
+	private Integer outerHeightMm;
+
+	@Schema(title = "单箱毛重（克）")
+	private Integer outerGrossWeightG;
+
 	/**
 	 * 每托数量（件）.
 	 */
