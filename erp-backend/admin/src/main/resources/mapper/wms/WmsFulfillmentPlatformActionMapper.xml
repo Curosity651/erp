@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.WmsFulfillmentPlatformActionMapper">
+  <select id="selectForUpdate" resultType="com.erp.admin.wms.model.entity.WmsFulfillmentPlatformAction">
+    SELECT * FROM wms_fulfillment_platform_action
+    WHERE fulfillment_order_id = #{fulfillmentOrderId} AND action_type = #{actionType}
+    FOR UPDATE
+  </select>
+</mapper>

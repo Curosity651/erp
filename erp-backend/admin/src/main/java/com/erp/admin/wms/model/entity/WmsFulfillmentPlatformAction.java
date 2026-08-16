@@ -8,19 +8,20 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 @Data
-@TableName("wms_inventory_reservation")
-public class WmsInventoryReservation {
+@TableName("wms_fulfillment_platform_action")
+public class WmsFulfillmentPlatformAction {
 	@TableId(type = IdType.AUTO)
 	private Long id;
 	private Long fulfillmentOrderId;
-	private Long fulfillmentItemId;
-	private Long inventoryId;
-	private Long locationId;
-	private Integer quantity;
-	private String reservationStatus;
-	private Integer version;
-	private LocalDateTime releasedTime;
-	private LocalDateTime shippedTime;
+	private String actionType;
+	private String actionStatus;
+	private String requestFingerprint;
+	private String requestPayload;
+	private String responsePayload;
+	private String errorMessage;
+	private Integer attemptCount;
+	private LocalDateTime startedTime;
+	private LocalDateTime completedTime;
 	private LocalDateTime createTime;
 	private LocalDateTime updateTime;
 }

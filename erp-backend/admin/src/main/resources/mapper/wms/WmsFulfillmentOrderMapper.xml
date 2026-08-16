@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.WmsFulfillmentOrderMapper">
+  <select id="selectBySource" resultType="com.erp.admin.wms.model.entity.WmsFulfillmentOrder">
+    SELECT * FROM wms_fulfillment_order
+    WHERE source_type = #{sourceType} AND source_order_id = #{sourceOrderId} AND deleted = 0
+    LIMIT 1
+  </select>
+  <select id="selectForUpdate" resultType="com.erp.admin.wms.model.entity.WmsFulfillmentOrder">
+    SELECT * FROM wms_fulfillment_order WHERE id = #{id} AND deleted = 0 FOR UPDATE
+  </select>
+  <update id="transit">
+    UPDATE wms_fulfillment_order
+    SET fulfillment_status = #{to}, version = version + 1, update_time = NOW()
+    WHERE id = #{id} AND fulfillment_status = #{from} AND deleted = 0
+  </update>
+</mapper>

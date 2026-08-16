@@ -1,22 +1,16 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.erp.admin.wms.mapper.WmsInventoryReservationMapper">
-
-	<select id="selectReservedForUpdate" resultType="com.erp.admin.wms.model.entity.WmsInventoryReservation">
-		SELECT *
-		FROM wms_inventory_reservation
-		WHERE fulfillment_order_id = #{fulfillmentOrderId}
-		  AND reservation_status = 'RESERVED'
-		ORDER BY inventory_id, id
-		FOR UPDATE
-	</select>
-
-	<update id="markStatus">
-		UPDATE wms_inventory_reservation
-		SET reservation_status = #{toStatus}, version = version + 1
-		WHERE id = #{id}
-		  AND reservation_status = #{fromStatus}
-		  AND version = #{version}
-	</update>
-
+  <select id="selectReservedForUpdate" resultType="com.erp.admin.wms.model.entity.WmsInventoryReservation">
+    SELECT * FROM wms_inventory_reservation
+    WHERE fulfillment_order_id = #{fulfillmentOrderId} AND reservation_status = 'RESERVED'
+    ORDER BY inventory_id, id FOR UPDATE
+  </select>
+  <update id="markStatus">
+    UPDATE wms_inventory_reservation
+    SET reservation_status = #{to}, version = version + 1, update_time = NOW(),
+        released_time = CASE WHEN #{to} = 'RELEASED' THEN NOW() ELSE released_time END,
+        shipped_time = CASE WHEN #{to} = 'SHIPPED' THEN NOW() ELSE shipped_time END
+    WHERE id = #{id} AND reservation_status = #{from} AND version = #{version}
+  </update>
 </mapper>
