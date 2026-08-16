@@ -1,6 +1,7 @@
 package com.erp.admin.wms.controller;
 
 import com.erp.admin.wms.enums.WmsResultCode;
+import com.erp.admin.wms.config.WmsCoreModeGuard;
 import com.erp.admin.wms.facade.CustomOutboundFacade;
 import com.erp.admin.wms.model.dto.BatchStockQueryDTO;
 import com.erp.admin.wms.model.dto.CustomOutboundDTO;
@@ -64,6 +65,8 @@ public class CustomOutboundController {
 
     private final ErpOwnerScopeService erpOwnerScopeService;
 
+    private final WmsCoreModeGuard coreModeGuard;
+
     /**
      * 分页查询（数据权限已按货主隔离，查询强制 source_type=CUSTOM）
      */
@@ -92,6 +95,7 @@ public class CustomOutboundController {
     @PostMapping
     @PreAuthorize("@per.hasPermission('wms:custom-outbound:add')")
     public ApiResult<Long> create(@Validated({Default.class, CreateGroup.class}) @RequestBody CustomOutboundDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧自定义出库创建");
         return ApiResult.ok(customOutboundFacade.create(dto));
     }
 
@@ -103,6 +107,7 @@ public class CustomOutboundController {
     @PutMapping
     @PreAuthorize("@per.hasPermission('wms:custom-outbound:edit')")
     public ApiResult<Void> update(@Validated({Default.class, UpdateGroup.class}) @RequestBody CustomOutboundDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧自定义出库编辑");
         customOutboundFacade.update(dto);
         return ApiResult.ok();
     }
@@ -115,6 +120,7 @@ public class CustomOutboundController {
     @PatchMapping("/submit")
     @PreAuthorize("@per.hasPermission('wms:custom-outbound:edit')")
     public ApiResult<List<StockShortageVO>> submit(@RequestParam Long id) {
+        coreModeGuard.assertLegacyWriteAllowed("旧自定义出库提交");
         List<StockShortageVO> shortages = customOutboundFacade.submit(id);
         if (!shortages.isEmpty()) {
             // 构建错误消息
@@ -135,6 +141,7 @@ public class CustomOutboundController {
     @PatchMapping("/cancel")
     @PreAuthorize("@per.hasPermission('wms:custom-outbound:edit')")
     public ApiResult<Void> cancel(@RequestParam Long id) {
+        coreModeGuard.assertLegacyWriteAllowed("旧自定义出库取消");
         customOutboundFacade.cancel(id);
         return ApiResult.ok();
     }
@@ -147,6 +154,7 @@ public class CustomOutboundController {
     @DeleteMapping
     @PreAuthorize("@per.hasPermission('wms:custom-outbound:del')")
     public ApiResult<Void> delete(@RequestBody List<Long> ids) {
+        coreModeGuard.assertLegacyWriteAllowed("旧自定义出库删除");
         customOutboundFacade.delete(ids);
         return ApiResult.ok();
     }
