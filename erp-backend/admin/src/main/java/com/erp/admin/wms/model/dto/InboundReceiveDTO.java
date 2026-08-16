@@ -28,9 +28,17 @@ public class InboundReceiveDTO {
 	@Schema(title = "收货明细")
 	private List<ReceiveItem> items;
 
+	@NotEmpty(message = "收货现场照片不能为空")
+	@Schema(title = "收货现场照片文件ID")
+	private List<Long> evidenceFileIds;
+
 	@Data
 	@Schema(title = "收货明细项")
 	public static class ReceiveItem {
+
+		@NotNull(message = "Inbound item ID is required")
+		@Schema(title = "Inbound item ID")
+		private Long inboundOrderItemId;
 
 		@NotBlank(message = "SKU编码不能为空")
 		@Schema(title = "SKU编码")

@@ -56,6 +56,21 @@ public class PurchaseInboundOrder {
     @Schema(title = "关联库存过账单ID（确认入库时生成）")
     private Long stockPostingId;
 
+    @Schema(title = "收货操作员ID")
+    private Long receiveBy;
+
+    @Schema(title = "收货时间")
+    private LocalDateTime receiveTime;
+
+    @Schema(title = "收货现场照片文件ID，逗号分隔")
+    private String receiveEvidenceFileIds;
+
+    @Schema(title = "上架操作员ID")
+    private Long putawayBy;
+
+    @Schema(title = "上架时间")
+    private LocalDateTime putawayTime;
+
     @Schema(title = "备注")
     private String remark;
 

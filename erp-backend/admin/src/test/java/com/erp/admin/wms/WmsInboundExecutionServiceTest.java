@@ -1,6 +1,8 @@
 package com.erp.admin.wms;
 
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
+import com.erp.admin.wms.model.dto.InboundReceiveDTO;
+import com.erp.admin.wms.model.entity.PurchaseInboundOrderItem;
 import com.erp.admin.wms.service.WmsInboundExecutionService;
 import com.erp.admin.wms.service.WmsInboundExecutionService.MergedLine;
 import org.junit.jupiter.api.Test;
@@ -80,6 +82,36 @@ class WmsInboundExecutionServiceTest {
 	void normalize_quality_defaults_to_good() {
 		List<MergedLine> merged = WmsInboundExecutionService.mergeLines(Arrays.asList(line("A", "L1", 1, null)));
 		assertThat(merged.get(0).quality).isEqualTo("GOOD");
+	}
+
+	@Test
+	void receive_keeps_duplicate_sku_lines_separate_by_item_id() {
+		PurchaseInboundOrderItem first = new PurchaseInboundOrderItem();
+		first.setId(101L);
+		first.setSkuCode("SKU-A");
+		PurchaseInboundOrderItem second = new PurchaseInboundOrderItem();
+		second.setId(102L);
+		second.setSkuCode("SKU-A");
+
+		InboundReceiveDTO.ReceiveItem firstReceived = new InboundReceiveDTO.ReceiveItem();
+		firstReceived.setInboundOrderItemId(101L);
+		firstReceived.setSkuCode("SKU-A");
+		firstReceived.setActualQuantity(5);
+		InboundReceiveDTO.ReceiveItem secondReceived = new InboundReceiveDTO.ReceiveItem();
+		secondReceived.setInboundOrderItemId(102L);
+		secondReceived.setSkuCode("SKU-A");
+		secondReceived.setActualQuantity(7);
+
+		Map<Long, Integer> quantities = WmsInboundExecutionService.mapReceivedByItemId(
+				Arrays.asList(first, second), Arrays.asList(firstReceived, secondReceived));
+
+		assertThat(quantities).containsEntry(101L, 5).containsEntry(102L, 7).hasSize(2);
+	}
+
+	@Test
+	void receiving_evidence_ids_are_stored_once_in_scan_order() {
+		assertThat(WmsInboundExecutionService.joinEvidenceFileIds(Arrays.asList(12L, 9L, 12L)))
+				.isEqualTo("12,9");
 	}
 
 }

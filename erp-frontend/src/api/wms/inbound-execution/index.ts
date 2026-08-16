@@ -18,6 +18,7 @@ export interface ReceiveItem {
 export interface InboundReceiveDTO {
   inboundOrderId: number
   items: ReceiveItem[]
+  evidenceFileIds: number[]
 }
 
 /** 上架分配行 */

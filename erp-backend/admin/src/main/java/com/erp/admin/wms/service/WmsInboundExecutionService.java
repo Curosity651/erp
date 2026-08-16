@@ -1,12 +1,15 @@
 package com.erp.admin.wms.service;
 
 import com.erp.admin.platform.finance.service.WarehouseBillingService;
+import com.erp.admin.system.model.vo.SysFileVO;
+import com.erp.admin.system.service.SysFileService;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.wms.enums.WmsResultCode;
 import com.erp.admin.wms.mapper.PurchaseInboundItemMapper;
 import com.erp.admin.wms.mapper.PurchaseInboundMapper;
+import com.erp.admin.wms.mapper.WmsPutawayReceiptLineMapper;
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.InboundReceiveDTO;
 import com.erp.admin.wms.model.dto.PutawayDTO;
@@ -14,6 +17,7 @@ import com.erp.admin.wms.model.dto.StockPostingDTO;
 import com.erp.admin.wms.model.dto.StockPostingItemDTO;
 import com.erp.admin.wms.model.entity.PurchaseInboundOrder;
 import com.erp.admin.wms.model.entity.PurchaseInboundOrderItem;
+import com.erp.admin.wms.model.entity.WmsPutawayReceiptLine;
 import com.erp.admin.wms.model.entity.ShippingOrder;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsZone;
@@ -26,9 +30,11 @@ import com.erp.admin.wms.model.vo.AvailableLocationVO;
 import com.erp.admin.wms.model.vo.InboundPutawayPlanVO;
 import com.erp.admin.wms.model.vo.PalletSlotVO;
 import com.erp.admin.wms.model.vo.PalletSummaryVO;
+import com.erp.admin.wms.model.vo.PutawayReceiptLineVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.core.exception.BusinessException;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
@@ -43,6 +49,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * 平台收货 / 上架执行服务（D2，方案②落地，同一张入库单状态流转）。
@@ -96,23 +103,32 @@ public class WmsInboundExecutionService {
 
 	private final WarehouseBillingService warehouseBillingService;
 
+	private final PrincipalAttributeAccessor principalAttributeAccessor;
+
+	private final WmsPutawayReceiptLineMapper putawayReceiptLineMapper;
+
+	private final SysFileService sysFileService;
+
 	// ==================== 收货 ====================
 
 	@Transactional(rollbackFor = Exception.class)
 	public void receive(InboundReceiveDTO dto) {
 		assertPlatform();
-		PurchaseInboundOrder order = purchaseInboundMapper.selectById(dto.getInboundOrderId());
+		PurchaseInboundOrder order = purchaseInboundMapper.selectByIdForUpdate(dto.getInboundOrderId());
 		Assert.notNull(order, "入库单不存在");
 		Assert.isTrue(PurchaseInboundStatus.SUBMITTED.name().equals(order.getOrderStatus()), "只有已提交的入库单可以收货");
-
-		Map<String, Integer> receivedBySku = dto.getItems().stream()
-				.collect(Collectors.toMap(InboundReceiveDTO.ReceiveItem::getSkuCode,
-						InboundReceiveDTO.ReceiveItem::getActualQuantity, Integer::sum));
+		List<Long> evidenceFileIds = dto.getEvidenceFileIds();
+		Assert.notEmpty(evidenceFileIds, "请至少上传一张收货现场照片");
+		List<SysFileVO> evidenceFiles = sysFileService.getFileInfoList(evidenceFileIds);
+		Assert.isTrue(evidenceFiles.size() == new HashSet<>(evidenceFileIds).size(), "收货照片不存在或已被删除");
+		Assert.isTrue(evidenceFiles.stream().allMatch(file -> file.getContentType() != null
+				&& file.getContentType().toLowerCase().startsWith("image/")), "收货凭证只能上传图片");
 
 		List<PurchaseInboundOrderItem> items = purchaseInboundItemMapper.selectByInboundOrderId(order.getId());
+		Map<Long, Integer> receivedByItemId = mapReceivedByItemId(items, dto.getItems());
 		List<PurchaseInboundOrderItem> validItems = new ArrayList<>();
 		for (PurchaseInboundOrderItem item : items) {
-			int actual = receivedBySku.getOrDefault(item.getSkuCode(), 0);
+			int actual = receivedByItemId.getOrDefault(item.getId(), 0);
 			// M-6：实收不得超过应收（收货链此前不校验，自定义链无区域在途兜底 → 超量经上架全额流入 available）。
 			// 仅在建单已声明应收(expectedQuantity 非空)时约束，不误伤无应收基准的单。
 			if (item.getExpectedQuantity() != null) {
@@ -140,8 +156,39 @@ public class WmsInboundExecutionService {
 		}
 
 		order.setOrderStatus(PurchaseInboundStatus.RECEIVED.name());
+		order.setReceiveBy(principalAttributeAccessor.getUserId());
+		order.setReceiveTime(LocalDateTime.now());
+		order.setReceiveEvidenceFileIds(joinEvidenceFileIds(evidenceFileIds));
 		purchaseInboundMapper.updateById(order);
 		log.info("收货完成, inboundOrderId={}, skuCount={}", order.getId(), validItems.size());
+	}
+
+	public static String joinEvidenceFileIds(List<Long> fileIds) {
+		return fileIds.stream().distinct().map(String::valueOf).collect(Collectors.joining(","));
+	}
+
+	public PurchaseInboundOrder findSubmittedByInboundNo(String inboundNo) {
+		assertPlatform();
+		Assert.hasText(inboundNo, "Inbound number is required");
+		PurchaseInboundOrder order = purchaseInboundMapper.selectSubmittedByInboundNo(inboundNo.trim());
+		Assert.notNull(order, "No submitted inbound order found for this number");
+		return order;
+	}
+
+	public static Map<Long, Integer> mapReceivedByItemId(List<PurchaseInboundOrderItem> orderItems,
+			List<InboundReceiveDTO.ReceiveItem> receivedItems) {
+		Map<Long, PurchaseInboundOrderItem> itemById = orderItems.stream()
+				.collect(Collectors.toMap(PurchaseInboundOrderItem::getId, item -> item));
+		Map<Long, Integer> result = new LinkedHashMap<>();
+		for (InboundReceiveDTO.ReceiveItem received : receivedItems) {
+			PurchaseInboundOrderItem item = itemById.get(received.getInboundOrderItemId());
+			Assert.notNull(item, "Inbound item does not belong to this order");
+			Assert.isTrue(item.getSkuCode().equalsIgnoreCase(received.getSkuCode()),
+					"Inbound item SKU does not match");
+			Assert.isTrue(!result.containsKey(item.getId()), "Inbound item was submitted more than once");
+			result.put(item.getId(), received.getActualQuantity());
+		}
+		return result;
 	}
 
 	private void postRegionInTransitOut(PurchaseInboundOrder order, List<PurchaseInboundOrderItem> validItems) {
@@ -212,15 +259,41 @@ public class WmsInboundExecutionService {
 				.collect(Collectors.toMap(InboundPutawayDTO.PutawayLine::getSkuCode,
 						InboundPutawayDTO.PutawayLine::getQuantity, Integer::sum));
 		if (!receivedBySku.equals(submittedBySku)) {
+			Set<String> skuCodes = new java.util.TreeSet<>();
+			skuCodes.addAll(receivedBySku.keySet());
+			skuCodes.addAll(submittedBySku.keySet());
+			String differences = skuCodes.stream()
+					.filter(sku -> !receivedBySku.getOrDefault(sku, 0)
+							.equals(submittedBySku.getOrDefault(sku, 0)))
+					.map(sku -> sku + "：实收" + receivedBySku.getOrDefault(sku, 0)
+							+ "，上架" + submittedBySku.getOrDefault(sku, 0))
+					.collect(Collectors.joining("；"));
 			throw new BusinessException(WmsResultCode.PUTAWAY_QUANTITY_MISMATCH.getCode(),
-					WmsResultCode.PUTAWAY_QUANTITY_MISMATCH.getMessage());
+					WmsResultCode.PUTAWAY_QUANTITY_MISMATCH.getMessage() + "（" + differences + "）");
 		}
-		Map<String, Long> itemIdBySku = items.stream().collect(Collectors.toMap(
-				PurchaseInboundOrderItem::getSkuCode, PurchaseInboundOrderItem::getId, (a, b) -> a));
-		Long erpTenantId = order.getErpTenantId() == null ? 1L : order.getErpTenantId();
+		Map<String, List<PurchaseInboundOrderItem>> receivedItemsBySku = items.stream()
+				.filter(item -> item.getActualQuantity() != null && item.getActualQuantity() > 0)
+				.sorted(Comparator.comparing(PurchaseInboundOrderItem::getId))
+				.collect(Collectors.groupingBy(PurchaseInboundOrderItem::getSkuCode,
+						LinkedHashMap::new, Collectors.toList()));
+		Map<Long, Integer> remainingByItem = items.stream()
+				.collect(Collectors.toMap(PurchaseInboundOrderItem::getId,
+						item -> item.getActualQuantity() == null ? 0 : item.getActualQuantity()));
+		Long erpTenantId = order.getErpTenantId();
+		Assert.notNull(erpTenantId, "入库单未设置货主，不能上架");
 		Set<String> allowedRacks = resolveAllowedRacks(order);
 		Map<String, PalletSlotVO> slotByCode = palletService.listSlots(order.getWarehouseId()).stream()
 				.collect(Collectors.toMap(PalletSlotVO::getSlotCode, value -> value, (a, b) -> a));
+
+		Map<Long, Set<String>> selectionKeysByPallet = dto.getLines().stream()
+				.filter(line -> line.getPalletId() != null)
+				.peek(line -> Assert.hasText(line.getPalletKey(), "现有托盘必须携带托盘栏标识"))
+				.collect(Collectors.groupingBy(InboundPutawayDTO.PutawayLine::getPalletId,
+						Collectors.mapping(InboundPutawayDTO.PutawayLine::getPalletKey, Collectors.toSet())));
+		selectionKeysByPallet.forEach((palletId, selectionKeys) ->
+				Assert.isTrue(selectionKeys.size() == 1,
+						"同一现有托盘不能由多个独立托盘栏重复选择：" + palletId
+								+ "；如需混托，请先合并为一个托盘栏"));
 
 		Map<String, List<InboundPutawayDTO.PutawayLine>> groups = dto.getLines().stream()
 				.collect(Collectors.groupingBy(this::palletGroupKey, LinkedHashMap::new, Collectors.toList()));
@@ -259,27 +332,88 @@ public class WmsInboundExecutionService {
 		for (InboundPutawayDTO.PutawayLine line : dto.getLines()) {
 			PalletSlotVO slot = slotByCode.get(line.getSlotCode());
 			com.erp.admin.wms.model.entity.WmsPallet pallet = assigned.get(palletGroupKey(line));
-			PutawayDTO put = new PutawayDTO();
-			put.setWmsTenantId(0L);
-			put.setErpTenantId(erpTenantId);
-			put.setWarehouseId(order.getWarehouseId());
-			put.setSkuCode(line.getSkuCode());
-			put.setInboundItemId(itemIdBySku.getOrDefault(line.getSkuCode(), 0L));
-			put.setQuantity(line.getQuantity());
-			put.setQuality(normalizeQuality(line.getQuality()));
-			put.setLocationCode(slot.getLocationCode());
-			put.setPalletId(pallet.getId());
-			put.setSlotId(slot.getSlotId());
-			put.setZoneId(slot.getZoneId());
-			put.setAllocatable(GOOD.equals(put.getQuality()) ? 1 : 0);
-			physicalInventoryService.putaway(put);
+			int remaining = line.getQuantity();
+			for (PurchaseInboundOrderItem item : receivedItemsBySku
+					.getOrDefault(line.getSkuCode(), Collections.emptyList())) {
+				int itemRemaining = remainingByItem.getOrDefault(item.getId(), 0);
+				if (itemRemaining <= 0 || remaining <= 0) {
+					continue;
+				}
+				int allocated = Math.min(itemRemaining, remaining);
+				PutawayDTO put = new PutawayDTO();
+				put.setWmsTenantId(pallet.getWmsTenantId());
+				put.setErpTenantId(erpTenantId);
+				put.setWarehouseId(order.getWarehouseId());
+				put.setSkuCode(line.getSkuCode());
+				put.setInboundItemId(item.getId());
+				put.setQuantity(allocated);
+				put.setQuality(normalizeQuality(line.getQuality()));
+				put.setLocationCode(slot.getLocationCode());
+				put.setPalletId(pallet.getId());
+				put.setSlotId(slot.getSlotId());
+				put.setZoneId(slot.getZoneId());
+				put.setAllocatable(GOOD.equals(put.getQuality()) ? 1 : 0);
+				physicalInventoryService.putaway(put);
+				remainingByItem.put(item.getId(), itemRemaining - allocated);
+				remaining -= allocated;
+			}
+			Assert.isTrue(remaining == 0, "SKU[" + line.getSkuCode() + "]上架明细无法匹配实收批次");
 		}
+		savePutawayReceiptLines(order.getId(), dto.getLines(), assigned);
 		assigned.values().forEach(pallet -> palletService.refreshAfterInventoryChange(pallet.getId()));
 		warehouseBillingService.recordInbound(order, items, dto.getConfirmedVolumeCbm(),
 				dto.getAfterHours(), dto.getAfterHoursReason());
+		int operatorRecorded = purchaseInboundMapper.recordPutawayOperator(order.getId(),
+				principalAttributeAccessor.getUserId(), LocalDateTime.now());
+		Assert.isTrue(operatorRecorded == 1, "上架操作员记录失败");
 		log.info("Pallet putaway completed, inboundOrderId={}, palletCount={}", order.getId(), assigned.size());
 		return palletService.summaries(assigned.values().stream()
 				.map(com.erp.admin.wms.model.entity.WmsPallet::getId).collect(Collectors.toSet()));
+	}
+
+	public List<PalletSummaryVO> getPutawayPallets(Long inboundOrderId) {
+		assertPlatform();
+		PurchaseInboundOrder order = purchaseInboundMapper.selectById(inboundOrderId);
+		Assert.notNull(order, "入库单不存在");
+		Assert.isTrue(PurchaseInboundStatus.COMPLETED.name().equals(order.getOrderStatus()),
+				"只有已完成上架的入库单可以查看托盘");
+		return palletService.listByInboundOrder(inboundOrderId);
+	}
+
+	public List<PutawayReceiptLineVO> getPutawayReceiptLines(Long inboundOrderId) {
+		assertPlatform();
+		PurchaseInboundOrder order = purchaseInboundMapper.selectById(inboundOrderId);
+		Assert.notNull(order, "入库单不存在");
+		Assert.isTrue(PurchaseInboundStatus.COMPLETED.name().equals(order.getOrderStatus()),
+				"只有已完成上架的入库单可以打印上架单");
+		List<PutawayReceiptLineVO> snapshot = putawayReceiptLineMapper.selectByInboundOrderId(inboundOrderId);
+		return snapshot.isEmpty() ? palletService.listReceiptLinesByInboundOrder(inboundOrderId) : snapshot;
+	}
+
+	private void savePutawayReceiptLines(Long inboundOrderId,
+			List<InboundPutawayDTO.PutawayLine> lines,
+			Map<String, com.erp.admin.wms.model.entity.WmsPallet> assigned) {
+		Map<String, WmsPutawayReceiptLine> snapshots = new LinkedHashMap<>();
+		for (InboundPutawayDTO.PutawayLine line : lines) {
+			com.erp.admin.wms.model.entity.WmsPallet pallet = assigned.get(palletGroupKey(line));
+			Assert.notNull(pallet, "上架托盘不存在");
+			String quality = normalizeQuality(line.getQuality());
+			String key = pallet.getId() + "|" + line.getSkuCode() + "|" + quality;
+			WmsPutawayReceiptLine snapshot = snapshots.computeIfAbsent(key, ignored -> {
+				WmsPutawayReceiptLine value = new WmsPutawayReceiptLine();
+				value.setInboundOrderId(inboundOrderId);
+				value.setPalletId(pallet.getId());
+				value.setPalletNo(pallet.getPalletNo());
+				value.setSlotCode(pallet.getSlotCode());
+				value.setSkuCode(line.getSkuCode());
+				value.setQuality(quality);
+				value.setQuantity(0);
+				value.setCreateTime(LocalDateTime.now());
+				return value;
+			});
+			snapshot.setQuantity(snapshot.getQuantity() + line.getQuantity());
+		}
+		snapshots.values().forEach(putawayReceiptLineMapper::insert);
 	}
 
 	public InboundPutawayPlanVO planPutaway(Long inboundOrderId) {

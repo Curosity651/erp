@@ -9,12 +9,15 @@
     <a-spin :spinning="loading">
       <!-- 扫码区 -->
       <div class="scan-box">
+        <div class="scan-modes">
+          <span><b>整单收货：</b>扫描当前入库单二维码，一次填满全部应收数量</span>
+          <span><b>逐件收货：</b>扫描 SKU 条码，按右侧“每次 +”数量累计</span>
+        </div>
         <div class="scan-row">
-          <span class="scan-icon">🔫</span>
           <a-input
             ref="scanInputRef"
             v-model:value="scanValue"
-            placeholder="扫描 SKU 条码，或手输后回车"
+            placeholder="扫描入库单号或 SKU 条码，手工输入后按回车也可以"
             allow-clear
             @press-enter="onScan"
           />
@@ -23,12 +26,15 @@
         </div>
         <div class="scan-feedback">
           <template v-if="lastScan">
-            <span v-if="lastScan.ok" class="ok">
+            <span v-if="lastScan.ok && lastScan.fullOrder" class="ok">
+              入库单 {{ lastScan.code }} 已识别，全部应收数量已填入，请核对后确认收货
+            </span>
+            <span v-else-if="lastScan.ok" class="ok">
               最近：{{ lastScan.code }} ✓ +{{ lastScan.delta }} → 实收 {{ lastScan.actual }}
             </span>
-            <span v-else class="err">最近：{{ lastScan.code }} ✗ 不在本单明细</span>
+            <span v-else class="err">最近：{{ lastScan.code }} ✗ 不是当前入库单号，也不在本单 SKU 明细中</span>
           </template>
-          <span v-else class="tip">进入自动聚焦，扫码枪连扫即可；漏扫可在下方手改</span>
+          <span v-else class="tip">当前入库单：{{ currentNo }}；扫码框会自动保持焦点</span>
         </div>
       </div>
 
@@ -41,8 +47,33 @@
         <a-button size="small" @click="fillAll">一键实收 = 预期</a-button>
       </div>
 
+      <section class="evidence-section">
+        <div class="evidence-head">
+          <div>
+            <b><span class="required">*</span> 收货现场照片</b>
+            <span>请拍摄外包装、到货数量或异常情况，至少上传 1 张</span>
+          </div>
+          <a-upload
+            :custom-request="handleEvidenceUpload"
+            :show-upload-list="false"
+            accept="image/jpeg,image/png,image/webp"
+            :disabled="photoFileIds.length >= MAX_PHOTOS"
+          >
+            <a-button size="small" :loading="uploadingEvidence">
+              <upload-outlined />上传照片 {{ photoFileIds.length }}/{{ MAX_PHOTOS }}
+            </a-button>
+          </a-upload>
+        </div>
+        <div v-if="photoFileIds.length" class="photo-list">
+          <div v-for="fileId in photoFileIds" :key="fileId" class="photo-item">
+            <a-image :src="photoUrls[fileId]" :width="84" :height="64" />
+            <close-circle-filled class="photo-remove" @click="removeEvidence(fileId)" />
+          </div>
+        </div>
+      </section>
+
       <!-- 明细 -->
-      <a-table :data-source="rows" :pagination="false" row-key="skuCode" size="small">
+      <a-table :data-source="rows" :pagination="false" row-key="id" size="small">
         <a-table-column title="SKU编码" data-index="skuCode" />
         <a-table-column title="商品" :width="150">
           <template #default="{ record }">{{ record.skuName || '-' }}</template>
@@ -53,6 +84,7 @@
             <a-input-number
               v-model:value="record.actual"
               :min="0"
+              :max="record.expected"
               :class="{ 'flash-cell': flashSku === record.skuCode }"
               style="width: 100%"
             />
@@ -78,14 +110,21 @@
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick } from 'vue'
 import { message, Modal } from 'ant-design-vue'
+import { CloseCircleFilled, UploadOutlined } from '@ant-design/icons-vue'
 import { isSuccess } from '@/api'
 import { doRequest } from '@/utils/axios/request'
+import { getFileDownloadUrl } from '@/api/system/file'
+import { useFileUpload } from '@/hooks/use-file-upload'
 import { getInboundOpsDetail, receiveInbound } from '@/api/wms/inbound-execution'
-import type { PurchaseInboundPageVO } from '@/api/wms/purchase-inbound/types'
+import type {
+  PurchaseInboundDetailVO,
+  PurchaseInboundPageVO
+} from '@/api/wms/purchase-inbound/types'
 
 const emits = defineEmits<{ (e: 'success'): void }>()
 
 interface Row {
+  id: number
   skuCode: string
   skuName: string
   expected: number
@@ -102,8 +141,19 @@ const rows = reactive<Row[]>([])
 const scanValue = ref('')
 const step = ref(1)
 const flashSku = ref('')
-const lastScan = ref<{ code: string; ok: boolean; delta?: number; actual?: number } | null>(null)
+const lastScan = ref<{
+  code: string
+  ok: boolean
+  fullOrder?: boolean
+  delta?: number
+  actual?: number
+} | null>(null)
 const scanInputRef = ref<{ focus?: () => void } | null>(null)
+const photoFileIds = ref<number[]>([])
+const photoUrls = reactive<Record<number, string>>({})
+const uploadingEvidence = ref(false)
+const { uploadFile } = useFileUpload()
+const MAX_PHOTOS = 6
 
 const drawerTitle = computed(
   () =>
@@ -153,16 +203,26 @@ function onScan() {
   const code = scanValue.value.trim()
   scanValue.value = ''
   if (!code) return
-  const row = rows.find(r => r.skuCode.toLowerCase() === code.toLowerCase())
+  if (code.toLowerCase() === currentNo.value.trim().toLowerCase()) {
+    fillAll()
+    lastScan.value = { code: currentNo.value, ok: true, fullOrder: true }
+    beep(true)
+    refocus()
+    return
+  }
+  const matchingRows = rows.filter(r => r.skuCode.toLowerCase() === code.toLowerCase())
+  const row = matchingRows.find(r => (r.actual || 0) < r.expected)
   if (!row) {
     lastScan.value = { code, ok: false }
+    if (matchingRows.length > 0) message.warning(`SKU ${code} 已全部收齐`)
     beep(false)
     refocus()
     return
   }
-  // 允许超收：直接累加（超出预期时状态列标红提示）
-  row.actual = (row.actual || 0) + step.value
-  lastScan.value = { code: row.skuCode, ok: true, delta: step.value, actual: row.actual }
+  const previous = row.actual || 0
+  const delta = Math.min(step.value, row.expected - previous)
+  row.actual = previous + delta
+  lastScan.value = { code: row.skuCode, ok: true, delta, actual: row.actual }
   flashSku.value = row.skuCode
   beep(true)
   window.setTimeout(() => {
@@ -178,16 +238,28 @@ function fillAll() {
 }
 
 function submit() {
+	if (photoFileIds.value.length === 0) {
+		message.warning('请至少上传一张收货现场照片')
+		return
+	}
   const items = rows
     .filter(r => (r.actual || 0) > 0)
-    .map(r => ({ skuCode: r.skuCode, actualQuantity: r.actual }))
+    .map(r => ({
+      inboundOrderItemId: r.id,
+      skuCode: r.skuCode,
+      actualQuantity: r.actual
+    }))
   if (items.length === 0) {
     message.warning('请至少录入一条实收数量大于0的明细')
     return
   }
   const doSubmit = () => {
     submitting.value = true
-    doRequest(receiveInbound({ inboundOrderId: currentId.value!, items }), {
+    doRequest(receiveInbound({
+      inboundOrderId: currentId.value!,
+      items,
+      evidenceFileIds: photoFileIds.value
+    }), {
       successMessage: '收货成功',
       onSuccess: () => {
         open.value = false
@@ -198,21 +270,23 @@ function submit() {
       }
     })
   }
-  const mismatch = rows.some(r => (r.actual || 0) !== r.expected)
-  if (mismatch) {
-    Modal.confirm({
-      title: '确认收货',
-      content: '存在缺收或超收，确定按当前实收数量提交？',
-      okText: '确定',
-      cancelText: '取消',
-      onOk: doSubmit
-    })
-  } else {
-    doSubmit()
-  }
+  const shortQuantity = rows.reduce((sum, row) => sum + Math.max(row.expected - row.actual, 0), 0)
+  Modal.confirm({
+    title: shortQuantity > 0 ? '确认按实际数量收货' : '确认货物全部收齐',
+    content:
+      shortQuantity > 0
+        ? `当前少收 ${shortQuantity} 件。确认后本张入库单将结束收货，剩余待收数量会被释放。`
+        : `请确认现场货物已经清点并全部收齐。本次共 ${rows.length} 条明细、${totalActual.value} 件，确认后将进入待上架状态。`,
+    okText: shortQuantity > 0 ? '按实际数量收货' : '确认全部收齐',
+    cancelText: '返回核对',
+    onOk: doSubmit
+  })
 }
 
-async function openReceive(record: PurchaseInboundPageVO) {
+async function openReceive(
+  record: PurchaseInboundPageVO,
+  options?: { detail?: PurchaseInboundDetailVO; fillExpected?: boolean }
+) {
   currentId.value = record.id
   currentNo.value = record.inboundNo
   currentWarehouse.value = record.warehouseName || ''
@@ -221,17 +295,22 @@ async function openReceive(record: PurchaseInboundPageVO) {
   step.value = 1
   lastScan.value = null
   flashSku.value = ''
+  photoFileIds.value = []
+  Object.keys(photoUrls).forEach(key => delete photoUrls[Number(key)])
   open.value = true
   loading.value = true
   try {
-    const res = await getInboundOpsDetail(record.id)
-    if (isSuccess(res) && res.data) {
-      ;(res.data.items || []).forEach(i => {
+    const detail = options?.detail
+    const res = detail ? null : await getInboundOpsDetail(record.id)
+    const data = detail || (res && isSuccess(res) ? res.data : undefined)
+    if (data) {
+      ;(data.items || []).forEach(i => {
         rows.push({
+          id: i.id,
           skuCode: i.skuCode,
           skuName: i.skuBrief?.skuName || '',
           expected: i.expectedQuantity,
-          actual: 0
+          actual: options?.fillExpected ? i.expectedQuantity : 0
         })
       })
     }
@@ -239,6 +318,40 @@ async function openReceive(record: PurchaseInboundPageVO) {
     loading.value = false
     refocus()
   }
+}
+
+async function handleEvidenceUpload(options: any) {
+  if (photoFileIds.value.length >= MAX_PHOTOS) {
+    message.warning(`最多上传 ${MAX_PHOTOS} 张收货照片`)
+    options.onError?.(new Error('照片数量超过限制'))
+    return
+  }
+  uploadingEvidence.value = true
+  try {
+    const result = await uploadFile(options.file, {
+      bucketKey: 'private-files',
+      folder: `inbound-receive/${currentId.value || 'unknown'}`,
+      allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      maxSize: 10 * 1024 * 1024
+    })
+    if (!result) {
+      options.onError?.(new Error('上传失败'))
+      return
+    }
+    photoFileIds.value.push(result.fileId)
+    const response = await getFileDownloadUrl(result.fileId)
+    if (isSuccess(response) && response.data) photoUrls[result.fileId] = response.data
+    options.onSuccess?.(result)
+  } catch (error: any) {
+    options.onError?.(error)
+  } finally {
+    uploadingEvidence.value = false
+  }
+}
+
+function removeEvidence(fileId: number) {
+  photoFileIds.value = photoFileIds.value.filter(id => id !== fileId)
+  delete photoUrls[fileId]
 }
 
 defineExpose({ open: openReceive })
@@ -257,6 +370,16 @@ export default {
   border-radius: 6px;
   padding: 12px;
   margin-bottom: 12px;
+}
+.scan-modes {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 13px;
+}
+.scan-modes b {
+  color: rgba(0, 0, 0, 0.88);
 }
 .scan-row {
   display: flex;
@@ -293,6 +416,32 @@ export default {
 .progress-bar b {
   color: #1677ff;
 }
+.evidence-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.evidence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.evidence-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.evidence-head span {
+  color: rgba(0, 0, 0, .45);
+  font-size: 12px;
+}
+.evidence-head .required { color: #ff4d4f; font-size: 14px; }
+.photo-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.photo-item { position: relative; }
+.photo-item :deep(img) { object-fit: cover; border-radius: 4px; }
+.photo-remove { position: absolute; top: -6px; right: -6px; color: #ff4d4f; background: #fff; border-radius: 50%; cursor: pointer; }
 .flash-cell :deep(.ant-input-number) {
   transition: background 0.2s;
 }
