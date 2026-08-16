@@ -41,6 +41,70 @@ public class WbOrderConfirmService {
 	private final ErpOrderService erpOrderService;
 	private final PlatformConfirmGuard confirmGuard;
 
+	/** 下架接单阶段：只创建 Supply 并加入订单，不执行发货。 */
+	public ConfirmResult prepareOrders(List<Long> orderIds) {
+		ConfirmResult result = new ConfirmResult();
+		List<ConfirmResult.Item> items = new ArrayList<>();
+		result.setItems(items);
+		if (CollectionUtils.isEmpty(orderIds)) return result;
+		List<ErpOrder> orders = orderMapper.selectByIds(orderIds);
+		List<ErpOrder> eligible = confirmValidator.validate(orders, PlatformEnum.Wildberries.code(),
+				Collections.singletonList(ErpOrderStatusEnum.READY_TO_SHIP.name()));
+		for (ErpOrder order : eligible) {
+			ConfirmResult.Item item = new ConfirmResult.Item();
+			item.setOrderId(order.getId());
+			try {
+				Shop shop = shopService.getById(order.getShopId());
+				WbCredential credential = credentialService.parseCredential(shop);
+				String supplyId = order.getShipmentId();
+				if (!StringUtils.hasText(supplyId)) {
+					supplyId = wbPlatformApi.createSupply(credential, order.getPlatformOrderId());
+					wbPlatformApi.addOrderToSupply(credential, supplyId, order.getPlatformOrderId());
+					erpOrderService.updateShipmentId(order.getId(), supplyId);
+				}
+				item.setSuccess(true);
+				item.setSupplyId(supplyId);
+				item.setMessage("OK");
+			}
+			catch (Exception ex) {
+				item.setSuccess(false);
+				item.setMessage(ex.getMessage());
+			}
+			items.add(item);
+		}
+		return result;
+	}
+
+	/** 仓库签出阶段：只对已经准备好的 Supply 执行最终发货。 */
+	public ConfirmResult finalizeOrders(List<Long> orderIds) {
+		ConfirmResult result = new ConfirmResult();
+		List<ConfirmResult.Item> items = new ArrayList<>();
+		result.setItems(items);
+		if (CollectionUtils.isEmpty(orderIds)) return result;
+		List<ErpOrder> orders = orderMapper.selectByIds(orderIds);
+		for (ErpOrder order : orders) {
+			ConfirmResult.Item item = new ConfirmResult.Item();
+			item.setOrderId(order.getId());
+			try {
+				if (!StringUtils.hasText(order.getShipmentId())) {
+					throw new IllegalStateException("订单尚未准备 WB Supply");
+				}
+				Shop shop = shopService.getById(order.getShopId());
+				WbCredential credential = credentialService.parseCredential(shop);
+				wbPlatformApi.shipSupply(credential, order.getShipmentId());
+				item.setSuccess(true);
+				item.setSupplyId(order.getShipmentId());
+				item.setMessage("OK");
+			}
+			catch (Exception ex) {
+				item.setSuccess(false);
+				item.setMessage(ex.getMessage());
+			}
+			items.add(item);
+		}
+		return result;
+	}
+
 	/**
 	 * 批量确认发货
 	 */
