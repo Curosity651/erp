@@ -21,7 +21,62 @@ export interface FulfillmentOrder {
   recipientName?: string
   recipientPhone?: string
   recipientAddress?: string
+  carrierName?: string
+  trackingNo?: string
+  packageWeightKg?: number
+  labelFileUrl?: string
+  labelBarcode?: string
+  labelFetchedTime?: string
+  labelVerifiedTime?: string
   createTime?: string
+}
+
+export interface FulfillmentBatchResult {
+  successIds: number[]
+  failures: Record<string, string>
+}
+
+export interface FulfillmentPickTask {
+  id: number
+  taskNo: string
+  warehouseId: number
+  taskStatus: string
+  orderCount: number
+  totalQuantity: number
+  operatorId?: number
+  createTime?: string
+}
+
+export interface FulfillmentPickTaskOrder {
+  id: number
+  fulfillmentOrderId: number
+  sequenceNo: number
+  orderStatus: string
+}
+
+export interface FulfillmentPickTaskLine {
+  id: number
+  fulfillmentOrderId: number
+  locationCode: string
+  skuCode: string
+  warehouseSkuCode: string
+  plannedQuantity: number
+  pickedQuantity: number
+  lineStatus: string
+}
+
+export interface FulfillmentPickTaskDetail {
+  task: FulfillmentPickTask
+  orders: FulfillmentPickTaskOrder[]
+  lines: FulfillmentPickTaskLine[]
+}
+
+export interface PlatformLabelResult {
+  success: boolean
+  message: string
+  externalReference?: string
+  labelUrl?: string
+  labelBarcode?: string
 }
 
 export interface FulfillmentItem {
@@ -59,4 +114,3 @@ export const fulfillmentStatusText: Record<FulfillmentStatus, string> = {
   CANCELLED: '已取消',
   EXCEPTION: '异常'
 }
-

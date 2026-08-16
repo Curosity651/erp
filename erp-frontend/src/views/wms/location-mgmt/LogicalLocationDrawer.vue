@@ -112,7 +112,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { Modal, message } from 'ant-design-vue'
-import { useAdminUser } from '@/hooks/system/use-admin-user'
+import { useAuthorize } from '@/hooks/permission'
 import { isSuccess } from '@/api'
 import {
   createLogicalLocation,
@@ -129,8 +129,8 @@ import type {
 } from '@/api/wms/location-mgmt/types'
 
 const emit = defineEmits<{ success: [] }>()
-const { userInfo } = useAdminUser()
-const canEdit = computed(() => userInfo.value?.permissions?.includes('wms:warehouse:edit') ?? true)
+const { hasPermission } = useAuthorize()
+const canEdit = computed(() => hasPermission('wms:warehouse:edit'))
 const visible = ref(false)
 const editorVisible = ref(false)
 const loading = ref(false)

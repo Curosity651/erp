@@ -1,40 +1,22 @@
-# 逻辑库位库存切换记录
+# 逻辑库位库存内核切换
 
-## 基线信息
+## 保留数据
 
-- 记录时间：2026-08-16
-- 功能分支：`codex/logical-location-fulfillment`
-- 后端：Java 8、Spring Boot 2.7.18、Maven
-- 前端：Vue 3、TypeScript、pnpm
-- 初始库存模式：`LEGACY`
+用户、角色、菜单、租户、店铺、SKU、SKU 映射、平台订单、仓库、区域、逻辑库位、服务合同、费率和物流产品。
 
-## 改造前验证
+## 清理数据
 
-### 后端打包
+仓库库存、预占、采购/入库/上架、移库、盘点、退货、报废、旧销售出库、旧人工出库、托盘/托位、拣货/打包以及派生账单。
 
-执行命令：
+## 执行顺序
 
-```powershell
-mvn -f erp-backend/pom.xml -pl admin -DskipTests package
-```
+1. 停止本项目 Java 和 Vite 进程，保持 MySQL、Redis 运行。
+2. 使用 `mysqldump --single-transaction` 生成带时间戳的完整备份。
+3. 执行 V103 至 V111 数据库迁移。
+4. 执行 `2026-08-16_wms_logical_core_cleanup.sql`。
+5. 执行 `2026-08-16_wms_logical_core_seed.sql` 和不变量检查。
+6. 将 `erp.wms.core-mode` 切换为 `LOGICAL_LOCATION` 后启动系统。
 
-结果：`BUILD SUCCESS`，耗时 5 分 25 秒。首次执行下载了 BallCat 快照依赖。
+## 回滚
 
-现有警告：MapStruct 存在未映射目标字段，以及少量废弃 API、未检查泛型警告。它们在本次改造前已经存在，不阻止编译，本任务不处理。
-
-### 前端类型检查
-
-执行命令：
-
-```powershell
-pnpm --dir erp-frontend type-check
-```
-
-结果：通过，退出码为 0。
-
-## 切换规则
-
-1. 任务 1 至任务 19 实施期间保持 `erp.wms.core-mode=LEGACY`。
-2. 完成数据库备份、业务数据清理、新库位初始化和全链路验证后，才允许改为 `LOGICAL_LOCATION`。
-3. 切换前停止本项目的 Java 与 Vite 进程，MySQL 和 Redis 容器保持运行。
-4. 旧托盘、托位、物理库存和销售出库写接口在新模式下必须被禁止，历史查询保留只读。
+停止应用，删除并重建 `erp` 数据库，然后导入本次切换前的完整 SQL 备份。禁止在新旧内核同时开放写入。

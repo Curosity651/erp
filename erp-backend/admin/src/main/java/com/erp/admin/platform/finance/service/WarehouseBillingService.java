@@ -4,6 +4,7 @@ import com.erp.admin.platform.finance.mapper.WmsBillingRecordMapper;
 import com.erp.admin.platform.finance.mapper.WmsFeeRateCardMapper;
 import com.erp.admin.platform.finance.model.entity.WmsBillingRecord;
 import com.erp.admin.platform.finance.model.entity.WmsFeeRateCard;
+import com.erp.admin.platform.finance.model.dto.ManualBillingDTO;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.mapper.WmsPalletMapper;
@@ -16,6 +17,7 @@ import com.erp.admin.wms.model.entity.SalesOutboundOrder;
 import com.erp.admin.wms.model.entity.WmsOutboundPickAllocation;
 import com.erp.admin.wms.model.entity.WmsPallet;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
 import com.erp.admin.wms.model.vo.OutboundHandlingPreviewVO;
 import com.erp.admin.wms.model.vo.SkuLookupVO;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,12 +51,80 @@ public class WarehouseBillingService {
     public static final String OUTBOUND_LARGE_BOX = "OUTBOUND_LARGE_BOX";
     public static final String OUTBOUND_SMALL_ITEM = "OUTBOUND_SMALL_ITEM";
 
+    private static final Set<String> MANUAL_FEE_CODES = new LinkedHashSet<>(Arrays.asList(
+            "DELIVERY_TRUCK_ACTUAL",
+            "DELIVERY_LTL_SHARE",
+            "DELIVERY_SHORT_SMALL_BOX",
+            "DELIVERY_SHORT_LARGE_BOX",
+            "RETURN_PICKUP_BOX",
+            "RETURN_INSPECTION_GENERAL",
+            "RETURN_INSPECTION_ELECTRONIC"));
+
     private final WmsFeeRateCardMapper rateMapper;
     private final WmsBillingRecordMapper billingMapper;
     private final WmsSkuLookupMapper skuLookupMapper;
     private final WmsPhysicalInventoryMapper physicalInventoryMapper;
     private final WmsPalletMapper palletMapper;
     private final SysTenantMapper tenantMapper;
+
+    public List<WmsFeeRateCard> listEffectiveRates(Long wmsTenantId) {
+        Map<String, WmsFeeRateCard> resolved = new LinkedHashMap<>();
+        for (WmsFeeRateCard rate : rateMapper.listEffectiveCandidates(wmsTenantId, LocalDate.now())) {
+            resolved.putIfAbsent(rate.getFeeCode(), rate);
+        }
+        return new ArrayList<>(resolved.values());
+    }
+
+    public WmsBillingRecord recordManual(ManualBillingDTO dto) {
+        YearMonth.parse(dto.getBillMonth());
+        Assert.isTrue(MANUAL_FEE_CODES.contains(dto.getFeeCode()), "该收费项目不能手工登记");
+        SysTenant operator = tenantMapper.selectById(dto.getWmsTenantId());
+        Assert.notNull(operator, "WMS服务商不存在");
+        Assert.isTrue("WMS_OPERATOR".equals(operator.getTenantType()), "计费对象必须是WMS服务商");
+        if (dto.getErpTenantId() != null) {
+            SysTenant owner = tenantMapper.selectById(dto.getErpTenantId());
+            Assert.notNull(owner, "货主不存在");
+            Assert.isTrue(dto.getWmsTenantId().equals(owner.getParentWmsTenantId()),
+                    "货主不属于所选WMS服务商");
+        }
+
+        WmsFeeRateCard rate = requireRate(dto.getWmsTenantId(), dto.getFeeCode());
+        boolean actual = "ACTUAL".equals(rate.getBillingUnit());
+        if (actual) {
+            Assert.isTrue(dto.getActualAmount() != null
+                    && dto.getActualAmount().compareTo(BigDecimal.ZERO) > 0, "实报实销项目必须填写实际金额");
+            Assert.isTrue(dto.getQuantity().compareTo(BigDecimal.ONE) == 0, "实报实销项目的费用笔数必须为1");
+        }
+        BigDecimal amount = actual ? dto.getActualAmount()
+                : dto.getQuantity().multiply(rate.getUnitPrice());
+        amount = amount.setScale(2, RoundingMode.HALF_UP);
+        String bizId = "MANUAL:" + dto.getWmsTenantId() + ":" + dto.getFeeCode()
+                + ":" + dto.getSourceRef().trim();
+        Assert.isNull(billingMapper.selectByBizId(bizId), "该业务凭证的收费已经登记");
+
+        WmsBillingRecord record = new WmsBillingRecord();
+        record.setBizId(bizId);
+        record.setWmsTenantId(dto.getWmsTenantId());
+        record.setErpTenantId(dto.getErpTenantId());
+        record.setWarehouseId(dto.getWarehouseId());
+        record.setBillMonth(dto.getBillMonth());
+        record.setFeeType(rate.getFeeType());
+        record.setSourceType("MANUAL");
+        record.setFeeCode(rate.getFeeCode());
+        record.setBillingUnit(rate.getBillingUnit());
+        record.setQuantity(dto.getQuantity().setScale(0, RoundingMode.HALF_UP).intValue());
+        record.setBillingQuantity(dto.getQuantity());
+        record.setUnitPrice(actual ? amount : rate.getUnitPrice());
+        record.setBaseAmount(amount);
+        record.setAmount(amount);
+        record.setCurrency(rate.getCurrency());
+        record.setChargeStatus("POSTED");
+        record.setRateSnapshot(rate.getFeeName() + "|" + rate.getBillingUnit() + "|" + rate.getUnitPrice());
+        record.setSourceRef(dto.getSourceRef().trim());
+        record.setRemark(dto.getRemark().trim());
+        billingMapper.insert(record);
+        return record;
+    }
 
     public VolumeQuote quoteInbound(Long erpTenantId, List<PurchaseInboundOrderItem> items) {
         BigDecimal total = BigDecimal.ZERO;
@@ -165,6 +237,15 @@ public class WarehouseBillingService {
         }
         return total;
     }
+
+	public BigDecimal recordFulfillmentOutbound(WmsFulfillmentOrder order, int quantity) {
+		Assert.isTrue(quantity > 0, "履约出库计费数量必须大于0");
+		Long operatorId = operatorId(order.getErpTenantId());
+		return postCharge("FULFILLMENT:" + order.getId() + ":" + OUTBOUND_SMALL_ITEM,
+				operatorId, order.getErpTenantId(), order.getWarehouseId(), "FULFILLMENT_ORDER",
+				order.getId(), order.getFulfillmentNo(), OUTBOUND_SMALL_ITEM,
+				BigDecimal.valueOf(quantity), "履约订单签出按件计费");
+	}
 
     private AllocationAnalysis analyzeAllocations(List<WmsOutboundPickAllocation> allocations) {
         AllocationAnalysis result = new AllocationAnalysis();
