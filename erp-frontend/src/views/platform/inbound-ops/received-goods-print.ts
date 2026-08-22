@@ -17,6 +17,13 @@ export interface ReceivedSkuBarcodeLabelGroup {
   barcodeDataUrl: string
 }
 
+interface ReceivedGoodsReferenceMeta {
+  inboundNo: string
+  ownerName?: string
+  ownerCode?: string
+  warehouseName?: string
+}
+
 const escapeHtml = (value: unknown) =>
   String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -192,65 +199,9 @@ export async function printReceivedGoodsReference(
   const page = resolvePage(existingPage, '货物对照表')
   try {
     const goods = assertPrintable(detail)
-    const rows = goods
-      .map(
-        item => `<tr>
-          <td class="image-cell">
-            ${
-              item.mainImage
-                ? `<img src="${escapeHtml(item.mainImage)}" alt="${escapeHtml(item.skuName)}"
-                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-                : ''
-            }
-            <span class="image-empty" style="${item.mainImage ? 'display:none' : 'display:flex'}">暂无图片</span>
-          </td>
-          <td class="code">${escapeHtml(item.warehouseSkuCode)}</td>
-          <td class="code">${escapeHtml(item.originalSkuCode)}</td>
-          <td>${escapeHtml(item.skuName)}</td>
-          <td class="number">${item.actualQuantity}</td>
-        </tr>`
-      )
-      .join('')
-    const total = goods.reduce((sum, item) => sum + item.actualQuantity, 0)
 
     page.document.open()
-    page.document.write(`<!doctype html>
-      <html lang="zh-CN"><head><meta charset="UTF-8"><title>货物对照表</title>
-      <style>
-        @page { size: A4 portrait; margin: 12mm; }
-        * { box-sizing: border-box; }
-        body { margin: 0; color: #111; font: 12px/1.4 Arial, "Microsoft YaHei", sans-serif; }
-        h1 { margin: 0 0 10px; text-align: center; font-size: 22px; }
-        .meta { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
-        .meta span { min-width: 0; overflow-wrap: anywhere; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { border: 1px solid #222; padding: 6px; text-align: left; vertical-align: middle; }
-        th { background: #f2f2f2; font-weight: 700; }
-        .image-cell { width: 86px; height: 86px; padding: 4px; }
-        .image-cell img { display: block; width: 76px; height: 76px; object-fit: contain; margin: auto; }
-        .image-empty { width: 76px; height: 76px; align-items: center; justify-content: center; color: #888; background: #f5f5f5; }
-        .code { overflow-wrap: anywhere; }
-        .number { width: 68px; text-align: right; font-weight: 700; }
-        .summary { margin-top: 8px; text-align: right; font-weight: 700; }
-      </style></head><body>
-        <h1>入库货物对照表</h1>
-        <div class="meta">
-          <span><b>入库单：</b>${escapeHtml(detail.inboundNo)}</span>
-          <span><b>货主：</b>${escapeHtml(detail.ownerName || detail.ownerCode || '-')}</span>
-          <span><b>仓库：</b>${escapeHtml(detail.warehouseName || '-')}</span>
-        </div>
-        <table>
-          <thead><tr>
-            <th style="width:86px">商品图片</th>
-            <th>内部 SKU</th>
-            <th>原始 SKU</th>
-            <th>商品名称</th>
-            <th class="number">实收件数</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <div class="summary">${goods.length} 种 SKU · 共 ${total} 件</div>
-      </body></html>`)
+    page.document.write(buildReceivedGoodsReferenceDocument(detail, goods))
     page.document.close()
     page.focus()
     await waitForPageAssets(page)
@@ -260,4 +211,78 @@ export async function printReceivedGoodsReference(
     page.close()
     throw error
   }
+}
+
+export function buildReceivedGoodsReferenceDocument(
+  detail: ReceivedGoodsReferenceMeta,
+  goods: ReceivedGoodsPrintItem[]
+) {
+  const rows = goods
+    .map(
+      item => `<tr>
+        <td class="image-cell">
+          ${
+            item.mainImage
+              ? `<img src="${escapeHtml(item.mainImage)}" alt="${escapeHtml(item.skuName)}"
+                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+              : ''
+          }
+          <span class="image-empty" style="${item.mainImage ? 'display:none' : 'display:flex'}">暂无图片</span>
+        </td>
+        <td class="code">${escapeHtml(item.warehouseSkuCode)}</td>
+        <td class="code">${escapeHtml(item.originalSkuCode)}</td>
+        <td>${escapeHtml(item.skuName)}</td>
+        <td class="number">${item.actualQuantity}</td>
+      </tr>`
+    )
+    .join('')
+  const total = goods.reduce((sum, item) => sum + item.actualQuantity, 0)
+
+  return `<!doctype html>
+    <html lang="zh-CN"><head><meta charset="UTF-8"><title>货物对照表</title>
+    <style>
+      @page { size: A4 portrait; margin: 12mm; }
+      * { box-sizing: border-box; }
+      html, body { width: 100%; max-width: 100%; }
+      body { margin: 0; color: #111; font: 12px/1.4 Arial, "Microsoft YaHei", sans-serif; }
+      h1 { margin: 0 0 10px; text-align: center; font-size: 22px; }
+      .meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; margin-bottom: 10px; }
+      .meta span { min-width: 0; overflow-wrap: anywhere; }
+      table { width: 100%; max-width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .col-image { width: 14%; }
+      .col-internal-sku { width: 26%; }
+      .col-original-sku { width: 24%; }
+      .col-name { width: 26%; }
+      .col-quantity { width: 10%; }
+      th, td { border: 1px solid #222; padding: 6px; text-align: left; vertical-align: middle; overflow-wrap: anywhere; word-break: break-word; }
+      th { background: #f2f2f2; font-weight: 700; }
+      .image-cell { height: 86px; padding: 4px; }
+      .image-cell img { display: block; width: 100%; max-width: 76px; height: 76px; object-fit: contain; margin: auto; }
+      .image-empty { width: 100%; max-width: 76px; height: 76px; margin: auto; align-items: center; justify-content: center; color: #888; background: #f5f5f5; }
+      .number { text-align: center; font-weight: 700; }
+      .summary { margin-top: 8px; text-align: right; font-weight: 700; }
+      @media screen { body { padding: 12px; } }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+      <h1>入库货物对照表</h1>
+      <div class="meta">
+        <span><b>入库单：</b>${escapeHtml(detail.inboundNo)}</span>
+        <span><b>货主：</b>${escapeHtml(detail.ownerName || detail.ownerCode || '-')}</span>
+        <span><b>仓库：</b>${escapeHtml(detail.warehouseName || '-')}</span>
+      </div>
+      <table>
+        <colgroup>
+          <col class="col-image"><col class="col-internal-sku"><col class="col-original-sku"><col class="col-name"><col class="col-quantity">
+        </colgroup>
+        <thead><tr>
+          <th>商品图片</th>
+          <th>内部 SKU</th>
+          <th>原始 SKU</th>
+          <th>商品名称</th>
+          <th class="number">实收件数</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="summary">${goods.length} 种 SKU · 共 ${total} 件</div>
+    </body></html>`
 }
