@@ -13,6 +13,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.product.mapper.SkuMapper;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
@@ -21,6 +22,7 @@ import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsLocationInventory;
+import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.vo.LocationInventoryDetailVO;
 import com.erp.admin.wms.model.vo.LocationInventoryGridVO;
 import lombok.RequiredArgsConstructor;
@@ -41,12 +43,14 @@ public class LocationInventoryQueryService {
 
 	private final SysTenantMapper tenantMapper;
 
+	private final WmsZoneService zoneService;
+
 	public List<LocationInventoryGridVO> grid(Long warehouseId) {
 		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		QueryData data = load(warehouseId);
 		List<LocationInventoryGridVO> result = data.locations.stream()
 			.map(location -> summarize(location, data.inventoryByLocation.getOrDefault(location.getId(), Collections.emptyList()),
-					data.skuByCode))
+					data.skuByTenant, data.zoneById.get(location.getZoneId())))
 			.collect(Collectors.toList());
 		result.sort(locationComparator());
 		return result;
@@ -69,11 +73,11 @@ public class LocationInventoryQueryService {
 					.orderByAsc(WmsLocationInventory::getErpTenantId)
 					.orderByAsc(WmsLocationInventory::getSkuCode)
 					.orderByAsc(WmsLocationInventory::getQuality));
-		Map<String, Sku> skus = loadSkus(inventory);
+		Map<Long, Map<String, Sku>> skus = loadSkus(inventory);
 		Map<Long, String> tenantNames = loadTenantNames(inventory);
 		LocationInventoryDetailVO result = new LocationInventoryDetailVO();
-		result.setLocation(summarize(location, inventory, skus));
-		result.setItems(inventory.stream().map(row -> detailLine(row, skus.get(row.getSkuCode()), tenantNames))
+		result.setLocation(summarize(location, inventory, skus, zoneService.getById(location.getZoneId())));
+		result.setItems(inventory.stream().map(row -> detailLine(row, findSku(skus, row), tenantNames))
 				.collect(Collectors.toList()));
 		return result;
 	}
@@ -86,17 +90,32 @@ public class LocationInventoryQueryService {
 					.gt(WmsLocationInventory::getQuantity, 0));
 		Map<Long, List<WmsLocationInventory>> byLocation = inventory.stream()
 				.collect(Collectors.groupingBy(WmsLocationInventory::getLocationId));
-		return new QueryData(locations, byLocation, loadSkus(inventory));
+		Map<Long, WmsZone> zoneById = zoneService.listByWarehouse(warehouseId).stream()
+				.collect(Collectors.toMap(WmsZone::getId, Function.identity(), (left, right) -> left));
+		return new QueryData(locations, byLocation, loadSkus(inventory), zoneById);
 	}
 
-	private Map<String, Sku> loadSkus(List<WmsLocationInventory> inventory) {
-		Set<String> codes = inventory.stream().map(WmsLocationInventory::getSkuCode).collect(Collectors.toSet());
-		if (codes.isEmpty()) {
+	private Map<Long, Map<String, Sku>> loadSkus(List<WmsLocationInventory> inventory) {
+		Map<Long, Set<String>> codesByTenant = inventory.stream()
+				.filter(row -> row.getErpTenantId() != null && row.getSkuCode() != null)
+				.collect(Collectors.groupingBy(WmsLocationInventory::getErpTenantId,
+						Collectors.mapping(WmsLocationInventory::getSkuCode, Collectors.toSet())));
+		if (codesByTenant.isEmpty()) {
 			return Collections.emptyMap();
 		}
-		List<Sku> skus = skuMapper.selectBySkuCodes(codes);
-		return skus == null ? Collections.emptyMap()
-				: skus.stream().collect(Collectors.toMap(Sku::getSkuCode, Function.identity(), (left, right) -> left));
+		Map<Long, Map<String, Sku>> result = new LinkedHashMap<>();
+		codesByTenant.forEach((tenantId, codes) -> {
+			List<Sku> skus = TenantContext.runAs(tenantId, () -> skuMapper.selectBySkuCodes(codes));
+			result.put(tenantId, skus == null ? Collections.emptyMap()
+					: skus.stream().collect(Collectors.toMap(Sku::getSkuCode, Function.identity(),
+							(left, right) -> left)));
+		});
+		return result;
+	}
+
+	private Sku findSku(Map<Long, Map<String, Sku>> skuByTenant, WmsLocationInventory inventory) {
+		return skuByTenant.getOrDefault(inventory.getErpTenantId(), Collections.emptyMap())
+				.get(inventory.getSkuCode());
 	}
 
 	private Map<Long, String> loadTenantNames(List<WmsLocationInventory> inventory) {
@@ -113,13 +132,16 @@ public class LocationInventoryQueryService {
 	}
 
 	private LocationInventoryGridVO summarize(WmsLocation location, List<WmsLocationInventory> rows,
-			Map<String, Sku> skuByCode) {
+			Map<Long, Map<String, Sku>> skuByTenant, WmsZone zone) {
 		LocationInventoryGridVO result = new LocationInventoryGridVO();
 		result.setLocationId(location.getId());
 		result.setWarehouseId(location.getWarehouseId());
 		result.setRackNo(location.getRackNo());
 		result.setSequenceNo(location.getColumnNo());
 		result.setLocationCode(location.getLocationCode());
+		result.setZoneId(location.getZoneId());
+		result.setZoneName(zone == null ? null : zone.getZoneName());
+		result.setZoneType(zone == null ? null : zone.getZoneType());
 		result.setLocationType(location.getLocationType());
 		result.setPublicShared(location.getPublicShared());
 		long capacity = volume(location.getLengthMm(), location.getWidthMm(), location.getHeightMm());
@@ -136,7 +158,7 @@ public class LocationInventoryQueryService {
 			total += quantity;
 			reserved += value(row.getReservedQuantity());
 			kinds.add(row.getSkuCode());
-			Sku sku = skuByCode.get(row.getSkuCode());
+			Sku sku = findSku(skuByTenant, row);
 			if (!validOuterBox(sku)) {
 				complete = false;
 				continue;
@@ -150,6 +172,7 @@ public class LocationInventoryQueryService {
 		result.setUsedWeightGrams(usedWeight);
 		result.setUtilizationPercent(percent(usedVolume, capacity));
 		result.setSkuKindCount(kinds.size());
+		result.setSkuCodes(kinds.stream().sorted().collect(Collectors.toList()));
 		result.setTotalQuantity(total);
 		result.setReservedQuantity(reserved);
 		result.setAvailableQuantity(Math.max(0, total - reserved));
@@ -235,13 +258,16 @@ public class LocationInventoryQueryService {
 	private static class QueryData {
 		private final List<WmsLocation> locations;
 		private final Map<Long, List<WmsLocationInventory>> inventoryByLocation;
-		private final Map<String, Sku> skuByCode;
+		private final Map<Long, Map<String, Sku>> skuByTenant;
+		private final Map<Long, WmsZone> zoneById;
 
 		private QueryData(List<WmsLocation> locations,
-				Map<Long, List<WmsLocationInventory>> inventoryByLocation, Map<String, Sku> skuByCode) {
+				Map<Long, List<WmsLocationInventory>> inventoryByLocation,
+				Map<Long, Map<String, Sku>> skuByTenant, Map<Long, WmsZone> zoneById) {
 			this.locations = locations;
 			this.inventoryByLocation = inventoryByLocation;
-			this.skuByCode = skuByCode;
+			this.skuByTenant = skuByTenant;
+			this.zoneById = zoneById;
 		}
 	}
 

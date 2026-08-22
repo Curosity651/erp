@@ -4,6 +4,9 @@ export interface LocationInventoryGrid {
   rackNo?: string
   sequenceNo?: number
   locationCode: string
+  zoneId?: number
+  zoneName?: string
+  zoneType?: string
   locationType?: string
   publicShared?: number
   capacityVolumeMm3: number
@@ -12,6 +15,7 @@ export interface LocationInventoryGrid {
   usedWeightGrams: number
   utilizationPercent: number
   skuKindCount: number
+  skuCodes: string[]
   totalQuantity: number
   reservedQuantity: number
   availableQuantity: number

@@ -10,9 +10,22 @@
         />
         <a-segmented v-model:value="viewMode" :options="viewOptions" />
         <a-button :loading="loading" @click="load">刷新</a-button>
+        <a-input
+          v-model:value="skuKeyword"
+          allow-clear
+          placeholder="搜索 SKU"
+          style="width: 200px"
+        />
+        <a-select
+          v-model:value="zoneId"
+          allow-clear
+          :options="zoneOptions"
+          placeholder="全部分区"
+          style="width: 160px"
+        />
       </a-space>
       <a-space>
-        <span>库位 {{ rows.length }}</span>
+        <span>库位 {{ filteredRows.length }}</span>
         <span>库存 {{ totalQuantity }} 件</span>
         <span>预占 {{ reservedQuantity }} 件</span>
       </a-space>
@@ -21,7 +34,7 @@
     <a-spin :spinning="loading">
       <location-grid-view
         v-if="viewMode === 'grid'"
-        :rows="rows"
+        :rows="filteredRows"
         @select="showDetail"
       />
       <location-tree-table v-else :tree="tree" @select="showDetail" />
@@ -45,6 +58,7 @@ import type {
 import LocationGridView from './LocationGridView.vue'
 import LocationTreeTable from './LocationTreeTable.vue'
 import LocationInventoryDrawer from './LocationInventoryDrawer.vue'
+import { buildZoneOptions, filterLocationInventory } from './location-inventory-filter'
 
 defineOptions({ name: 'LocationInventoryPage' })
 
@@ -54,18 +68,26 @@ const warehouseId = ref<number>()
 const warehouseOptions = ref<{ value: number; label: string }[]>([])
 const viewMode = ref<'grid' | 'tree'>('grid')
 const rows = ref<LocationInventoryGrid[]>([])
+const skuKeyword = ref('')
+const zoneId = ref<number>()
 const drawerRef = ref<InstanceType<typeof LocationInventoryDrawer>>()
 const viewOptions = [
   { label: '网格视图', value: 'grid' },
   { label: '列表视图', value: 'tree' }
 ]
 
-const totalQuantity = computed(() => rows.value.reduce((sum, row) => sum + row.totalQuantity, 0))
+const filteredRows = computed(() =>
+  filterLocationInventory(rows.value, skuKeyword.value, zoneId.value)
+)
+const zoneOptions = computed(() => buildZoneOptions(rows.value))
+const totalQuantity = computed(() =>
+  filteredRows.value.reduce((sum, row) => sum + row.totalQuantity, 0)
+)
 const reservedQuantity = computed(() =>
-  rows.value.reduce((sum, row) => sum + row.reservedQuantity, 0)
+  filteredRows.value.reduce((sum, row) => sum + row.reservedQuantity, 0)
 )
 const tree = computed<LocationInventoryTree>(() =>
-  rows.value.reduce<LocationInventoryTree>((groups, row) => {
+  filteredRows.value.reduce<LocationInventoryTree>((groups, row) => {
     const rack = row.rackNo || '未分排'
     groups[rack] = [...(groups[rack] || []), row]
     return groups
@@ -89,7 +111,11 @@ const load = async () => {
 
 const showDetail = (locationId: number) => drawerRef.value?.show(locationId)
 
-watch(warehouseId, load)
+watch(warehouseId, () => {
+  skuKeyword.value = ''
+  zoneId.value = undefined
+  load()
+})
 
 onMounted(async () => {
   const response = await getWarehouseOptions()

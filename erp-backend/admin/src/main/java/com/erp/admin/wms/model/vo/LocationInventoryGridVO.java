@@ -1,6 +1,7 @@
 package com.erp.admin.wms.model.vo;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import lombok.Data;
 
@@ -17,6 +18,12 @@ public class LocationInventoryGridVO {
 
 	private String locationCode;
 
+	private Long zoneId;
+
+	private String zoneName;
+
+	private String zoneType;
+
 	private String locationType;
 
 	private Integer publicShared;
@@ -32,6 +39,8 @@ public class LocationInventoryGridVO {
 	private BigDecimal utilizationPercent;
 
 	private int skuKindCount;
+
+	private List<String> skuCodes;
 
 	private int totalQuantity;
 
