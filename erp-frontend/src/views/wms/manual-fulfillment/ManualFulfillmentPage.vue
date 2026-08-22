@@ -73,6 +73,7 @@ const warehouseNames = computed(() => new Map(warehouseOptions.value.map((item) 
 const columns: ProColumns[] = [
   { title: '人工出库单号', key: 'fulfillmentNo', width: 220, fixed: 'left' },
   { title: '仓库', key: 'warehouse', width: 160 },
+  { title: '物流产品', dataIndex: 'logisticsProductName', width: 160 },
   { title: '收件人', dataIndex: 'recipientName', width: 130 },
   { title: '联系电话', dataIndex: 'recipientPhone', width: 150 },
   { title: '状态', key: 'status', width: 130 },

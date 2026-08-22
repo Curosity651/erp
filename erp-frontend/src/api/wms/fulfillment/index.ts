@@ -90,11 +90,19 @@ export function verifyFulfillmentLabel(id: number, barcode: string) {
 
 export function packFulfillment(id: number, dto: {
   carrierCode?: string
-  carrierName?: string
-  trackingNo?: string
-  packageWeightKg?: number
+  carrierName: string
+  shippingMethod: string
+  trackingNo: string
+  packageWeightKg: number
 }) {
   return httpClient.post<ApiResult<void>>(`${shippingBaseUrl}/${id}/pack`, dto)
+}
+
+export function adjustFulfillmentLogisticsFee(id: number, dto: {
+  amount: number
+  adjustmentReason?: string
+}) {
+  return httpClient.post<ApiResult<void>>(`${shippingBaseUrl}/${id}/logistics-fee`, dto)
 }
 
 export function shipFulfillmentOrders(ids: number[]) {

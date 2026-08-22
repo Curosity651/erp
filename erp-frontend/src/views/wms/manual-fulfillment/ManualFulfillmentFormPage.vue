@@ -15,6 +15,13 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="物流产品" name="logisticsProductId">
+          <a-select v-model:value="form.logisticsProductId" placeholder="请选择物流产品">
+            <a-select-option v-for="item in productOptions" :key="item.id" :value="item.id">
+              {{ item.productName }}（{{ item.unitPrice }} {{ item.currency }}）
+            </a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item label="收件人" name="recipientName">
           <a-input v-model:value="form.recipientName" maxlength="100" />
         </a-form-item>
@@ -79,6 +86,8 @@ import {
   updateManualFulfillment
 } from '@/api/wms/fulfillment'
 import type { ManualFulfillmentForm } from '@/api/wms/fulfillment/types'
+import { listOwnerLogisticsProducts } from '@/api/wms/logistics-product'
+import type { LogisticsProductVO } from '@/api/wms/logistics-product/types'
 
 const emit = defineEmits<{ saved: [] }>()
 const visible = ref(false)
@@ -87,12 +96,14 @@ const editingId = ref<number>()
 const formRef = ref<FormInstance>()
 const warehouseOptions = ref<WarehouseOptionVO[]>([])
 const skuOptions = ref<{ label: string; value: string }[]>([])
+const productOptions = ref<LogisticsProductVO[]>([])
 let lineKey = 1
 type FormLine = ManualFulfillmentForm['items'][number] & { _key: number }
 const form = reactive<Omit<ManualFulfillmentForm, 'items'> & { items: FormLine[] }>({ items: [] })
 
 const rules: Record<string, Rule[]> = {
-  warehouseId: [{ required: true, message: '请选择出库仓库' }]
+  warehouseId: [{ required: true, message: '请选择出库仓库' }],
+  logisticsProductId: [{ required: true, message: '请选择物流产品' }]
 }
 const itemColumns = [
   { title: 'ERP SKU', key: 'skuCode', width: 420 },
@@ -104,6 +115,7 @@ const newLine = (skuCode = '', quantity = 1): FormLine => ({ _key: lineKey++, sk
 const reset = () => {
   editingId.value = undefined
   form.warehouseId = undefined
+  form.logisticsProductId = undefined
   form.recipientName = ''
   form.recipientPhone = ''
   form.recipientAddress = ''
@@ -111,10 +123,11 @@ const reset = () => {
 }
 
 const loadOptions = async () => {
-  const result = await getWarehouseOptions()
-  if (isSuccess(result)) {
-    warehouseOptions.value = (result.data || []).filter((item) => item.warehouseType === 'OWN')
-  }
+  const [warehouseResult, productResult] = await Promise.all([
+    getWarehouseOptions(), listOwnerLogisticsProducts()
+  ])
+  if (isSuccess(warehouseResult)) warehouseOptions.value = (warehouseResult.data || []).filter((item) => item.warehouseType === 'OWN')
+  if (isSuccess(productResult)) productOptions.value = productResult.data || []
 }
 
 const open = async (id?: number) => {
@@ -132,6 +145,7 @@ const open = async (id?: number) => {
     }
     Object.assign(form, {
       warehouseId: orderResult.data.warehouseId,
+      logisticsProductId: orderResult.data.logisticsProductId,
       recipientName: orderResult.data.recipientName || '',
       recipientPhone: orderResult.data.recipientPhone || '',
       recipientAddress: orderResult.data.recipientAddress || '',
@@ -174,6 +188,7 @@ const handleSave = async () => {
   try {
     const payload: ManualFulfillmentForm = {
       warehouseId: form.warehouseId,
+      logisticsProductId: form.logisticsProductId,
       recipientName: form.recipientName,
       recipientPhone: form.recipientPhone,
       recipientAddress: form.recipientAddress,
@@ -218,4 +233,3 @@ defineExpose({ open })
   .address-field { grid-column: auto; }
 }
 </style>
-

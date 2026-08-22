@@ -22,12 +22,21 @@ export interface FulfillmentOrder {
   recipientPhone?: string
   recipientAddress?: string
   carrierName?: string
+  shippingMethod?: string
   trackingNo?: string
   packageWeightKg?: number
   labelFileUrl?: string
   labelBarcode?: string
   labelFetchedTime?: string
   labelVerifiedTime?: string
+  logisticsProductId?: number
+  logisticsProductCode?: string
+  logisticsProductName?: string
+  logisticsProductDescription?: string
+  logisticsProductDefaultFee?: number
+  logisticsProductActualFee?: number
+  logisticsProductCurrency?: string
+  logisticsFeeAdjustmentReason?: string
   createTime?: string
 }
 
@@ -69,6 +78,11 @@ export interface FulfillmentPickTaskDetail {
   task: FulfillmentPickTask
   orders: FulfillmentPickTaskOrder[]
   lines: FulfillmentPickTaskLine[]
+  currentOrder?: {
+    taskOrder: FulfillmentPickTaskOrder
+    fulfillmentOrder: FulfillmentOrder
+    routeLines: FulfillmentPickTaskLine[]
+  }
 }
 
 export interface PlatformLabelResult {
@@ -95,6 +109,7 @@ export interface ManualFulfillmentItem {
 
 export interface ManualFulfillmentForm {
   warehouseId?: number
+  logisticsProductId?: number
   recipientName?: string
   recipientPhone?: string
   recipientAddress?: string
