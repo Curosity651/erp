@@ -12,6 +12,20 @@
         <template #extra><a-button type="primary" @click="retryLoad">重新加载</a-button></template>
       </a-result>
       <template v-else-if="context">
+        <div class="template-toolbar">
+          <div>
+            <div class="template-title">Excel 批量填写</div>
+            <div class="template-hint">下载当前入库单专用模板，填写实际库位和数量后导入。</div>
+          </div>
+          <a-space>
+            <a-button :loading="templateDownloading" @click="downloadTemplate">
+              <Download :size="16" />下载模板
+            </a-button>
+            <a-upload accept=".xlsx" :show-upload-list="false" :before-upload="beforeImportTemplate">
+              <a-button :loading="templateImporting"><Upload :size="16" />导入模板</a-button>
+            </a-upload>
+          </a-space>
+        </div>
         <a-alert :type="totalsMatch ? 'success' : 'error'" show-icon class="quantity-alert">
           <template #message>数量核对：实收 {{ receivedGrandTotal }} 件，已登记 {{ allocatedGrandTotal }} 件</template>
           <template #description>{{ totalsMatch ? '各 SKU 数量一致。' : differenceText }}</template>
@@ -84,8 +98,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
+import { Download, Upload } from 'lucide-vue-next'
 import { isSuccess } from '@/api'
 import { getPutawayRecordContext, recordPutaway } from '@/api/wms/inbound-execution'
 import type { PutawayRecordContextVO, PutawayRecordDTO, PutawayRecordLocationVO, PutawayRecordSkuVO } from '@/api/wms/inbound-execution'
@@ -93,6 +108,7 @@ import type { PurchaseInboundPageVO } from '@/api/wms/purchase-inbound/types'
 import { allocatedQuantity, capacityState, createInitialRow, mergeRecordLines, projectLocationCapacity, requiresCapacityReason } from './putaway-record'
 import type { CapacityProjection, PutawayRecordFormLine } from './putaway-record'
 import { printPutawayReceipt } from './putaway-receipt-print'
+import { downloadPutawayTemplate, parsePutawayTemplateFile, validateTemplateRows } from './putaway-record-excel'
 
 const emits = defineEmits<{ (e: 'success'): void }>()
 const open = ref(false)
@@ -108,6 +124,8 @@ const afterHours = ref(false)
 const afterHoursReason = ref('')
 const detailOpen = ref(false)
 const detailItem = ref<PutawayRecordSkuVO>()
+const templateDownloading = ref(false)
+const templateImporting = ref(false)
 
 const qualityOptions = [{ value: 'GOOD', label: '良品' }, { value: 'DAMAGED', label: '不良品' }]
 const allRows = computed(() => Object.values(allocations.value).flat())
@@ -167,6 +185,63 @@ function splitRow(skuCode: string, index: number) {
   rowsFor(skuCode).splice(index + 1, 0, row)
 }
 function removeRow(skuCode: string, index: number) { rowsFor(skuCode).splice(index, 1) }
+
+async function downloadTemplate() {
+  if (!context.value) return
+  templateDownloading.value = true
+  try {
+    await downloadPutawayTemplate(context.value)
+    message.success('上架模板已下载')
+  } catch (error: any) {
+    message.error(error?.message || '模板下载失败')
+  } finally {
+    templateDownloading.value = false
+  }
+}
+
+async function beforeImportTemplate(file: File) {
+  if (!context.value) return false
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    message.error('仅支持导入 .xlsx 文件')
+    return false
+  }
+  templateImporting.value = true
+  try {
+    const rows = await parsePutawayTemplateFile(file)
+    const result = validateTemplateRows(rows, context.value)
+    if (result.errors.length) {
+      Modal.error({
+        title: '模板校验未通过',
+        width: 680,
+        content: h('div', { class: 'template-errors' }, result.errors.slice(0, 30).map(error => h('div', error)))
+      })
+      return false
+    }
+    const total = result.lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0)
+    Modal.confirm({
+      title: '确认导入上架模板',
+      content: `已校验 ${result.lines.length} 条库位记录、共 ${total} 件。导入后将完全覆盖页面当前填写内容，是否继续？`,
+      okText: '确认覆盖',
+      cancelText: '取消',
+      onOk: () => applyImportedLines(result.lines)
+    })
+  } catch (error: any) {
+    message.error(error?.message || '模板读取失败，请重新下载模板后填写')
+  } finally {
+    templateImporting.value = false
+  }
+  return false
+}
+
+function applyImportedLines(lines: PutawayRecordFormLine[]) {
+  const next: Record<string, PutawayRecordFormLine[]> = {}
+  context.value?.items.forEach(item => { next[item.skuCode] = [] })
+  lines.forEach((line, index) => {
+    next[line.skuCode]?.push({ ...line, key: `excel-${Date.now()}-${index}` })
+  })
+  allocations.value = next
+  message.success('模板已导入，请核对后确认上架记录')
+}
 
 async function openPutaway(record: PurchaseInboundPageVO) {
   currentRecord.value = record
@@ -231,6 +306,11 @@ defineExpose({ open: openPutaway })
 <style scoped>
 .steps { margin-bottom: 16px; }
 .record-alert, .quantity-alert { margin-bottom: 14px; }
+.template-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fafafa; }
+.template-title { font-weight: 600; }
+.template-hint { margin-top: 2px; color: rgba(0, 0, 0, .45); font-size: 12px; }
+.template-toolbar :deep(.ant-btn) { display: inline-flex; align-items: center; gap: 6px; }
+:global(.template-errors) { max-height: 360px; overflow: auto; line-height: 1.8; color: rgba(0, 0, 0, .75); }
 .sku-card { border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 12px; padding: 14px; }
 .sku-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
 .sku-link { font-size: 15px; font-weight: 600; }

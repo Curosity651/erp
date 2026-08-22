@@ -36,6 +36,7 @@
     "crypto-js": "^4.1.1",
     "dayjs": "^1.11.7",
     "echarts": "^6.0.0",
+    "exceljs": "4.4.0",
     "jsbarcode": "^3.12.3",
     "json-bigint": "^1.0.0",
     "jszip": "^3.10.1",
