@@ -28,4 +28,6 @@ public class ShopDetailVO {
 
 	private Long defaultWmsWarehouseId;
 
+	private Long defaultLogisticsProductId;
+
 }

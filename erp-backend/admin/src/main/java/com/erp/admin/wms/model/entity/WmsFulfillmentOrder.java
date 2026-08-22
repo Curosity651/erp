@@ -20,6 +20,14 @@ public class WmsFulfillmentOrder {
 	private Long erpTenantId;
 	private Long warehouseId;
 	private Long shopId;
+	private Long logisticsProductId;
+	private String logisticsProductCode;
+	private String logisticsProductName;
+	private String logisticsProductDescription;
+	private BigDecimal logisticsProductDefaultFee;
+	private BigDecimal logisticsProductActualFee;
+	private String logisticsProductCurrency;
+	private String logisticsFeeAdjustmentReason;
 	private String fulfillmentNo;
 	private String sourceType;
 	private Long sourceOrderId;
@@ -31,6 +39,7 @@ public class WmsFulfillmentOrder {
 	private String recipientAddress;
 	private String carrierCode;
 	private String carrierName;
+	private String shippingMethod;
 	private String trackingNo;
 	private BigDecimal packageWeightKg;
 	private String labelFileUrl;

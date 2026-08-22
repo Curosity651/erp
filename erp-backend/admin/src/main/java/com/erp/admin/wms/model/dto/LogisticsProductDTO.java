@@ -34,6 +34,13 @@ public class LogisticsProductDTO {
     @Schema(title = "统一单价(每次使用)")
     private BigDecimal unitPrice;
 
+    @NotBlank(message = "币种不能为空")
+    @Schema(title = "币种")
+    private String currency;
+
+    @Schema(title = "产品说明")
+    private String productDescription;
+
     @Schema(title = "备注")
     private String remark;
 

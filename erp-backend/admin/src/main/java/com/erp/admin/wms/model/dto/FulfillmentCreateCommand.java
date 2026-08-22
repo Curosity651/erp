@@ -1,5 +1,6 @@
 package com.erp.admin.wms.model.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import lombok.Data;
@@ -11,6 +12,13 @@ public class FulfillmentCreateCommand {
 	private Long erpTenantId;
 	private Long warehouseId;
 	private Long shopId;
+	private Long logisticsProductId;
+	private String logisticsProductCode;
+	private String logisticsProductName;
+	private String logisticsProductDescription;
+	private BigDecimal logisticsProductDefaultFee;
+	private BigDecimal logisticsProductActualFee;
+	private String logisticsProductCurrency;
 	private String sourceType;
 	private Long sourceOrderId;
 	private String sourceOrderNo;

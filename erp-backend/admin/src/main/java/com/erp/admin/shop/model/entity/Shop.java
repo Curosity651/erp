@@ -59,6 +59,9 @@ public class Shop {
 	@Schema(title = "默认内部WMS仓库ID")
 	private Long defaultWmsWarehouseId;
 
+	@Schema(title = "默认物流产品ID")
+	private Long defaultLogisticsProductId;
+
 	/**
 	 * 1 启用 / 0 禁用
 	 */

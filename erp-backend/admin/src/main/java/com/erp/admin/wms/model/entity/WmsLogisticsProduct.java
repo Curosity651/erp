@@ -42,6 +42,12 @@ public class WmsLogisticsProduct {
     @Schema(title = "统一单价(每次使用)")
     private BigDecimal unitPrice;
 
+    @Schema(title = "币种")
+    private String currency;
+
+    @Schema(title = "产品说明")
+    private String productDescription;
+
     @Schema(title = "状态 1启用/0停用")
     private Integer status;
 

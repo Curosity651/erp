@@ -21,4 +21,6 @@ public class CreateOrUpdateShopRequest {
 
 	private Long defaultWmsWarehouseId;
 
+	private Long defaultLogisticsProductId;
+
 }
