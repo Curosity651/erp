@@ -15,6 +15,8 @@ public class ManualFulfillmentDTO {
 	private Long id;
 	@NotNull(message = "仓库不能为空")
 	private Long warehouseId;
+	@NotNull(message = "物流产品不能为空")
+	private Long logisticsProductId;
 	private String recipientName;
 	private String recipientPhone;
 	private String recipientAddress;

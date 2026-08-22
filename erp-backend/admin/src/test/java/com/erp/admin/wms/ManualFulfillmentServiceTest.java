@@ -13,10 +13,12 @@ import com.erp.admin.wms.mapper.WmsFulfillmentOrderMapper;
 import com.erp.admin.wms.model.dto.FulfillmentCreateCommand;
 import com.erp.admin.wms.model.dto.ManualFulfillmentDTO;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
+import com.erp.admin.wms.model.entity.WmsLogisticsProduct;
 import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.service.FulfillmentReservationService;
 import com.erp.admin.wms.service.ManualFulfillmentService;
 import com.erp.admin.wms.service.WarehouseService;
+import com.erp.admin.wms.service.WmsLogisticsProductService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,8 +47,9 @@ class ManualFulfillmentServiceTest {
 		WarehouseSkuCodeService codeService = mock(WarehouseSkuCodeService.class);
 		WarehouseService warehouseService = mock(WarehouseService.class);
 		reservationService = mock(FulfillmentReservationService.class);
+		WmsLogisticsProductService productService = mock(WmsLogisticsProductService.class);
 		service = new ManualFulfillmentService(orderMapper, itemMapper, skuMapper, codeService,
-				warehouseService, reservationService);
+				warehouseService, reservationService, productService);
 		TenantContext.setCurrentTenant(3L);
 		WmsTenantContext.setCurrentWmsTenant(4L);
 		when(orderMapper.insert(any())).thenAnswer(invocation -> {
@@ -57,6 +60,7 @@ class ManualFulfillmentServiceTest {
 		when(itemMapper.insert(any())).thenReturn(1);
 		when(codeService.build(3L, "SKU-A")).thenReturn("JHIN-SKU-A");
 		when(skuMapper.selectBySkuCode("SKU-A")).thenReturn(sku("SKU-A"));
+		when(productService.requireEnabledForOwner(7L, 3L)).thenReturn(product());
 	}
 
 	@AfterEach
@@ -88,6 +92,7 @@ class ManualFulfillmentServiceTest {
 		order.setSourceOrderId(20L);
 		order.setSourceOrderNo("MO-20");
 		order.setFulfillmentStatus(FulfillmentStatus.DRAFT);
+		order.setLogisticsProductId(7L);
 		when(orderMapper.selectForUpdate(91L)).thenReturn(order);
 		when(itemMapper.selectList(any())).thenReturn(Collections.singletonList(snapshot()));
 		when(orderMapper.transit(91L, FulfillmentStatus.DRAFT, FulfillmentStatus.WAITING_SHELF)).thenReturn(1);
@@ -109,9 +114,22 @@ class ManualFulfillmentServiceTest {
 	private ManualFulfillmentDTO dto(java.util.List<ManualFulfillmentDTO.Item> items) {
 		ManualFulfillmentDTO dto = new ManualFulfillmentDTO();
 		dto.setWarehouseId(5L);
+		dto.setLogisticsProductId(7L);
 		dto.setRecipientName("Receiver");
 		dto.setItems(items);
 		return dto;
+	}
+
+	private WmsLogisticsProduct product() {
+		WmsLogisticsProduct product = new WmsLogisticsProduct();
+		product.setId(7L);
+		product.setWmsTenantId(4L);
+		product.setProductCode("STANDARD");
+		product.setProductName("Standard");
+		product.setUnitPrice(new java.math.BigDecimal("20.00"));
+		product.setCurrency("RUB");
+		product.setStatus(1);
+		return product;
 	}
 
 	private ManualFulfillmentDTO.Item item(String skuCode, int quantity) {

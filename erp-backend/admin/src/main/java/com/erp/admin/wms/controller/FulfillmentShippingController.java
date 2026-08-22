@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.erp.admin.wms.model.dto.FulfillmentPackDTO;
+import com.erp.admin.wms.model.dto.FulfillmentLogisticsFeeDTO;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
 import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
 import com.erp.admin.wms.service.FulfillmentShippingService;
@@ -50,6 +51,14 @@ public class FulfillmentShippingController {
 	public ApiResult<Void> pack(@PathVariable("id") Long id,
 			@Validated @RequestBody FulfillmentPackDTO dto) {
 		service.pack(id, dto);
+		return ApiResult.ok();
+	}
+
+	@PostMapping("/{id}/logistics-fee")
+	@PreAuthorize("@per.hasPermission('wms:logistics-product:edit')")
+	public ApiResult<Void> adjustLogisticsFee(@PathVariable("id") Long id,
+			@Validated @RequestBody FulfillmentLogisticsFeeDTO dto) {
+		service.adjustLogisticsFee(id, dto);
 		return ApiResult.ok();
 	}
 

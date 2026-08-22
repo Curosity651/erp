@@ -19,6 +19,7 @@ import com.erp.admin.wms.model.dto.FulfillmentCreateCommand;
 import com.erp.admin.wms.model.dto.ManualFulfillmentDTO;
 import com.erp.admin.wms.model.entity.WmsFulfillmentItem;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
+import com.erp.admin.wms.model.entity.WmsLogisticsProduct;
 import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class ManualFulfillmentService {
 	private final WarehouseSkuCodeService warehouseSkuCodeService;
 	private final WarehouseService warehouseService;
 	private final FulfillmentReservationService reservationService;
+	private final WmsLogisticsProductService logisticsProductService;
 
 	@Transactional(rollbackFor = Exception.class)
 	public Long saveDraft(ManualFulfillmentDTO dto) {
@@ -42,6 +44,8 @@ public class ManualFulfillmentService {
 		warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
 		Long ownerId = requireOwner();
 		Long wmsTenantId = requireWmsTenant();
+		WmsLogisticsProduct product = logisticsProductService
+				.requireEnabledForOwner(dto.getLogisticsProductId(), ownerId);
 		WmsFulfillmentOrder order;
 		if (dto.getId() == null) {
 			long sourceId = IdWorker.getId();
@@ -58,6 +62,7 @@ public class ManualFulfillmentService {
 			order.setVersion(0);
 			order.setDeleted(0L);
 			copyRecipient(order, dto);
+			copyProduct(order, product);
 			Assert.isTrue(orderMapper.insert(order) == 1, "人工出库草稿创建失败");
 		}
 		else {
@@ -66,6 +71,7 @@ public class ManualFulfillmentService {
 			update.setId(order.getId());
 			update.setWarehouseId(dto.getWarehouseId());
 			copyRecipient(update, dto);
+			copyProduct(update, product);
 			Assert.isTrue(orderMapper.updateById(update) == 1, "人工出库草稿更新失败");
 			itemMapper.delete(Wrappers.<WmsFulfillmentItem>lambdaQuery()
 					.eq(WmsFulfillmentItem::getFulfillmentOrderId, order.getId()));
@@ -79,6 +85,7 @@ public class ManualFulfillmentService {
 	public void submit(Long id) {
 		Long ownerId = requireOwner();
 		WmsFulfillmentOrder order = requireOwnedDraft(id, ownerId);
+		logisticsProductService.requireEnabledForOwner(order.getLogisticsProductId(), ownerId);
 		List<WmsFulfillmentItem> items = listItemsInternal(id);
 		Assert.notEmpty(items, "人工出库没有商品");
 		FulfillmentCreateCommand command = toCommand(order, items);
@@ -165,6 +172,13 @@ public class ManualFulfillmentService {
 		command.setSourceType("MANUAL");
 		command.setSourceOrderId(order.getSourceOrderId());
 		command.setSourceOrderNo(order.getSourceOrderNo());
+		command.setLogisticsProductId(order.getLogisticsProductId());
+		command.setLogisticsProductCode(order.getLogisticsProductCode());
+		command.setLogisticsProductName(order.getLogisticsProductName());
+		command.setLogisticsProductDescription(order.getLogisticsProductDescription());
+		command.setLogisticsProductDefaultFee(order.getLogisticsProductDefaultFee());
+		command.setLogisticsProductActualFee(order.getLogisticsProductActualFee());
+		command.setLogisticsProductCurrency(order.getLogisticsProductCurrency());
 		List<FulfillmentCreateCommand.Item> snapshots = new ArrayList<>();
 		for (WmsFulfillmentItem row : items) {
 			FulfillmentCreateCommand.Item item = new FulfillmentCreateCommand.Item();
@@ -195,6 +209,17 @@ public class ManualFulfillmentService {
 		order.setRecipientName(dto.getRecipientName());
 		order.setRecipientPhone(dto.getRecipientPhone());
 		order.setRecipientAddress(dto.getRecipientAddress());
+	}
+
+	private void copyProduct(WmsFulfillmentOrder order, WmsLogisticsProduct product) {
+		order.setLogisticsProductId(product.getId());
+		order.setLogisticsProductCode(product.getProductCode());
+		order.setLogisticsProductName(product.getProductName());
+		order.setLogisticsProductDescription(product.getProductDescription());
+		order.setLogisticsProductDefaultFee(product.getUnitPrice());
+		order.setLogisticsProductActualFee(product.getUnitPrice());
+		order.setLogisticsProductCurrency(product.getCurrency());
+		order.setLogisticsFeeAdjustmentReason(null);
 	}
 
 	private Long requireOwner() {

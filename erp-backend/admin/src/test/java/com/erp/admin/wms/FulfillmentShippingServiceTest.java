@@ -7,6 +7,9 @@ import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.erp.admin.wms.mapper.WmsFulfillmentItemMapper;
 import com.erp.admin.wms.mapper.WmsFulfillmentOrderMapper;
 import com.erp.admin.wms.model.dto.FulfillmentPackDTO;
+import com.erp.admin.wms.model.dto.FulfillmentLogisticsFeeDTO;
+import com.erp.admin.tenant.model.vo.TenantIdentityVO;
+import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
 import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.service.FulfillmentPickingService;
@@ -61,6 +64,21 @@ class FulfillmentShippingServiceTest {
 		service.pack(1L, validPack());
 
 		verify(pickingService).completePackedOrder(1L);
+	}
+
+	@Test
+	void logistics_fee_can_only_be_adjusted_by_the_owning_wms_provider() {
+		TenantIdentityService identityService = mock(TenantIdentityService.class);
+		TenantIdentityVO identity = new TenantIdentityVO();
+		identity.setIdentityType(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
+		identity.setTenantId(-1L);
+		when(identityService.currentIdentity(null)).thenReturn(identity);
+		ReflectionTestUtils.setField(service, "tenantIdentityService", identityService);
+		FulfillmentLogisticsFeeDTO dto = new FulfillmentLogisticsFeeDTO();
+		dto.setAmount(new BigDecimal("30.00"));
+
+		assertThatThrownBy(() -> service.adjustLogisticsFee(1L, dto))
+				.hasMessageContaining("只有WMS服务商");
 	}
 
 	private WmsFulfillmentOrder waitingPackOrder() {

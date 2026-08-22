@@ -19,6 +19,12 @@ ALTER TABLE wms_fulfillment_order
     ADD COLUMN logistics_fee_adjustment_reason VARCHAR(500) NULL AFTER logistics_product_currency,
     ADD COLUMN shipping_method VARCHAR(128) NULL AFTER carrier_name;
 
+ALTER TABLE wms_client_billing_record
+    ADD COLUMN fulfillment_order_id BIGINT NULL AFTER outbound_order_id,
+    ADD COLUMN product_name_snapshot VARCHAR(100) NULL AFTER logistics_product_id,
+    ADD COLUMN product_description_snapshot VARCHAR(2000) NULL AFTER product_name_snapshot,
+    ADD KEY idx_client_billing_fulfillment (fulfillment_order_id);
+
 UPDATE wms_logistics_product
 SET currency = 'RUB'
 WHERE currency IS NULL OR currency = '';

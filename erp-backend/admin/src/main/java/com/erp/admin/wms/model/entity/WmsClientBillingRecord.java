@@ -37,6 +37,9 @@ public class WmsClientBillingRecord {
     @Schema(title = "关联出库单")
     private Long outboundOrderId;
 
+    @Schema(title = "关联履约订单")
+    private Long fulfillmentOrderId;
+
     @Schema(title = "费用类型 SHIPPING/OPERATION")
     private String feeType;
 
@@ -51,6 +54,12 @@ public class WmsClientBillingRecord {
 
     @Schema(title = "物流产品ID")
     private Long logisticsProductId;
+
+    @Schema(title = "物流产品名称快照")
+    private String productNameSnapshot;
+
+    @Schema(title = "物流产品说明快照")
+    private String productDescriptionSnapshot;
 
     @Schema(title = "账期 YYYY-MM")
     private String billMonth;
