@@ -11,4 +11,5 @@ public class FulfillmentPickTaskDetailVO {
 	private WmsFulfillmentPickTask task;
 	private List<WmsFulfillmentPickTaskOrder> orders;
 	private List<WmsFulfillmentPickTaskLine> lines;
+	private FulfillmentPickCurrentOrderVO currentOrder;
 }

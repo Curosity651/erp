@@ -14,6 +14,7 @@ import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
 import com.erp.admin.wms.service.platform.PlatformLabelResult;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
@@ -29,6 +30,9 @@ public class FulfillmentShippingService {
 	private final LocationInventoryService inventoryService;
 	private final WarehouseBillingService billingService;
 	private final TransactionTemplate transactionTemplate;
+
+	@Autowired(required = false)
+	private FulfillmentPickingService pickingService;
 
 	public List<WmsFulfillmentOrder> listWorkOrders() {
 		return orderMapper.selectList(Wrappers.<WmsFulfillmentOrder>lambdaQuery()
@@ -62,14 +66,22 @@ public class FulfillmentShippingService {
 	public void pack(Long fulfillmentId, FulfillmentPackDTO dto) {
 		WmsFulfillmentOrder order = requireStatus(fulfillmentId, FulfillmentStatus.WAITING_PACK);
 		Assert.notNull(order.getLabelVerifiedTime(), "必须先扫描核验当前订单面单");
+		Assert.hasText(dto.getCarrierName(), "承运商不能为空");
+		Assert.hasText(dto.getShippingMethod(), "运输方式不能为空");
+		Assert.hasText(dto.getTrackingNo(), "跟踪号不能为空");
+		Assert.isTrue(dto.getPackageWeightKg() != null
+				&& dto.getPackageWeightKg().signum() > 0, "包裹重量必须大于0");
 		order.setCarrierCode(dto.getCarrierCode());
 		order.setCarrierName(dto.getCarrierName());
+		order.setShippingMethod(dto.getShippingMethod());
 		order.setTrackingNo(dto.getTrackingNo());
 		order.setPackageWeightKg(dto.getPackageWeightKg());
 		order.setPackedTime(LocalDateTime.now());
 		orderMapper.updateById(order);
 		Assert.isTrue(orderMapper.transit(fulfillmentId, FulfillmentStatus.WAITING_PACK,
 				FulfillmentStatus.PACKED) == 1, "订单状态已变化，请刷新后重试");
+		Assert.notNull(pickingService, "拣货任务服务未初始化");
+		pickingService.completePackedOrder(fulfillmentId);
 		progressService.sync(order, FulfillmentStatus.PACKED);
 	}
 

@@ -25,6 +25,7 @@ import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
 import com.erp.admin.wms.model.vo.FulfillmentPickTaskDetailVO;
+import com.erp.admin.wms.model.vo.FulfillmentPickCurrentOrderVO;
 import com.erp.admin.wms.service.platform.PlatformActionResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -187,13 +188,50 @@ public class FulfillmentPickingService {
 		Assert.notNull(task, "拣货任务不存在");
 		FulfillmentPickTaskDetailVO result = new FulfillmentPickTaskDetailVO();
 		result.setTask(task);
-		result.setOrders(taskOrderMapper.selectList(Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+		List<WmsFulfillmentPickTaskOrder> orders = taskOrderMapper.selectList(Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
 				.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskId)
-				.orderByAsc(WmsFulfillmentPickTaskOrder::getSequenceNo)));
-		result.setLines(taskLineMapper.selectList(Wrappers.<WmsFulfillmentPickTaskLine>lambdaQuery()
+				.orderByAsc(WmsFulfillmentPickTaskOrder::getSequenceNo));
+		List<WmsFulfillmentPickTaskLine> lines = taskLineMapper.selectList(Wrappers.<WmsFulfillmentPickTaskLine>lambdaQuery()
 				.eq(WmsFulfillmentPickTaskLine::getTaskId, taskId)
-				.orderByAsc(WmsFulfillmentPickTaskLine::getSequenceNo)));
+				.orderByAsc(WmsFulfillmentPickTaskLine::getSequenceNo));
+		result.setOrders(orders);
+		result.setLines(lines);
+		for (WmsFulfillmentPickTaskOrder candidate : orders) {
+			if ("COMPLETED".equals(candidate.getOrderStatus())) continue;
+			FulfillmentPickCurrentOrderVO current = new FulfillmentPickCurrentOrderVO();
+			current.setTaskOrder(candidate);
+			current.setFulfillmentOrder(orderMapper.selectById(candidate.getFulfillmentOrderId()));
+			List<WmsFulfillmentPickTaskLine> route = new ArrayList<>();
+			for (WmsFulfillmentPickTaskLine line : lines) {
+				if (candidate.getFulfillmentOrderId().equals(line.getFulfillmentOrderId())) route.add(line);
+			}
+			current.setRouteLines(route);
+			result.setCurrentOrder(current);
+			break;
+		}
 		return result;
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void completePackedOrder(Long fulfillmentOrderId) {
+		requireTaskDependencies();
+		List<WmsFulfillmentPickTaskOrder> matches = taskOrderMapper.selectList(
+				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskOrder::getFulfillmentOrderId, fulfillmentOrderId));
+		Assert.isTrue(matches.size() == 1, "履约订单未关联唯一拣货任务");
+		WmsFulfillmentPickTaskOrder taskOrder = matches.get(0);
+		Assert.isTrue("WAITING_PACK".equals(taskOrder.getOrderStatus()), "任务订单尚未取齐或已完成");
+		taskOrder.setOrderStatus("COMPLETED");
+		taskOrderMapper.updateById(taskOrder);
+		long pending = taskOrderMapper.selectCount(Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+				.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskOrder.getTaskId())
+				.ne(WmsFulfillmentPickTaskOrder::getOrderStatus, "COMPLETED"));
+		if (pending == 0) {
+			WmsFulfillmentPickTask task = taskMapper.selectById(taskOrder.getTaskId());
+			Assert.notNull(task, "拣货任务不存在");
+			task.setTaskStatus("COMPLETED");
+			taskMapper.updateById(task);
+		}
 	}
 
 	@Transactional(rollbackFor = Exception.class)
@@ -234,18 +272,11 @@ public class FulfillmentPickingService {
 				.eq(WmsFulfillmentPickTaskLine::getFulfillmentOrderId, order.getId())
 				.ne(WmsFulfillmentPickTaskLine::getLineStatus, "COMPLETED"));
 		if (incomplete > 0) return;
-		current.setOrderStatus("COMPLETED");
+		current.setOrderStatus("WAITING_PACK");
 		taskOrderMapper.updateById(current);
 		Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.PICKING,
 				FulfillmentStatus.WAITING_PACK) == 1, "订单拣货状态更新失败");
 		syncProgress(order, FulfillmentStatus.WAITING_PACK);
-		long pending = taskOrderMapper.selectCount(Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
-				.eq(WmsFulfillmentPickTaskOrder::getTaskId, task.getId())
-				.ne(WmsFulfillmentPickTaskOrder::getOrderStatus, "COMPLETED"));
-		if (pending == 0) {
-			task.setTaskStatus("COMPLETED");
-			taskMapper.updateById(task);
-		}
 	}
 
 	private void requireTaskDependencies() {
