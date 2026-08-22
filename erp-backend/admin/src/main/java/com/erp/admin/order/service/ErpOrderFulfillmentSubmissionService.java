@@ -17,9 +17,11 @@ import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.shop.mapper.ShopMapper;
 import com.erp.admin.shop.model.entity.Shop;
 import com.erp.admin.wms.model.dto.FulfillmentCreateCommand;
+import com.erp.admin.wms.model.entity.WmsLogisticsProduct;
 import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.service.FulfillmentOrderService;
 import com.erp.admin.wms.service.WarehouseService;
+import com.erp.admin.wms.service.WmsLogisticsProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ public class ErpOrderFulfillmentSubmissionService {
 	private final WarehouseSkuCodeService warehouseSkuCodeService;
 	private final WarehouseService warehouseService;
 	private final FulfillmentOrderService fulfillmentOrderService;
+	private final WmsLogisticsProductService logisticsProductService;
 
 	@Transactional(rollbackFor = Exception.class)
 	public Long submit(SubmitFulfillmentDTO dto) {
@@ -54,7 +57,12 @@ public class ErpOrderFulfillmentSubmissionService {
 		Assert.isTrue(erpTenantId != null && erpTenantId > 0, "当前货主身份无效");
 		Assert.notNull(wmsTenantId, "当前货主尚未绑定WMS服务商");
 
-		FulfillmentCreateCommand command = buildCommand(order, erpTenantId, wmsTenantId, warehouseId);
+		Long productId = dto.getLogisticsProductId() != null
+				? dto.getLogisticsProductId() : shop.getDefaultLogisticsProductId();
+		Assert.notNull(productId, "请为店铺设置默认物流产品，或在确认发货时选择");
+		WmsLogisticsProduct product = logisticsProductService.requireEnabledForOwner(productId, erpTenantId);
+
+		FulfillmentCreateCommand command = buildCommand(order, erpTenantId, wmsTenantId, warehouseId, product);
 		Long fulfillmentId = fulfillmentOrderService.createAndReserve(command);
 		FulfillmentStatus currentStatus = fulfillmentOrderService.statusOf(fulfillmentId);
 		ErpOrder update = new ErpOrder();
@@ -79,7 +87,7 @@ public class ErpOrderFulfillmentSubmissionService {
 	}
 
 	private FulfillmentCreateCommand buildCommand(ErpOrder order, Long erpTenantId, Long wmsTenantId,
-			Long warehouseId) {
+			Long warehouseId, WmsLogisticsProduct product) {
 		List<ErpOrderItem> orderItems = orderItemMapper.selectByOrderId(order.getId());
 		Assert.notEmpty(orderItems, "订单没有商品明细");
 		List<FulfillmentCreateCommand.Item> items = new ArrayList<>();
@@ -104,6 +112,13 @@ public class ErpOrderFulfillmentSubmissionService {
 		command.setErpTenantId(erpTenantId);
 		command.setWarehouseId(warehouseId);
 		command.setShopId(order.getShopId());
+		command.setLogisticsProductId(product.getId());
+		command.setLogisticsProductCode(product.getProductCode());
+		command.setLogisticsProductName(product.getProductName());
+		command.setLogisticsProductDescription(product.getProductDescription());
+		command.setLogisticsProductDefaultFee(product.getUnitPrice());
+		command.setLogisticsProductActualFee(product.getUnitPrice());
+		command.setLogisticsProductCurrency(product.getCurrency());
 		command.setSourceType(sourceType(order.getPlatform()));
 		command.setSourceOrderId(order.getId());
 		command.setSourceOrderNo(order.getPlatformOrderId());

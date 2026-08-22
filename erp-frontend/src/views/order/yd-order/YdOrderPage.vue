@@ -148,6 +148,7 @@
   <!-- 确认发货弹窗 -->
   <OrderConfirmModal
     v-model:open="confirmModal.open"
+    v-model:logistics-product-id="confirmModal.logisticsProductId"
     :loading="confirmModal.loading"
     :eligible="confirmModal.eligible"
     :ineligible="confirmModal.ineligible"

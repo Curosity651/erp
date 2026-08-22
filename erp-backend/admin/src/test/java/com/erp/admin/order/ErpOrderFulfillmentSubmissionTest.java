@@ -16,10 +16,14 @@ import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.shop.mapper.ShopMapper;
 import com.erp.admin.shop.model.entity.Shop;
 import com.erp.admin.wms.model.dto.FulfillmentCreateCommand;
+import com.erp.admin.wms.model.entity.WmsLogisticsProduct;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.service.FulfillmentOrderService;
 import com.erp.admin.wms.service.WarehouseService;
+import com.erp.admin.wms.service.WmsLogisticsProductService;
+
+import java.math.BigDecimal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,9 +50,10 @@ class ErpOrderFulfillmentSubmissionTest {
 		WarehouseSkuCodeService warehouseSkuCodeService = mock(WarehouseSkuCodeService.class);
 		WarehouseService warehouseService = mock(WarehouseService.class);
 		FulfillmentOrderService fulfillmentOrderService = mock(FulfillmentOrderService.class);
+		WmsLogisticsProductService logisticsProductService = mock(WmsLogisticsProductService.class);
 		ErpOrderFulfillmentSubmissionService service = new ErpOrderFulfillmentSubmissionService(orderMapper,
 				itemMapper, shopMapper, skuMapper, warehouseSkuCodeService, warehouseService,
-				fulfillmentOrderService);
+				fulfillmentOrderService, logisticsProductService);
 
 		ErpOrder order = new ErpOrder();
 		order.setId(10L);
@@ -59,6 +64,14 @@ class ErpOrderFulfillmentSubmissionTest {
 		Shop shop = new Shop();
 		shop.setId(20L);
 		shop.setDefaultWmsWarehouseId(30L);
+		shop.setDefaultLogisticsProductId(7L);
+		WmsLogisticsProduct product = new WmsLogisticsProduct();
+		product.setId(8L);
+		product.setProductCode("EXPRESS");
+		product.setProductName("加急派送");
+		product.setProductDescription("仓库根据实际包裹选择承运方式");
+		product.setUnitPrice(new BigDecimal("48.00"));
+		product.setCurrency("RUB");
 		ErpOrderItem orderItem = new ErpOrderItem();
 		orderItem.setSkuCode("SKU-A");
 		orderItem.setQuantity(2);
@@ -77,10 +90,12 @@ class ErpOrderFulfillmentSubmissionTest {
 		when(fulfillmentOrderService.createAndReserve(any())).thenReturn(99L);
 		when(fulfillmentOrderService.statusOf(99L)).thenReturn(FulfillmentStatus.WAITING_PICK);
 		when(orderMapper.updateById(any())).thenReturn(1);
+		when(logisticsProductService.requireEnabledForOwner(8L, 3L)).thenReturn(product);
 		TenantContext.setCurrentTenant(3L);
 		WmsTenantContext.setCurrentWmsTenant(4L);
 		SubmitFulfillmentDTO dto = new SubmitFulfillmentDTO();
 		dto.setErpOrderId(10L);
+		dto.setLogisticsProductId(8L);
 
 		assertThat(service.submit(dto)).isEqualTo(99L);
 		ArgumentCaptor<FulfillmentCreateCommand> captor = ArgumentCaptor.forClass(FulfillmentCreateCommand.class);
@@ -88,6 +103,10 @@ class ErpOrderFulfillmentSubmissionTest {
 		assertThat(captor.getValue().getWarehouseId()).isEqualTo(30L);
 		assertThat(captor.getValue().getSourceType()).isEqualTo("OZON");
 		assertThat(captor.getValue().getItems().get(0).getWarehouseSkuCode()).isEqualTo("JHIN-SKU-A");
+		assertThat(captor.getValue().getLogisticsProductId()).isEqualTo(8L);
+		assertThat(captor.getValue().getLogisticsProductName()).isEqualTo("加急派送");
+		assertThat(captor.getValue().getLogisticsProductDefaultFee()).isEqualByComparingTo("48.00");
+		assertThat(captor.getValue().getLogisticsProductActualFee()).isEqualByComparingTo("48.00");
 		ArgumentCaptor<ErpOrder> updateCaptor = ArgumentCaptor.forClass(ErpOrder.class);
 		verify(orderMapper).updateById(updateCaptor.capture());
 		assertThat(updateCaptor.getValue().getWarehouseFulfillmentStatus()).isEqualTo("WAITING_PICK");

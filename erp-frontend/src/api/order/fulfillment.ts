@@ -1,10 +1,15 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult } from '@/api/types'
 
-export function submitOrderFulfillment(erpOrderId: number, wmsWarehouseId?: number) {
+export function submitOrderFulfillment(
+  erpOrderId: number,
+  wmsWarehouseId?: number,
+  logisticsProductId?: number
+) {
   return httpClient.post<ApiResult<number>>('/order/fulfillment/submit', {
     erpOrderId,
-    wmsWarehouseId
+    wmsWarehouseId,
+    logisticsProductId
   })
 }
 

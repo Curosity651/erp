@@ -91,6 +91,13 @@ public class FulfillmentOrderService {
 		order.setErpTenantId(command.getErpTenantId());
 		order.setWarehouseId(command.getWarehouseId());
 		order.setShopId(command.getShopId());
+		order.setLogisticsProductId(command.getLogisticsProductId());
+		order.setLogisticsProductCode(command.getLogisticsProductCode());
+		order.setLogisticsProductName(command.getLogisticsProductName());
+		order.setLogisticsProductDescription(command.getLogisticsProductDescription());
+		order.setLogisticsProductDefaultFee(command.getLogisticsProductDefaultFee());
+		order.setLogisticsProductActualFee(command.getLogisticsProductActualFee());
+		order.setLogisticsProductCurrency(command.getLogisticsProductCurrency());
 		order.setFulfillmentNo("FO-" + sourceType + "-" + command.getSourceOrderId());
 		order.setSourceType(sourceType);
 		order.setSourceOrderId(command.getSourceOrderId());

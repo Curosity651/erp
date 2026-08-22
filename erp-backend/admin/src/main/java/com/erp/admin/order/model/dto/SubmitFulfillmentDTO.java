@@ -9,4 +9,5 @@ public class SubmitFulfillmentDTO {
 	@NotNull(message = "订单不能为空")
 	private Long erpOrderId;
 	private Long wmsWarehouseId;
+	private Long logisticsProductId;
 }

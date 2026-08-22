@@ -12,6 +12,15 @@
       <span>不可确认：{{ ineligible.length }} 单</span>
     </div>
 
+  <a-form-item label="物流产品" class="product-field">
+    <a-select
+      v-model:value="productModel"
+      :options="productOptions"
+      allow-clear
+      placeholder="留空则自动使用每个店铺的默认物流产品"
+    />
+  </a-form-item>
+
     <div v-if="eligible.length" class="confirm-section">
       <div class="confirm-section-title">可确认订单</div>
       <ul class="confirm-list">
@@ -44,7 +53,9 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import type { BaseOrderVO } from '@/api/order/types'
+import { listOwnerLogisticsProducts } from '@/api/wms/logistics-product'
 
 interface Props {
   loading?: boolean
@@ -61,6 +72,18 @@ withDefaults(defineProps<Props>(), {
 })
 
 const openModel = defineModel<boolean>('open', { required: true })
+const productModel = defineModel<number | undefined>('logisticsProductId')
+const productOptions = ref<{ label: string; value: number }[]>([])
+
+watch(openModel, async value => {
+  if (!value || productOptions.value.length) return
+  const response = await listOwnerLogisticsProducts()
+  if (response.code !== 200) return
+  productOptions.value = (response.data || []).map(item => ({
+    label: `${item.productName} (${item.currency || 'RUB'} ${Number(item.unitPrice).toFixed(2)})`,
+    value: item.id
+  }))
+})
 
 defineEmits<{
   confirm: []
@@ -72,6 +95,10 @@ defineEmits<{
   display: flex;
   gap: 16px;
   margin-bottom: 8px;
+}
+
+.product-field {
+  margin: 12px 0;
 }
 
 .confirm-section {

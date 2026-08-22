@@ -29,7 +29,8 @@ export function useOrderConfirm<T extends BaseOrderVO>(options: UseOrderConfirmO
     loading: false,
     total: 0,
     eligible: [] as T[],
-    ineligible: [] as (T & { reason: string })[]
+    ineligible: [] as (T & { reason: string })[],
+    logisticsProductId: undefined as number | undefined
   })
 
   function openConfirmDialog(rows: T[]) {
@@ -61,7 +62,9 @@ export function useOrderConfirm<T extends BaseOrderVO>(options: UseOrderConfirmO
     confirmModal.loading = true
     try {
       const results = await Promise.allSettled(
-        confirmModal.eligible.map(order => submitOrderFulfillment(order.id))
+        confirmModal.eligible.map(order =>
+          submitOrderFulfillment(order.id, undefined, confirmModal.logisticsProductId)
+        )
       )
       const failures = results
         .map((result, index) => ({ result, order: confirmModal.eligible[index] }))
