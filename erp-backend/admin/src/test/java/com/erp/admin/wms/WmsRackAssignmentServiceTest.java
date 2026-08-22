@@ -1,11 +1,27 @@
 package com.erp.admin.wms;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
+import com.erp.admin.platform.finance.mapper.WmsContractRackMapper;
+import com.erp.admin.tenant.mapper.SysTenantMapper;
+import com.erp.admin.wms.mapper.WarehouseMapper;
+import com.erp.admin.wms.mapper.WmsLocationMapper;
+import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
+import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.vo.RackVO;
 import com.erp.admin.wms.service.WmsRackAssignmentService;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * 货架分配纯逻辑测试（C2）：时间段重叠、有效、临期。
@@ -57,6 +73,46 @@ class WmsRackAssignmentServiceTest {
 		assertThat(WmsRackAssignmentService.isExpiringSoon(LocalDate.of(2026, 8, 1), today)).isFalse();
 		// 无结束日 → 不临期
 		assertThat(WmsRackAssignmentService.isExpiringSoon(null, today)).isFalse();
+	}
+
+	@Test
+	void rack_numbers_are_sorted_naturally() {
+		ArrayList<String> rackNos = new ArrayList<>(Arrays.asList("A10", "A2", "A11", "A1", "A3"));
+
+		rackNos.sort(WmsRackAssignmentService::compareRackNo);
+
+		assertThat(rackNos).containsExactly("A1", "A2", "A3", "A10", "A11");
+	}
+
+	@Test
+	void preview_uses_actual_non_shared_logical_locations_without_legacy_generation_state() {
+		WmsLocationMapper locationMapper = mock(WmsLocationMapper.class);
+		WmsPhysicalInventoryMapper inventoryMapper = mock(WmsPhysicalInventoryMapper.class);
+		WarehouseMapper warehouseMapper = mock(WarehouseMapper.class);
+		SysTenantMapper tenantMapper = mock(SysTenantMapper.class);
+		PrincipalAttributeAccessor principalAccessor = mock(PrincipalAttributeAccessor.class);
+		WmsContractRackMapper contractRackMapper = mock(WmsContractRackMapper.class);
+		WmsRackAssignmentMapper assignmentMapper = mock(WmsRackAssignmentMapper.class);
+		WmsRackAssignmentService service = new WmsRackAssignmentService(locationMapper, inventoryMapper,
+				warehouseMapper, tenantMapper, principalAccessor, contractRackMapper);
+		ReflectionTestUtils.setField(service, "baseMapper", assignmentMapper);
+
+		when(locationMapper.listAssignableByWarehouse(53L)).thenReturn(Arrays.asList(
+				location("A1", 0), location("A2", 0)));
+		when(assignmentMapper.listByWarehouse(53L)).thenReturn(Collections.emptyList());
+		when(contractRackMapper.listCurrentBindingsByWarehouse(53L)).thenReturn(Collections.emptyList());
+
+		List<RackVO> preview = service.preview(53L, null, null, null);
+
+		assertThat(preview).extracting(RackVO::getRackNo).containsExactly("A1", "A2");
+	}
+
+	private WmsLocation location(String rackNo, int publicShared) {
+		WmsLocation location = new WmsLocation();
+		location.setRackNo(rackNo);
+		location.setPublicShared(publicShared);
+		location.setIsVirtual(0);
+		return location;
 	}
 
 }

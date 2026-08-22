@@ -1,4 +1,4 @@
-import QRCode from 'qrcode'
+import JsBarcode from 'jsbarcode'
 import type {
   PurchaseInboundDetailVO,
   PurchaseInboundItemVO
@@ -12,6 +12,11 @@ export interface ReceivedGoodsPrintItem {
   actualQuantity: number
 }
 
+export interface ReceivedSkuBarcodeLabelGroup {
+  item: ReceivedGoodsPrintItem
+  barcodeDataUrl: string
+}
+
 const escapeHtml = (value: unknown) =>
   String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -20,18 +25,9 @@ const escapeHtml = (value: unknown) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;')
 
-export function buildWarehouseSkuCode(ownerName: string, skuCode: string) {
-  const normalizedOwner = ownerName?.trim().replaceAll(/\s+/g, '_').toUpperCase()
-  const normalizedSku = skuCode?.trim()
-  if (!normalizedOwner) throw new Error('货主名称未配置，无法生成仓库内部SKU')
-  if (!normalizedSku) throw new Error('SKU编码不能为空')
-  return `${normalizedOwner}-${normalizedSku}`
-}
-
 export function aggregateReceivedGoods(
-  ownerName: string,
   items: Array<
-    Pick<PurchaseInboundItemVO, 'skuCode' | 'actualQuantity' | 'skuBrief'>
+    Pick<PurchaseInboundItemVO, 'skuCode' | 'warehouseSkuCode' | 'actualQuantity' | 'skuBrief'>
   >
 ): ReceivedGoodsPrintItem[] {
   const aggregated = new Map<string, ReceivedGoodsPrintItem>()
@@ -39,6 +35,10 @@ export function aggregateReceivedGoods(
     const actualQuantity = Number(item.actualQuantity || 0)
     if (actualQuantity <= 0) return
     const originalSkuCode = item.skuCode.trim()
+    const warehouseSkuCode = item.warehouseSkuCode?.trim()
+    if (!warehouseSkuCode) {
+      throw new Error(`SKU ${originalSkuCode} 缺少仓库内部编码，请刷新后重试`)
+    }
     const key = originalSkuCode.toUpperCase()
     const existing = aggregated.get(key)
     if (existing) {
@@ -50,13 +50,39 @@ export function aggregateReceivedGoods(
     }
     aggregated.set(key, {
       originalSkuCode,
-      warehouseSkuCode: buildWarehouseSkuCode(ownerName, originalSkuCode),
+      warehouseSkuCode,
       skuName: item.skuBrief?.skuName || '-',
       mainImage: item.skuBrief?.mainImage,
       actualQuantity
     })
   })
   return Array.from(aggregated.values())
+}
+
+interface PrintableImage {
+  complete: boolean
+  addEventListener(type: 'load' | 'error', listener: () => void, options?: { once: boolean }): void
+}
+
+export function waitForImageElements(images: Iterable<PrintableImage>) {
+  return Promise.all(Array.from(images, image => {
+    if (image.complete) return Promise.resolve()
+    return new Promise<void>(resolve => {
+      image.addEventListener('load', resolve, { once: true })
+      image.addEventListener('error', resolve, { once: true })
+    })
+  }))
+}
+
+async function waitForPageAssets(page: Window) {
+  const fonts = page.document.fonts?.ready
+  await Promise.race([
+    Promise.all([
+      waitForImageElements(page.document.images),
+      fonts || Promise.resolve()
+    ]),
+    new Promise<void>(resolve => window.setTimeout(resolve, 10000))
+  ])
 }
 
 function preparePage(page: Window, title: string, message: string) {
@@ -76,9 +102,62 @@ function resolvePage(existingPage: Window | null | undefined, title: string) {
 }
 
 function assertPrintable(detail: PurchaseInboundDetailVO) {
-  const goods = aggregateReceivedGoods(detail.ownerName || '', detail.items || [])
+  const goods = aggregateReceivedGoods(detail.items || [])
   if (!goods.length) throw new Error('该入库单没有实收商品，无法打印')
   return goods
+}
+
+function createCode128DataUrl(value: string) {
+  const canvas = document.createElement('canvas')
+  JsBarcode(canvas, value, {
+    format: 'CODE128',
+    displayValue: false,
+    width: 2,
+    height: 72,
+    margin: 10,
+    background: '#fff',
+    lineColor: '#000'
+  })
+  return canvas.toDataURL('image/png')
+}
+
+export function buildReceivedSkuLabelDocument(groups: ReceivedSkuBarcodeLabelGroup[]) {
+  const labels = groups.flatMap(({ item, barcodeDataUrl }) =>
+    Array.from(
+      { length: item.actualQuantity },
+      () => `<section class="label">
+        <img class="barcode" src="${escapeHtml(barcodeDataUrl)}" alt="${escapeHtml(item.warehouseSkuCode)}">
+        <div class="sku-code${item.warehouseSkuCode.length > 32 ? ' compact' : ''}">${escapeHtml(item.warehouseSkuCode)}</div>
+      </section>`
+    )
+  )
+
+  return `<!doctype html>
+    <html lang="zh-CN"><head><meta charset="UTF-8"><title>商品标签</title>
+    <style>
+      @page { size: 50mm 25mm; margin: 0; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; color: #000; background: #fff; }
+      body { font-family: Arial, "Microsoft YaHei", sans-serif; }
+      .label {
+        width: 50mm; height: 25mm; padding: 1.5mm;
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: flex-start; gap: 0.8mm;
+        page-break-after: always; overflow: hidden;
+      }
+      .label:last-child { page-break-after: auto; }
+      .barcode {
+        display: block; width: auto; max-width: 47mm; height: 17mm;
+        object-fit: contain; flex: 0 0 17mm;
+      }
+      .sku-code {
+        width: 47mm; height: 3.2mm; margin: 0;
+        color: #000; font-size: 7pt; line-height: 3.2mm;
+        font-weight: 500; letter-spacing: 0; text-align: center;
+        white-space: nowrap; overflow: hidden;
+      }
+      .sku-code.compact { font-size: 6pt; }
+    </style></head><body>${labels.join('')}</body></html>`
 }
 
 export async function printReceivedSkuLabels(
@@ -88,53 +167,17 @@ export async function printReceivedSkuLabels(
   const page = resolvePage(existingPage, '商品标签')
   try {
     const goods = assertPrintable(detail)
-    const labelGroups = await Promise.all(
-      goods.map(async item => ({
+    const labelGroups = goods.map(item => ({
         item,
-        qrCode: await QRCode.toDataURL(item.warehouseSkuCode, { margin: 1, width: 260 })
+        barcodeDataUrl: createCode128DataUrl(item.warehouseSkuCode)
       }))
-    )
-    const labels = labelGroups.flatMap(({ item, qrCode }) =>
-      Array.from(
-        { length: item.actualQuantity },
-        (_, index) => `<section class="label">
-          <img class="qr" src="${qrCode}" alt="${escapeHtml(item.warehouseSkuCode)}">
-          <div class="content">
-            <div class="owner">${escapeHtml(detail.ownerName || detail.ownerCode || '-')}</div>
-            <h1>${escapeHtml(item.warehouseSkuCode)}</h1>
-            <div class="name">${escapeHtml(item.skuName)}</div>
-            <div class="meta"><b>原始 SKU：</b>${escapeHtml(item.originalSkuCode)}</div>
-            <div class="meta"><b>入库单：</b>${escapeHtml(detail.inboundNo)}</div>
-            <div class="copy">第 ${index + 1} / ${item.actualQuantity} 件</div>
-          </div>
-        </section>`
-      )
-    )
 
     page.document.open()
-    page.document.write(`<!doctype html>
-      <html lang="zh-CN"><head><meta charset="UTF-8"><title>商品标签</title>
-      <style>
-        @page { size: 80mm 50mm; margin: 0; }
-        * { box-sizing: border-box; }
-        body { margin: 0; color: #111; font-family: Arial, "Microsoft YaHei", sans-serif; }
-        .label {
-          position: relative; width: 80mm; height: 50mm; padding: 3.5mm;
-          display: grid; grid-template-columns: 29mm 1fr; gap: 3mm;
-          align-items: center; page-break-after: always; overflow: hidden;
-        }
-        .label:last-child { page-break-after: auto; }
-        .qr { width: 28mm; height: 28mm; }
-        .content { min-width: 0; }
-        .owner { font-size: 9pt; font-weight: 700; margin-bottom: 1mm; }
-        h1 { margin: 0 0 1mm; font-size: 13pt; line-height: 1.12; overflow-wrap: anywhere; }
-        .name { font-size: 9pt; line-height: 1.3; margin-bottom: 1mm; max-height: 8mm; overflow: hidden; }
-        .meta { font-size: 7.5pt; line-height: 1.35; overflow-wrap: anywhere; }
-        .copy { position: absolute; right: 3mm; bottom: 2mm; color: #666; font-size: 7pt; }
-      </style></head><body>${labels.join('')}</body></html>`)
+    page.document.write(buildReceivedSkuLabelDocument(labelGroups))
     page.document.close()
     page.focus()
-    window.setTimeout(() => page.print(), 300)
+    await waitForPageAssets(page)
+    page.print()
     return true
   } catch (error) {
     page.close()
@@ -210,7 +253,8 @@ export async function printReceivedGoodsReference(
       </body></html>`)
     page.document.close()
     page.focus()
-    window.setTimeout(() => page.print(), 700)
+    await waitForPageAssets(page)
+    page.print()
     return true
   } catch (error) {
     page.close()

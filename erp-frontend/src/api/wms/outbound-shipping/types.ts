@@ -21,6 +21,7 @@ export type PackMode =
 /** 出库单明细（打包签出视角） */
 export interface PackShipItemVO {
   skuCode: string
+  warehouseSkuCode?: string
   skuName?: string
   qty: number
   sortedQty?: number
@@ -111,6 +112,67 @@ export interface PackageScanDTO {
   scanCode: string
   quantity: number
   manual?: boolean
+  manualReason?: string
+}
+
+export interface PackageLabelScanDTO {
+  outboundOrderId: number
+  packageId: number
+  scanCode: string
+}
+
+export type PackageWorkStatus = 'PENDING_PACK' | 'PACKED' | 'SHIPPED'
+
+export interface PackShipPackageQO {
+  keyword?: string
+  platform?: string
+  workStatus?: PackageWorkStatus
+  erpTenantId?: number
+  wmsTenantId?: number
+  createTimeStart?: string
+  createTimeEnd?: string
+}
+
+export interface PackShipPackagePageVO {
+  id: number
+  outboundOrderId: number
+  outboundNo: string
+  erpOrderId: number
+  platformOrderId: string
+  platform: string
+  shopId?: number
+  shopName?: string
+  erpTenantId: number
+  ownerName: string
+  operatorId?: number
+  operatorName?: string
+  warehouseName: string
+  sortSlotId?: number
+  sortSlotScanCode?: string
+  sortCode?: string
+  skuKinds: number
+  totalQty: number
+  labelStatus: string
+  packStatus: 'PENDING' | 'PACKED'
+  shipStatus: 'PENDING' | 'SHIPPED'
+  workStatus: PackageWorkStatus
+  documentMode?: 'WAREHOUSE_PRINT' | 'OWNER_PROVIDED'
+  defaultChannelCode?: string
+  channelCode?: string
+  channelName?: string
+  trackingNo?: string
+  weight?: number
+  packerName?: string
+  shippedByName?: string
+  createTime: string
+}
+
+export interface ShipPackageDTO {
+  outboundOrderId: number
+  packageId: number
+  channel: string
+  trackingNo?: string
+  weight: number
 }
 
 export interface OzonActVO {
@@ -125,6 +187,29 @@ export interface OzonActBatchVO {
   batchNo: string
   acts: OzonActVO[]
   failed: Array<{ orderId: number; platformOrderId: string; reason: string }>
+}
+
+export interface LabelBatchFileVO {
+  fileId: number
+  fileName: string
+  downloadUrl?: string
+}
+
+export interface LabelBatchFailedItemVO {
+  orderId: number
+  platformOrderId?: string
+  errorMsg?: string
+}
+
+export interface LabelBatchVO {
+  batchId: number
+  batchNo: string
+  status: 'CREATED' | 'GENERATED' | 'PARTIAL' | 'FAILED'
+  totalOrders: number
+  successCount: number
+  failedCount: number
+  files: LabelBatchFileVO[]
+  failedItems: LabelBatchFailedItemVO[]
 }
 
 /** 签出入参 */

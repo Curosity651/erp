@@ -32,6 +32,9 @@ export interface WarehouseStructure {
   /** 已分配的服务商名称（当前有效，去重） */
   assignedOperatorNames?: string[]
   actualPhysicalLocationCount?: number
+  actualRackCount?: number
+  assignableRackCount?: number
+  locationConfigured?: boolean
   actualPalletSlotCount?: number
   activePalletCount?: number
   unfinishedTransferCount?: number

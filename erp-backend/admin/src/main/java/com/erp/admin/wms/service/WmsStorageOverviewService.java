@@ -3,7 +3,7 @@ package com.erp.admin.wms.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 
@@ -25,6 +25,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class WmsStorageOverviewService {
 
+	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+
 	/** 临期阈值（天），与货架分配一致。 */
 	private static final int EXPIRING_DAYS = 30;
 
@@ -33,7 +35,7 @@ public class WmsStorageOverviewService {
 	/** 汇总 + 仓库列表。 */
 	public StorageOverviewVO summary() {
 		Long wmsTenantId = WmsTenantContext.getCurrentWmsTenant();
-		LocalDate today = LocalDate.now(ZoneOffset.UTC);
+		LocalDate today = LocalDate.now(BUSINESS_ZONE);
 		StorageOverviewVO vo = new StorageOverviewVO();
 		if (wmsTenantId == null) {
 			vo.setWarehouseCount(0);
@@ -73,7 +75,7 @@ public class WmsStorageOverviewService {
 		if (wmsTenantId == null) {
 			return Collections.emptyList();
 		}
-		LocalDate today = LocalDate.now(ZoneOffset.UTC);
+		LocalDate today = LocalDate.now(BUSINESS_ZONE);
 		List<RackRow> rows = mapper.listRacks(wmsTenantId, warehouseId, today);
 		for (RackRow r : rows) {
 			r.setOccupancyRate(rate(r.getOccupiedCount(), nz(r.getLocationCount())));
@@ -88,7 +90,7 @@ public class WmsStorageOverviewService {
 		if (wmsTenantId == null) {
 			return Collections.emptyList();
 		}
-		LocalDate today = LocalDate.now(ZoneOffset.UTC);
+		LocalDate today = LocalDate.now(BUSINESS_ZONE);
 		List<OwnerRow> rows = mapper.listOwners(wmsTenantId, warehouseId, today);
 		long total = 0;
 		for (OwnerRow r : rows) {

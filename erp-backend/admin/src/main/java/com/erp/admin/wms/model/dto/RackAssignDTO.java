@@ -9,6 +9,7 @@ import lombok.Data;
 
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.DecimalMin;
 
 /**
  * 货架分配请求（C2）。可一次给多排分配（每排一条记录）。
@@ -32,6 +33,7 @@ public class RackAssignDTO {
 	private List<String> rackNos;
 
 	@NotNull(message = "月租金不能为空")
+	@DecimalMin(value = "0.00", message = "月租金不能小于0")
 	@Schema(title = "月租金(CNY)")
 	private BigDecimal monthlyFee;
 

@@ -46,8 +46,8 @@
           <a @click="handleViewDetail(record)">查看</a>
           <template v-if="record.orderStatus === 'PENDING_OWNER'">
             <confirm-text-button
-              title="确认销毁这批货物吗？确认后将真正扣减库存，不可撤销。"
-              text="确认销毁"
+              title="同意仓库报废这批货物吗？同意后进入待仓库销毁，暂不扣减库存。"
+              text="同意报废"
               @confirm="handleConfirm(record)"
             />
             <a style="color: #ff4d4f" @click="openReject(record)">驳回</a>
@@ -67,6 +67,7 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { message } from 'ant-design-vue'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
@@ -122,7 +123,7 @@ const columns: ProColumns[] = [
 const handleViewDetail = (r: AdjustmentPageVO) => detailRef.value?.open(r.id)
 const handleConfirm = (r: AdjustmentPageVO) => {
   doRequest(ownerConfirmScrap(r.id), {
-    successMessage: '已确认销毁，库存已扣减',
+    successMessage: '已同意报废，等待仓库实际销毁',
     onSuccess: () => reloadTable()
   })
 }
@@ -139,6 +140,10 @@ const openReject = (r: AdjustmentPageVO) => {
 }
 const doReject = () => {
   if (!rejectTarget.value) return
+  if (!rejectReason.value?.trim()) {
+    message.warning('请填写驳回原因')
+    return
+  }
   rejecting.value = true
   doRequest(ownerRejectScrap(rejectTarget.value.id, rejectReason.value), {
     successMessage: '已驳回',

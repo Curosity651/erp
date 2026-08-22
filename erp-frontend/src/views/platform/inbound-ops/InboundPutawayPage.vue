@@ -1,5 +1,5 @@
 <template>
-  <a-card :bordered="false" style="margin-bottom: 16px">
+  <a-card :bordered="false" class="search-card">
     <a-form :model="searchModel" layout="inline" class="inbound-search">
       <a-form-item label="入库单号">
         <a-input
@@ -42,6 +42,15 @@
           :operator-id="searchModel.wmsTenantId"
         />
       </a-form-item>
+      <a-form-item label="操作员">
+        <user-select
+          v-model:value="searchModel.putawayBy"
+          placeholder="全部"
+          :options="userOptions"
+          :loading="usersLoading"
+          style="width: 140px"
+        />
+      </a-form-item>
       <a-form-item class="search-actions-item">
         <search-actions :loading="tableRef?.loading" @search="searchTable" @reset="resetSearch" />
       </a-form-item>
@@ -54,7 +63,7 @@
     row-key="id"
     :request="tableRequest"
     :columns="columns"
-    :scroll="{ x: 1100 }"
+    :scroll="{ x: 1240 }"
     size="middle"
   >
     <template #bodyCell="{ column, record }">
@@ -66,7 +75,10 @@
           <a v-if="record.orderStatus === InboundStatus.RECEIVED" @click="openPutaway(record)">
             上架
           </a>
-          <span v-else style="color: rgba(0, 0, 0, 0.25)">已上架</span>
+          <a v-else-if="record.orderStatus === InboundStatus.COMPLETED" @click="openDetail(record)">
+            详情
+          </a>
+          <span v-else style="color: rgba(0, 0, 0, 0.25)">不可操作</span>
         </operation-group>
       </template>
     </template>
@@ -74,10 +86,11 @@
 
   <!-- 上架作业抽屉 -->
   <putaway-drawer ref="putawayDrawerRef" @success="reloadTable" />
+  <putaway-detail-drawer ref="putawayDetailDrawerRef" />
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import { OperationGroup } from '@/components/Operation'
@@ -89,10 +102,14 @@ import { InboundStatus, InboundStatusMap } from '@/api/wms/purchase-inbound/type
 import InboundStatusBadge from '@/views/wms/purchase-inbound/components/InboundStatusBadge.vue'
 import WmsOperatorSelect from '@/components/Lov/WmsOperatorSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
+import UserSelect from '@/components/Lov/UserSelect.vue'
+import { useUserData } from '@/hooks/use-user-data'
 import PutawayDrawer from './PutawayDrawer.vue'
+import PutawayDetailDrawer from './PutawayDetailDrawer.vue'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 
 const tableRef = ref<ProTableInstanceExpose>()
+const { allUsers: userOptions, loading: usersLoading, loadAllUsers } = useUserData()
 
 // 上架页覆盖「已收货/已完成」：上架后单据保留在本页（状态变已完成），只是上架动作不再可点
 const PUTAWAY_SCOPE = [InboundStatus.RECEIVED, InboundStatus.COMPLETED]
@@ -102,7 +119,8 @@ const searchModel = reactive<PurchaseInboundQO>({
   inboundNo: undefined,
   orderStatus: undefined,
   wmsTenantId: undefined,
-  erpTenantId: undefined
+  erpTenantId: undefined,
+  putawayBy: undefined
 })
 // 日期范围（[开始, 结束]，value-format 已转字符串）
 const dateRange = ref<[string, string]>()
@@ -123,6 +141,7 @@ const tableRequest: TableRequest = (params, sorter, filter) => {
     inboundNo: searchParams.inboundNo,
     wmsTenantId: searchParams.wmsTenantId,
     erpTenantId: searchParams.erpTenantId,
+    putawayBy: searchParams.putawayBy,
     inboundDateStart: searchParams.inboundDateStart,
     inboundDateEnd: searchParams.inboundDateEnd,
     ...statusFilter
@@ -144,6 +163,7 @@ const resetSearch = () => {
   searchModel.orderStatus = undefined
   searchModel.wmsTenantId = undefined
   searchModel.erpTenantId = undefined
+  searchModel.putawayBy = undefined
   dateRange.value = undefined
   searchTable()
 }
@@ -153,13 +173,24 @@ const columns: ProColumns[] = [
   { title: '货主', dataIndex: 'ownerName', key: 'ownerName', width: 140, ellipsis: true },
   { title: '服务商', dataIndex: 'operatorName', key: 'operatorName', width: 140, ellipsis: true },
   { title: '仓库', dataIndex: 'warehouseName', key: 'warehouseName', width: 180 },
+  {
+    title: '操作员',
+    dataIndex: 'putawayByName',
+    key: 'putawayByName',
+    width: 90,
+    ellipsis: true
+  },
   { title: '状态', key: 'status', width: 110, align: 'center' },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
   { title: '操作', key: 'operate', width: 120, align: 'center', fixed: 'right' }
 ]
 
 const putawayDrawerRef = ref<InstanceType<typeof PutawayDrawer>>()
+const putawayDetailDrawerRef = ref<InstanceType<typeof PutawayDetailDrawer>>()
 const openPutaway = (record: PurchaseInboundPageVO) => putawayDrawerRef.value?.open(record)
+const openDetail = (record: PurchaseInboundPageVO) => putawayDetailDrawerRef.value?.open(record)
+
+onMounted(loadAllUsers)
 </script>
 
 <script lang="ts">
@@ -169,18 +200,31 @@ export default {
 </script>
 
 <style scoped>
-/* 搜索栏：所有筛选项一排排列，查询/重置按钮靠右对齐 */
+.search-card {
+  margin-bottom: 16px;
+}
+.search-card :deep(.ant-card-body) {
+  min-width: 0;
+}
+/* 根据可用宽度自然换行；每个“标签 + 控件”始终作为完整单元排列。 */
 .inbound-search {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  row-gap: 8px;
+  gap: 16px 20px;
 }
 .inbound-search :deep(.ant-form-item) {
-  margin-right: 12px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.inbound-search :deep(.ant-form-item-row) {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.inbound-search :deep(.ant-form-item-label) {
+  flex: 0 0 auto;
 }
 .inbound-search .search-actions-item {
-  margin-left: auto;
-  margin-right: 0;
+  margin: 0;
 }
 </style>

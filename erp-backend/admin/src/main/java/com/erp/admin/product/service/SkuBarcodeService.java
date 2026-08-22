@@ -69,6 +69,10 @@ public class SkuBarcodeService {
 			return null;
 		}
 		String code = scanCode.trim();
+		String warehouseSkuCode = warehouseSkuCodeService.extractSkuCode(erpTenantId, code);
+		if (warehouseSkuCode != null) {
+			return warehouseSkuCode;
+		}
 		return TenantContext.runAs(erpTenantId, () -> {
 			SkuBarcode barcode = barcodeMapper.selectByBarcode(code);
 			return barcode == null ? null : barcode.getSkuCode();

@@ -7,6 +7,7 @@ import java.util.List;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.erp.admin.product.mapper.SkuMapper;
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
@@ -22,6 +23,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class LocationRecommendationServiceTest {
+
+	@Test
+	void recommend_reads_sku_in_the_owner_tenant_context() {
+		WmsLocationMapper locationMapper = mock(WmsLocationMapper.class);
+		WmsLocationInventoryMapper inventoryMapper = mock(WmsLocationInventoryMapper.class);
+		SkuMapper skuMapper = mock(SkuMapper.class);
+		when(skuMapper.selectBySkuCode("SKU-A")).thenAnswer(invocation ->
+				Long.valueOf(6L).equals(TenantContext.getCurrentTenant())
+						? sku("SKU-A", 100, 100, 100, 1000) : null);
+		when(locationMapper.listByWarehouse(9L)).thenReturn(Collections.emptyList());
+		LocationCapacityService capacityService = new LocationCapacityService(locationMapper, inventoryMapper, skuMapper);
+		LocationRecommendationService service = new LocationRecommendationService(locationMapper, skuMapper,
+				capacityService);
+
+		assertThat(service.recommend(9L, 6L, "SKU-A", 1, "GOOD")).isEmpty();
+	}
 
 	@Test
 	void recommend_uses_the_best_of_six_box_rotations_and_includes_public_temp_locations() {

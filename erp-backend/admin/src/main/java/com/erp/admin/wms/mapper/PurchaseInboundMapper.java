@@ -16,6 +16,7 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
 
 import java.util.Collection;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * 采购入库单 Mapper
@@ -46,6 +47,10 @@ public interface PurchaseInboundMapper extends ExtendMapper<PurchaseInboundOrder
      * @return PurchaseInboundOrder 入库单
      */
     PurchaseInboundOrder selectByInboundNo(@Param("inboundNo") String inboundNo, @Param("excludeId") Long excludeId);
+
+    PurchaseInboundOrder selectByIdForUpdate(@Param("id") Long id);
+
+    PurchaseInboundOrder selectSubmittedByInboundNo(@Param("inboundNo") String inboundNo);
 
 
     /**
@@ -99,6 +104,14 @@ public interface PurchaseInboundMapper extends ExtendMapper<PurchaseInboundOrder
                 .set(PurchaseInboundOrder::getOrderStatus, next)
                 .eq(PurchaseInboundOrder::getId, id)
                 .eq(PurchaseInboundOrder::getOrderStatus, expect));
+    }
+
+    default int recordPutawayOperator(Long id, Long userId, LocalDateTime putawayTime) {
+        return this.update(null, WrappersX.lambdaUpdate(PurchaseInboundOrder.class)
+                .set(PurchaseInboundOrder::getPutawayBy, userId)
+                .set(PurchaseInboundOrder::getPutawayTime, putawayTime)
+                .eq(PurchaseInboundOrder::getId, id)
+                .eq(PurchaseInboundOrder::getOrderStatus, "COMPLETED"));
     }
 
 }

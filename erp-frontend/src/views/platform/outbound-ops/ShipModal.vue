@@ -47,7 +47,7 @@
           <a-input-number v-model:value="weight" :min="0.01" :step="0.1" style="width: 180px" />
         </a-form-item>
         <a-divider orientation="left" plain>仓储操作计费</a-divider>
-        <a-form-item v-if="order.handlingPreview?.wholePallets.length" label="整托">
+        <a-form-item v-if="order?.handlingPreview?.wholePallets?.length" label="整托">
           <a-checkbox-group v-model:value="fullPalletIds">
             <a-space direction="vertical">
               <a-checkbox

@@ -12,6 +12,7 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.apache.ibatis.annotations.Select;
 
 /**
  * 月度应收账单 Mapper：账单头 CRUD + 计费聚合（货架租金/操作费/折扣/服务商列表）。
@@ -44,5 +45,10 @@ public interface WmsMonthlyBillMapper extends ExtendMapper<WmsMonthlyBill> {
 
     /** 服务商费率折扣百分比（无则返回 null） */
     BigDecimal selectDiscountPct(@Param("wmsTenantId") Long wmsTenantId);
+
+    @Select("SELECT COALESCE(SUM(total_amount), 0) FROM wms_monthly_bill "
+            + "WHERE wms_tenant_id = #{wmsTenantId} AND status <> 'PAID' "
+            + "AND total_amount > 0 AND deleted = 0")
+    BigDecimal sumUnpaidAmount(@Param("wmsTenantId") Long wmsTenantId);
 
 }

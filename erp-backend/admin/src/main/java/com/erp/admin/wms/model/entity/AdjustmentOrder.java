@@ -44,13 +44,13 @@ public class AdjustmentOrder {
 	@Schema(title = "调整原因")
 	private String adjustmentReason;
 
-	@Schema(title = "状态: PENDING_OWNER-待货主确认 / SCRAPPED-已销毁 / REJECTED-已驳回 / CANCELLED-已取消")
+	@Schema(title = "状态: PENDING_OWNER-待货主确认 / PENDING_DESTROY-待仓库销毁 / SCRAPPED-已销毁 / REJECTED-已驳回 / CANCELLED-已取消")
 	private String orderStatus;
 
-	@Schema(title = "平台发起人/确认时间（沿用旧字段：记录货主确认）")
+	@Schema(title = "仓库实际销毁时间")
 	private LocalDateTime confirmTime;
 
-	@Schema(title = "确认人")
+	@Schema(title = "仓库实际销毁操作人")
 	private Long confirmBy;
 
 	@Schema(title = "货主确认/驳回时间")

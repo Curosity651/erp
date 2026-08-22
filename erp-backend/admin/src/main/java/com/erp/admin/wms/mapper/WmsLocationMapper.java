@@ -3,9 +3,11 @@ package com.erp.admin.wms.mapper;
 import java.util.List;
 
 import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.vo.WarehouseLocationSummaryVO;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 
@@ -15,6 +17,28 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
  * @author erp
  */
 public interface WmsLocationMapper extends ExtendMapper<WmsLocation> {
+
+	@Select("<script>"
+			+ "SELECT * FROM wms_location "
+			+ "WHERE warehouse_id = #{warehouseId} AND is_virtual = 0 AND deleted = 0 "
+			+ "AND id IN "
+			+ "<foreach collection='locationIds' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
+			+ "ORDER BY id FOR UPDATE"
+			+ "</script>")
+	List<WmsLocation> selectPhysicalByIdsForUpdate(@Param("warehouseId") Long warehouseId,
+			@Param("locationIds") List<Long> locationIds);
+
+	@Update("<script>"
+			+ "UPDATE wms_location SET zone_id = #{zoneId} "
+			+ "WHERE warehouse_id = #{warehouseId} AND is_virtual = 0 AND deleted = 0 "
+			+ "AND id IN "
+			+ "<foreach collection='locationIds' item='id' open='(' separator=',' close=')'>#{id}</foreach>"
+			+ "</script>")
+	int updateZoneBatch(@Param("warehouseId") Long warehouseId, @Param("locationIds") List<Long> locationIds,
+			@Param("zoneId") Long zoneId);
+
+	@Select("SELECT * FROM wms_location WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+	WmsLocation selectByIdForUpdate(@Param("id") Long id);
 
 	@Select("SELECT * FROM wms_location WHERE id = #{id} AND deleted = 0 FOR UPDATE")
 	WmsLocation selectLogicalByIdForUpdate(@Param("id") Long id);
@@ -48,6 +72,28 @@ public interface WmsLocationMapper extends ExtendMapper<WmsLocation> {
 			.orderByAsc(WmsLocation::getColumnNo));
 	}
 
+	default List<WmsLocation> listAssignableByWarehouse(Long warehouseId) {
+		return this.selectList(WrappersX.lambdaQueryX(WmsLocation.class)
+			.eq(WmsLocation::getWarehouseId, warehouseId)
+			.eq(WmsLocation::getIsVirtual, 0)
+			.and(query -> query.isNull(WmsLocation::getPublicShared)
+				.or()
+				.eq(WmsLocation::getPublicShared, 0))
+			.orderByAsc(WmsLocation::getRackNo)
+			.orderByAsc(WmsLocation::getColumnNo));
+	}
+
+	@Select("<script>"
+			+ "SELECT warehouse_id AS warehouseId, COUNT(*) AS actualLocationCount, "
+			+ "COUNT(DISTINCT rack_no) AS actualRackCount, "
+			+ "COUNT(DISTINCT CASE WHEN is_virtual = 0 AND COALESCE(public_shared, 0) = 0 "
+			+ "THEN rack_no END) AS assignableRackCount "
+			+ "FROM wms_location WHERE deleted = 0 AND warehouse_id IN "
+			+ "<foreach collection='warehouseIds' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
+			+ "GROUP BY warehouse_id"
+			+ "</script>")
+	List<WarehouseLocationSummaryVO> summarizeByWarehouseIds(@Param("warehouseIds") List<Long> warehouseIds);
+
 	/**
 	 * 删除某仓库全部库位（重新生成前清旧）——<b>物理删除</b>。
 	 * <p>WmsLocation 带 {@code @TableLogic}，若走常规逻辑删除只会把旧行标 deleted=1、仍占用唯一索引
@@ -61,6 +107,10 @@ public interface WmsLocationMapper extends ExtendMapper<WmsLocation> {
 
 	@Delete("DELETE FROM wms_location WHERE warehouse_id = #{warehouseId} AND is_virtual = 0")
 	int deletePhysicalByWarehouse(@Param("warehouseId") Long warehouseId);
+
+	@Delete("DELETE FROM wms_location "
+			+ "WHERE id = #{id} AND warehouse_id = #{warehouseId} AND is_virtual = 1")
+	int deleteVirtualById(@Param("id") Long id, @Param("warehouseId") Long warehouseId);
 
 	/**
 	 * 统计仓库下库位数。

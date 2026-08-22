@@ -2,6 +2,10 @@ package com.erp.admin.platform.finance.controller;
 
 import com.erp.admin.platform.finance.model.dto.DisputeBillDTO;
 import com.erp.admin.platform.finance.model.dto.GenerateBillDTO;
+import com.erp.admin.platform.finance.model.dto.ManualBillingDTO;
+import com.erp.admin.platform.finance.model.dto.PayBillDTO;
+import com.erp.admin.platform.finance.model.entity.WmsBillingRecord;
+import com.erp.admin.platform.finance.model.entity.WmsFeeRateCard;
 import com.erp.admin.platform.finance.model.qo.MonthlyBillQO;
 import com.erp.admin.platform.finance.model.vo.GenerateBillResultVO;
 import com.erp.admin.platform.finance.model.vo.MonthlyBillVO;
@@ -20,6 +24,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import java.util.List;
 
 /**
  * 平台财务·应收账单控制器（链路一，业务需求 1.7）。仅平台身份（service 内二次校验）。
@@ -48,6 +54,20 @@ public class MonthlyBillController {
         return ApiResult.ok(monthlyBillService.getDetail(id));
     }
 
+    @Operation(summary = "查询服务商当前有效收费标准")
+    @GetMapping("/rates")
+    @PreAuthorize("hasAuthority('platform-finance:bill:oper')")
+    public ApiResult<List<WmsFeeRateCard>> rates(@RequestParam Long wmsTenantId) {
+        return ApiResult.ok(monthlyBillService.listRates(wmsTenantId));
+    }
+
+    @Operation(summary = "登记配送、退货和验货补充费用")
+    @PostMapping("/manual-charge")
+    @PreAuthorize("hasAuthority('platform-finance:bill:oper')")
+    public ApiResult<WmsBillingRecord> manualCharge(@Validated @RequestBody ManualBillingDTO dto) {
+        return ApiResult.ok(monthlyBillService.addManualCharge(dto));
+    }
+
     @Operation(summary = "生成/重算账单(草稿覆盖，已确认/已付款跳过)")
     @PostMapping("/generate")
     @PreAuthorize("hasAuthority('platform-finance:bill:oper')")
@@ -65,8 +85,9 @@ public class MonthlyBillController {
     @Operation(summary = "已确认→已付款")
     @PostMapping("/{id}/pay")
     @PreAuthorize("hasAuthority('platform-finance:bill:oper')")
-    public ApiResult<MonthlyBillVO> pay(@PathVariable("id") Long id) {
-        return ApiResult.ok(monthlyBillService.pay(id));
+    public ApiResult<MonthlyBillVO> pay(@PathVariable("id") Long id,
+            @Validated @RequestBody PayBillDTO dto) {
+        return ApiResult.ok(monthlyBillService.pay(id, dto.getPaymentVoucherFileId()));
     }
 
     @Operation(summary = "已确认→争议")

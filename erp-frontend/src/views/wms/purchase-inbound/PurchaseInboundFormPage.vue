@@ -43,7 +43,8 @@
         <a-row :gutter="16">
           <a-col :xs="24" :sm="12">
             <a-form-item
-              label="入库单号"
+              label="货主入库单号"
+              extra="保存后系统会自动拼接货主名称，例如 JHIN-RK-001"
               name="inboundNo"
               :rules="[
                 { required: true, message: '请输入入库单号', trigger: 'blur' },

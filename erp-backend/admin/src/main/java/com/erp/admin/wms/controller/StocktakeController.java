@@ -13,6 +13,7 @@ import com.erp.admin.wms.model.vo.StocktakeItemVO;
 import com.erp.admin.wms.model.vo.StocktakePageVO;
 import com.erp.admin.wms.model.vo.StocktakeProgressVO;
 import com.erp.admin.wms.model.vo.StocktakeLocationTaskVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.service.StocktakeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -191,6 +192,13 @@ public class StocktakeController {
 		return ApiResult.ok();
 	}
 
+	@Operation(summary = "查询盘点后需要重新打印的托盘标签")
+	@GetMapping("/pallets")
+	@PreAuthorize("@per.hasPermission('wms:stocktake:read')")
+	public ApiResult<List<PalletSummaryVO>> pallets(@RequestParam Long id) {
+		return ApiResult.ok(stocktakeService.listPrintablePallets(id));
+	}
+
 	/**
 	 * 取消盘点
 	 * 
@@ -304,8 +312,9 @@ public class StocktakeController {
 	@PreAuthorize("@per.hasPermission('wms:stocktake:read')")
 	public ApiResult<List<AvailableSkuVO>> getSelectableSkus(
 			@RequestParam Long warehouseId,
-			@RequestParam(required = false) Long stocktakeId) {
-		return ApiResult.ok(stocktakeService.getSelectableSkus(warehouseId, stocktakeId));
+			@RequestParam(required = false) Long stocktakeId,
+			@RequestParam(required = false) Long erpTenantId) {
+		return ApiResult.ok(stocktakeService.getSelectableSkus(warehouseId, stocktakeId, erpTenantId));
 	}
 
 }

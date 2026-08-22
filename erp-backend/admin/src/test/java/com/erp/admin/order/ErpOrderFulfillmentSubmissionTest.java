@@ -17,6 +17,7 @@ import com.erp.admin.shop.mapper.ShopMapper;
 import com.erp.admin.shop.model.entity.Shop;
 import com.erp.admin.wms.model.dto.FulfillmentCreateCommand;
 import com.erp.admin.wms.model.entity.Warehouse;
+import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.service.FulfillmentOrderService;
 import com.erp.admin.wms.service.WarehouseService;
 import org.junit.jupiter.api.AfterEach;
@@ -74,6 +75,7 @@ class ErpOrderFulfillmentSubmissionTest {
 		when(skuMapper.selectBySkuCode("SKU-A")).thenReturn(sku);
 		when(warehouseSkuCodeService.build(3L, "SKU-A")).thenReturn("JHIN-SKU-A");
 		when(fulfillmentOrderService.createAndReserve(any())).thenReturn(99L);
+		when(fulfillmentOrderService.statusOf(99L)).thenReturn(FulfillmentStatus.WAITING_PICK);
 		when(orderMapper.updateById(any())).thenReturn(1);
 		TenantContext.setCurrentTenant(3L);
 		WmsTenantContext.setCurrentWmsTenant(4L);
@@ -86,5 +88,8 @@ class ErpOrderFulfillmentSubmissionTest {
 		assertThat(captor.getValue().getWarehouseId()).isEqualTo(30L);
 		assertThat(captor.getValue().getSourceType()).isEqualTo("OZON");
 		assertThat(captor.getValue().getItems().get(0).getWarehouseSkuCode()).isEqualTo("JHIN-SKU-A");
+		ArgumentCaptor<ErpOrder> updateCaptor = ArgumentCaptor.forClass(ErpOrder.class);
+		verify(orderMapper).updateById(updateCaptor.capture());
+		assertThat(updateCaptor.getValue().getWarehouseFulfillmentStatus()).isEqualTo("WAITING_PICK");
 	}
 }

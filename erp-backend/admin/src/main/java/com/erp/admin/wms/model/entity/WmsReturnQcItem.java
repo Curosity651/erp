@@ -49,7 +49,9 @@ public class WmsReturnQcItem {
     private String qualifiedZone;
 
     @Schema(title = "良品回库库位")
-    private String qualifiedLocationCode;
+	private String qualifiedLocationCode;
+
+	private Long qualifiedLocationId;
 
     private Long qualifiedPalletId;
 
@@ -58,7 +60,9 @@ public class WmsReturnQcItem {
     private String qualifiedSlotCode;
 
     @Schema(title = "残次品回库库位")
-    private String damagedLocationCode;
+	private String damagedLocationCode;
+
+	private Long damagedLocationId;
 
     private Long damagedPalletId;
 
@@ -69,7 +73,7 @@ public class WmsReturnQcItem {
     @Schema(title = "质检结果 PASS/FAIL")
     private String qcResult;
 
-    @Schema(title = "回库分区 RETURN/STANDARD/DEFECTIVE")
+    @Schema(title = "回库分区 RETURN/DEFECTIVE")
     private String zone;
 
     @Schema(title = "品质 GOOD/DAMAGED")

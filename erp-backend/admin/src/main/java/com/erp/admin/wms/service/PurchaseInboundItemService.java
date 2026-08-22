@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.erp.admin.product.service.SkuBriefService;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.wms.converter.PurchaseInboundItemConverter;
 import com.erp.admin.wms.mapper.PurchaseInboundItemMapper;
 import com.erp.admin.wms.model.dto.CustomReturnItemDTO;
@@ -32,6 +34,8 @@ public class PurchaseInboundItemService extends ExtendServiceImpl<PurchaseInboun
 
 	private final SkuBriefService skuBriefService;
 
+	private final WarehouseSkuCodeService warehouseSkuCodeService;
+
     /**
      * 根据入库单ID查询明细列表
      * @param inboundOrderId 入库单ID
@@ -47,8 +51,24 @@ public class PurchaseInboundItemService extends ExtendServiceImpl<PurchaseInboun
      * @return 明细VO列表
      */
     public List<PurchaseInboundItemVO> getVoListByInboundOrderId(Long inboundOrderId) {
+		return getVoListByInboundOrderId(inboundOrderId, null);
+    }
+
+	public List<PurchaseInboundItemVO> getVoListByInboundOrderId(Long inboundOrderId, Long erpTenantId) {
 		List<PurchaseInboundItemVO> itemVOS = baseMapper.selectItemVOsByInboundOrderId(inboundOrderId);
-		this.skuBriefService.enrichForQuery(itemVOS, PurchaseInboundItemVO::getSkuCode, PurchaseInboundItemVO::setSkuBrief);
+		if (erpTenantId == null) {
+			this.skuBriefService.enrichForQuery(itemVOS, PurchaseInboundItemVO::getSkuCode,
+					PurchaseInboundItemVO::setSkuBrief);
+		}
+		else {
+			TenantContext.runAs(erpTenantId, () -> {
+				this.skuBriefService.enrichForQuery(itemVOS, PurchaseInboundItemVO::getSkuCode,
+						PurchaseInboundItemVO::setSkuBrief);
+				return null;
+			});
+			itemVOS.forEach(item -> item.setWarehouseSkuCode(
+					warehouseSkuCodeService.build(erpTenantId, item.getSkuCode())));
+		}
 		return itemVOS;
     }
 

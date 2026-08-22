@@ -1,7 +1,7 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult, PageParam, PageResult } from '@/api/types'
 import type { ReturnOrderVO, ReturnQO, ReturnReceiveDTO, ReturnQcDTO } from './types'
-import type { PalletSlotVO } from '@/api/wms/inbound-execution'
+import type { PalletSummaryVO } from '@/api/wms/pallet'
 import type { WarehouseOptionVO } from '@/api/wms/warehouse/types'
 import { mockPage, mockDetail, mockReceive, mockQc } from './mock'
 
@@ -14,7 +14,7 @@ import { mockPage, mockDetail, mockReceive, mockQc } from './mock'
  *   GET   /{id}          退货单详情(含 items)             → ReturnOrderVO
  *   POST  /receive       退货收货 RETURN_PENDING→QC_PENDING  body=ReturnReceiveDTO → void
  *   POST  /qc            质检+上架 QC_PENDING→COMPLETED      body=ReturnQcDTO → void
- *                        (PASS→退货区/标准区 GOOD 生成新批次；FAIL→不良品区 DAMAGED；FAIL+电子类校验照片)
+ *                        (PASS→退货区 GOOD 生成新批次；FAIL→不良品区 DAMAGED；FAIL+电子类校验照片)
  */
 const USE_MOCK = false
 
@@ -47,6 +47,11 @@ export async function getReturnDetail(id: number): Promise<ApiResult<ReturnOrder
     return d ? ok(d) : { code: 404, data: null as any, message: '退货单不存在' }
   }
   return httpClient.get(`${BASE}/${id}`)
+}
+
+/** 质检完成后本次创建或更新的托盘，用于打印最新托盘标签。 */
+export function getReturnQcPallets(id: number) {
+  return httpClient.get<ApiResult<PalletSummaryVO[]>>(`${BASE}/${id}/pallets`)
 }
 
 /** 退货收货 */
@@ -91,7 +96,8 @@ export function getAvailableSlots(returnOrderId: number, warehouseId: number, zo
 /** 按退货单所属仓库+分区查可用(未占用)库位，供质检上架库位下拉 */
 export async function getAvailableLocations(
   returnOrderId: number,
+  warehouseId: number,
   zone: string
 ): Promise<ApiResult<string[]>> {
-  return httpClient.get(`${BASE}/available-locations`, { params: { returnOrderId, zone } })
+  return httpClient.get(`${BASE}/available-locations`, { params: { returnOrderId, warehouseId, zone } })
 }

@@ -7,6 +7,7 @@ import com.erp.admin.wms.model.dto.BatchPickPreviewDTO;
 import com.erp.admin.wms.model.dto.PackageScanDTO;
 import com.erp.admin.wms.model.dto.PickExceptionDTO;
 import com.erp.admin.wms.model.dto.PickLineScanDTO;
+import com.erp.admin.wms.model.dto.PickReturnScanDTO;
 import com.erp.admin.wms.model.dto.ResolvePickExceptionDTO;
 import com.erp.admin.wms.model.vo.OutboundOrderVO;
 import com.erp.admin.wms.model.vo.PickAllocationVO;
@@ -106,9 +107,17 @@ public class OutboundPickingController {
 
     @Operation(summary = "扫描或手工登记一条实拣数量")
     @PostMapping("/tasks/scan")
-    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
     public ApiResult<Void> scanLine(@Validated @RequestBody PickLineScanDTO dto) {
         outboundPickingService.scanPickLine(dto, principalAttributeAccessor.getUserId());
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "扫描已拣商品返库")
+    @PostMapping("/tasks/return/scan")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
+    public ApiResult<Void> scanReturn(@Validated @RequestBody PickReturnScanDTO dto) {
+        outboundPickingService.scanReturnLine(dto, principalAttributeAccessor.getUserId());
         return ApiResult.ok();
     }
 
@@ -138,7 +147,7 @@ public class OutboundPickingController {
 
     @Operation(summary = "扫描核对一个平台订单格口商品")
     @PostMapping("/tasks/{taskId}/packages/scan")
-    @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+    @PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
     public ApiResult<Void> scanPackageSort(@PathVariable("taskId") Long taskId,
             @Validated @RequestBody PackageScanDTO dto) {
         outboundPickingService.scanPackageSort(taskId, dto, principalAttributeAccessor.getUserId());
@@ -150,7 +159,15 @@ public class OutboundPickingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> confirmPackageSort(@PathVariable("taskId") Long taskId,
 			@PathVariable("packageId") Long packageId) {
-		outboundPickingService.confirmPackageSort(taskId, packageId);
+		outboundPickingService.confirmPackageSort(taskId, packageId, principalAttributeAccessor.getUserId());
+		return ApiResult.ok();
+	}
+
+	@Operation(summary = "未开始分货时跳过格口，直接进入逐单复核打包")
+	@PostMapping("/tasks/{taskId}/skip-sorting")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> skipSorting(@PathVariable("taskId") Long taskId) {
+		outboundPickingService.skipSorting(taskId);
 		return ApiResult.ok();
 	}
 

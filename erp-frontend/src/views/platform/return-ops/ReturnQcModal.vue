@@ -35,13 +35,13 @@
         type="info"
         show-icon
         class="qc-alert"
-        message="选择实际退货仓库后，将良品和残次品分配到具体托盘层位；电子类商品存在残次品时必须上传照片。"
+        message="选择实际退货仓库后，将良品分配到退货区库位、残次品分配到不良品区库位；电子类商品存在残次品时必须上传照片。"
       />
 
       <a-table :data-source="lines" :pagination="false" row-key="skuCode" size="small">
         <a-table-column title="SKU" :width="145">
           <template #default="{ record }">
-            <div>{{ record.skuCode }}</div>
+                <div>{{ record.warehouseSkuCode || record.skuCode }}</div>
             <div class="secondary">
               {{ record.skuName }}
               <a-tag v-if="record.electronic" color="geekblue">电子类</a-tag>
@@ -68,28 +68,18 @@
             <span v-else>退货区</span>
           </template>
         </a-table-column>
-        <a-table-column title="良品层位 / 托盘容量" :width="240">
+        <a-table-column title="良品库位" :width="190">
           <template #default="{ record }">
-            <span v-if="readonly">{{ record.qualifiedSlotCode || record.qualifiedLocationCode || '-' }}</span>
+            <span v-if="readonly">{{ record.qualifiedLocationCode || '-' }}</span>
             <div v-else class="placement-cell">
               <a-select
-                v-model:value="record.qualifiedSlotCode"
-                :options="placementOptions(record.qualifiedZone)"
+                v-model:value="record.qualifiedLocationCode"
+                :options="locationOptions(record.qualifiedZone)"
                 :disabled="record.qualifiedQty <= 0 || !selectedWarehouseId"
-                :loading="slotLoading"
+                :loading="locationLoading"
                 show-search
                 allow-clear
-                placeholder="选择层位"
-                @change="value => handleSlotChange(record, 'qualified', value as string)"
-              />
-              <a-input-number
-                v-model:value="record.qualifiedCapacityPercent"
-                :disabled="record.qualifiedQty <= 0"
-                :min="1"
-                :max="100"
-                :precision="0"
-                addon-after="%"
-                placeholder="入库后容量"
+                placeholder="选择退货区库位"
               />
             </div>
           </template>
@@ -107,28 +97,18 @@
             />
           </template>
         </a-table-column>
-        <a-table-column title="残次品层位 / 托盘容量" :width="240">
+        <a-table-column title="残次品库位" :width="190">
           <template #default="{ record }">
-            <span v-if="readonly">{{ record.damagedSlotCode || record.damagedLocationCode || '-' }}</span>
+            <span v-if="readonly">{{ record.damagedLocationCode || '-' }}</span>
             <div v-else class="placement-cell">
               <a-select
-                v-model:value="record.damagedSlotCode"
-                :options="placementOptions('DEFECTIVE')"
+                v-model:value="record.damagedLocationCode"
+                :options="locationOptions('DEFECTIVE')"
                 :disabled="record.damagedQty <= 0 || !selectedWarehouseId"
-                :loading="slotLoading"
+                :loading="locationLoading"
                 show-search
                 allow-clear
-                placeholder="选择不良品层位"
-                @change="value => handleSlotChange(record, 'damaged', value as string)"
-              />
-              <a-input-number
-                v-model:value="record.damagedCapacityPercent"
-                :disabled="record.damagedQty <= 0"
-                :min="1"
-                :max="100"
-                :precision="0"
-                addon-after="%"
-                placeholder="入库后容量"
+                placeholder="选择不良品区库位"
               />
             </div>
           </template>
@@ -181,13 +161,12 @@ import { CloseCircleFilled, UploadOutlined } from '@ant-design/icons-vue'
 import { isSuccess } from '@/api'
 import {
   getAuthorizedWarehouses,
-  getAvailableSlots,
+  getAvailableLocations,
   getReturnDetail,
   submitQc
 } from '@/api/wms/return-qc'
 import { batchGetDownloadUrls, getFileDownloadUrl } from '@/api/system/file'
 import { useFileUpload } from '@/hooks/use-file-upload'
-import type { PalletSlotVO } from '@/api/wms/inbound-execution'
 import type { ReturnOrderVO, ReturnQcLineDTO, ReturnZone } from '@/api/wms/return-qc/types'
 
 type PlacementKind = 'qualified' | 'damaged'
@@ -230,13 +209,13 @@ const { uploadFile } = useFileUpload()
 const loading = ref(false)
 const submitting = ref(false)
 const warehouseLoading = ref(false)
-const slotLoading = ref(false)
+const locationLoading = ref(false)
 const selectedWarehouseId = ref<number>()
 const warehouseOptions = ref<{ label: string; value: number }[]>([])
 const order = ref<ReturnOrderVO | null>(null)
 const lines = ref<QcLine[]>([])
 const photoUrlMap = reactive<Record<number, string>>({})
-const slotsByZone = reactive<Record<string, PalletSlotVO[]>>({ RETURN: [], STANDARD: [], DEFECTIVE: [] })
+const locationsByZone = reactive<Record<ReturnZone, string[]>>({ RETURN: [], DEFECTIVE: [] })
 
 watch(
   () => [props.open, props.orderId] as const,
@@ -294,26 +273,26 @@ async function loadWarehouses(detail: ReturnOrderVO) {
     selectedWarehouseId.value = warehouseOptions.value.some(item => item.value === detail.warehouseId)
       ? detail.warehouseId
       : warehouseOptions.value[0]?.value
-    if (selectedWarehouseId.value) await loadSlots()
+    if (selectedWarehouseId.value) await loadLocations()
     else message.warning('当前货主没有可用于退货质检的有效仓库')
   } finally {
     warehouseLoading.value = false
   }
 }
 
-async function loadSlots() {
-  ZONES.forEach(zone => (slotsByZone[zone] = []))
+async function loadLocations() {
+  ZONES.forEach(zone => (locationsByZone[zone] = []))
   if (!order.value || !selectedWarehouseId.value) return
-  slotLoading.value = true
+  locationLoading.value = true
   try {
     const results = await Promise.all(
-      ZONES.map(zone => getAvailableSlots(order.value!.id, selectedWarehouseId.value!, zone))
+      ZONES.map(zone => getAvailableLocations(order.value!.id, selectedWarehouseId.value!, zone))
     )
     results.forEach((res, index) => {
-      if (isSuccess(res) && res.data) slotsByZone[ZONES[index]] = res.data
+      if (isSuccess(res) && res.data) locationsByZone[ZONES[index]] = res.data
     })
   } finally {
-    slotLoading.value = false
+    locationLoading.value = false
   }
 }
 
@@ -322,46 +301,11 @@ async function handleWarehouseChange() {
     resetPlacement(line, 'qualified')
     resetPlacement(line, 'damaged')
   })
-  await loadSlots()
+  await loadLocations()
 }
 
-function placementOptions(zone: ReturnZone) {
-  return (slotsByZone[zone] || []).map(slot => ({
-    label: slot.palletId
-      ? `${slot.slotCode} · 合并 ${slot.palletNo} · 当前 ${Math.round(slot.capacityPercent || 0)}%`
-      : `${slot.slotCode} · 空层位`,
-    value: slot.slotCode
-  }))
-}
-
-function handleSlotChange(record: QcLine, kind: PlacementKind, slotCode?: string) {
-  if (!slotCode) {
-    resetPlacement(record, kind)
-    return
-  }
-  const zone = kind === 'qualified' ? record.qualifiedZone : 'DEFECTIVE'
-  const slot = (slotsByZone[zone] || []).find(item => item.slotCode === slotCode)
-  if (!slot) return
-  const quantity = kind === 'qualified' ? record.qualifiedQty : record.damagedQty
-  const estimatedIncrement = record.quantityPerPallet
-    ? (quantity / record.quantityPerPallet) * 100
-    : undefined
-  if (kind === 'qualified') {
-    record.qualifiedSlotCode = slot.slotCode
-    record.qualifiedLocationCode = slot.locationCode
-    record.qualifiedPalletId = slot.palletId
-    record.qualifiedCapacityPercent = recommendedCapacity(slot, estimatedIncrement)
-  } else {
-    record.damagedSlotCode = slot.slotCode
-    record.damagedLocationCode = slot.locationCode
-    record.damagedPalletId = slot.palletId
-    record.damagedCapacityPercent = recommendedCapacity(slot, estimatedIncrement)
-  }
-}
-
-function recommendedCapacity(slot: PalletSlotVO, increment?: number) {
-  if (increment === undefined) return undefined
-  return Math.min(100, Math.max(1, Math.ceil((slot.capacityPercent || 0) + increment)))
+function locationOptions(zone: ReturnZone) {
+  return (locationsByZone[zone] || []).map(code => ({ label: code, value: code }))
 }
 
 function resetPlacement(record: QcLine, kind: PlacementKind) {
@@ -382,14 +326,12 @@ function syncDamagedQty(record: QcLine) {
   record.qualifiedQty = Number(record.qualifiedQty || 0)
   record.damagedQty = Math.max(0, record.receivedQty - record.qualifiedQty)
   if (!record.damagedQty) resetPlacement(record, 'damaged')
-  if (record.qualifiedSlotCode) handleSlotChange(record, 'qualified', record.qualifiedSlotCode)
 }
 
 function syncQualifiedQty(record: QcLine) {
   record.damagedQty = Number(record.damagedQty || 0)
   record.qualifiedQty = Math.max(0, record.receivedQty - record.damagedQty)
   if (!record.qualifiedQty) resetPlacement(record, 'qualified')
-  if (record.damagedSlotCode) handleSlotChange(record, 'damaged', record.damagedSlotCode)
 }
 
 async function handleUpload(options: any, record: QcLine) {
@@ -439,7 +381,7 @@ async function loadPhotoUrls(fileIds: number[]) {
 }
 
 function zoneText(zone?: ReturnZone) {
-  return zone === 'STANDARD' ? '标准区' : zone === 'DEFECTIVE' ? '不良品区' : '退货区'
+  return zone === 'DEFECTIVE' ? '不良品区' : '退货区'
 }
 
 function handleClose() {
@@ -451,7 +393,6 @@ async function handleConfirm() {
     message.warning('请选择退货仓库')
     return
   }
-  const usedSlots = new Set<string>()
   for (const line of lines.value) {
     if (line.qualifiedQty < 0 || line.damagedQty < 0 || line.qualifiedQty + line.damagedQty !== line.receivedQty) {
       message.warning(`${line.skuCode} 良品数与残次数之和必须等于实收数`)
@@ -460,17 +401,11 @@ async function handleConfirm() {
     for (const kind of ['qualified', 'damaged'] as PlacementKind[]) {
       const quantity = kind === 'qualified' ? line.qualifiedQty : line.damagedQty
       if (quantity <= 0) continue
-      const slotCode = kind === 'qualified' ? line.qualifiedSlotCode : line.damagedSlotCode
-      const capacity = kind === 'qualified' ? line.qualifiedCapacityPercent : line.damagedCapacityPercent
-      if (!slotCode || !capacity) {
-        message.warning(`${line.skuCode} 请选择${kind === 'qualified' ? '良品' : '残次品'}层位并填写容量`)
+      const locationCode = kind === 'qualified' ? line.qualifiedLocationCode : line.damagedLocationCode
+      if (!locationCode) {
+        message.warning(`${line.skuCode} 请选择${kind === 'qualified' ? '良品' : '残次品'}库位`)
         return
       }
-      if (usedSlots.has(slotCode)) {
-        message.warning(`层位 ${slotCode} 本次已被另一条质检结果使用，请重新选择`)
-        return
-      }
-      usedSlots.add(slotCode)
     }
     if (line.electronic && line.damagedQty > 0 && !line.photoFileIds.length) {
       message.warning(`${line.skuCode} 属于电子类商品，存在残次品时必须上传照片`)
@@ -484,13 +419,7 @@ async function handleConfirm() {
     damagedQty: line.damagedQty,
     qualifiedZone: line.qualifiedQty > 0 ? line.qualifiedZone : undefined,
     qualifiedLocationCode: line.qualifiedQty > 0 ? line.qualifiedLocationCode : undefined,
-    qualifiedSlotCode: line.qualifiedQty > 0 ? line.qualifiedSlotCode : undefined,
-    qualifiedPalletId: line.qualifiedQty > 0 ? line.qualifiedPalletId : undefined,
-    qualifiedCapacityPercent: line.qualifiedQty > 0 ? line.qualifiedCapacityPercent : undefined,
     damagedLocationCode: line.damagedQty > 0 ? line.damagedLocationCode : undefined,
-    damagedSlotCode: line.damagedQty > 0 ? line.damagedSlotCode : undefined,
-    damagedPalletId: line.damagedQty > 0 ? line.damagedPalletId : undefined,
-    damagedCapacityPercent: line.damagedQty > 0 ? line.damagedCapacityPercent : undefined,
     qcRemark: line.qcRemark,
     photoFileIds: line.photoFileIds
   }))
@@ -502,7 +431,7 @@ async function handleConfirm() {
       lines: dtoLines
     })
     if (isSuccess(res)) {
-      message.success('质检完成，退货已按托盘层位上架')
+      message.success('质检完成，退货已按逻辑库位上架')
       emit('success')
       emit('update:open', false)
     } else message.error(res.message || '质检失败')

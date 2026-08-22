@@ -209,6 +209,29 @@ public class ErpOrderService extends ExtendServiceImpl<ErpOrderMapper, ErpOrder>
                 orderIds, outboundOrderId);
     }
 
+	@Transactional(rollbackFor = Exception.class)
+	public void completeOutboundForWarehouse(List<Long> orderIds, Long outboundOrderId, Long erpTenantId) {
+		if (orderIds == null || orderIds.isEmpty()) {
+			return;
+		}
+		Assert.notNull(erpTenantId, "货主ID不能为空");
+		for (Long orderId : orderIds) {
+			ErpOrder order = baseMapper.selectForWarehouseComplete(orderId, erpTenantId);
+			Assert.notNull(order, "订单不存在或不属于当前货主，订单ID: " + orderId);
+			if ("COMPLETED".equals(order.getOutboundStatus())
+					&& Objects.equals(outboundOrderId, order.getOutboundOrderId())) {
+				continue;
+			}
+			Assert.isTrue("ALLOCATED".equals(order.getOutboundStatus())
+							&& Objects.equals(outboundOrderId, order.getOutboundOrderId()),
+					"订单未由当前出库单占用，无法签出，订单ID: " + orderId);
+			int affected = baseMapper.completeOutboundWithVersion(orderId, outboundOrderId, order.getVersion());
+			Assert.isTrue(affected > 0, "订单签出确认失败（并发冲突），订单ID: " + orderId);
+		}
+		log.info("Warehouse completed outbound orders, orderIds={}, outboundOrderId={}, erpTenantId={}",
+				orderIds, outboundOrderId, erpTenantId);
+	}
+
     /**
      * 批量查询SKU日均销量
      * <p>

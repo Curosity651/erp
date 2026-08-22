@@ -3,7 +3,9 @@ package com.erp.admin.wms.service;
 import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.erp.admin.order.service.ErpOrderService;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.tenant.service.TenantIdentityService;
+import com.erp.admin.wms.mapper.OutboundPickingMapper;
 import com.erp.admin.wms.mapper.OutboundShippingMapper;
 import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
@@ -13,6 +15,8 @@ import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.model.dto.PackDTO;
 import com.erp.admin.wms.model.dto.PackPackageDTO;
 import com.erp.admin.wms.model.dto.PackageScanDTO;
+import com.erp.admin.wms.model.dto.PackageLabelScanDTO;
+import com.erp.admin.wms.model.dto.ShipPackageDTO;
 import com.erp.admin.wms.model.dto.ShipDTO;
 import com.erp.admin.wms.model.entity.SalesOutboundOrder;
 import com.erp.admin.wms.model.entity.SalesOutboundOrderItem;
@@ -22,9 +26,11 @@ import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.model.enums.OutboundSourceType;
 import com.erp.admin.wms.model.qo.PackShipQO;
+import com.erp.admin.wms.model.qo.PackShipPackageQO;
 import com.erp.admin.wms.model.vo.LogisticsChannelVO;
 import com.erp.admin.wms.model.vo.PackShipItemVO;
 import com.erp.admin.wms.model.vo.PackShipOrderVO;
+import com.erp.admin.wms.model.vo.PackShipPackagePageVO;
 import com.erp.admin.wms.model.vo.ShipResultVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,12 +41,15 @@ import org.ballcat.mybatisplus.toolkit.PageUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -69,6 +78,7 @@ public class OutboundShippingService {
     private final OutboundShippingMapper outboundShippingMapper;
 
     private final SalesOutboundMapper salesOutboundMapper;
+    private final OutboundPickingMapper outboundPickingMapper;
 
     private final SalesOutboundItemMapper salesOutboundItemMapper;
 
@@ -95,6 +105,8 @@ public class OutboundShippingService {
 	private final WarehouseOutboundDocumentService outboundDocumentService;
 
 	private final WarehouseBillingService warehouseBillingService;
+    private final WarehouseSkuCodeService warehouseSkuCodeService;
+	private final WmsSortSlotService sortSlotService;
 
     // ==================== 查询 ====================
 
@@ -115,12 +127,34 @@ public class OutboundShippingService {
         return new PageResult<>(records, page.getTotal());
     }
 
+	public PageResult<PackShipPackagePageVO> pagePackages(PageParam pageParam, PackShipPackageQO qo) {
+		assertPlatform();
+		IPage<PackShipPackagePageVO> page = PageUtil.prodPage(pageParam);
+		outboundShippingMapper.pagePackages(page, qo);
+		return new PageResult<>(page.getRecords(), page.getTotal());
+	}
+
+	public PackShipPackagePageVO locatePackage(String scanCode) {
+		assertPlatform();
+		Assert.hasText(scanCode, "请扫描格口码或平台订单号");
+		String normalized = scanCode.trim();
+		PackShipPackagePageVO result = outboundShippingMapper.locatePackageByPlatformOrderId(normalized);
+		if (result == null) {
+			Long packageId = sortSlotService.locateActivePackage(normalized);
+			if (packageId != null) {
+				result = outboundShippingMapper.locatePackageById(packageId);
+			}
+		}
+		Assert.notNull(result, "没有找到待打包或待签出的平台订单");
+		return result;
+	}
+
     public PackShipOrderVO getDetail(Long id) {
         assertPlatform();
         PackShipOrderVO vo = outboundShippingMapper.selectOrderById(id);
         Assert.notNull(vo, "出库单不存在");
         vo.setStatus(OutboundPickingService.toViewStatus(vo.getStatus()));
-        vo.setItems(buildItems(id));
+        vo.setItems(buildItems(id, vo.getErpTenantId()));
 		if (OutboundSourceType.SALES.name().equals(vo.getSourceType())) {
 			vo.setPackages(outboundPackageService.listPackages(id));
 		}
@@ -163,23 +197,31 @@ public class OutboundShippingService {
 	/** 销售出库单按平台订单逐包裹打包，全部包裹完成后主单自动进入 PACKED。 */
 	@Transactional(rollbackFor = Exception.class)
 	public void packPackage(PackPackageDTO dto) {
+		packPackage(dto, null);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void packPackage(PackPackageDTO dto, Long operatorId) {
 		assertPlatform();
 		SalesOutboundOrder order = salesOutboundMapper.selectByIdForUpdate(dto.getOutboundOrderId());
 		Assert.notNull(order, "出库单不存在");
 		Assert.isTrue(OutboundSourceType.SALES.name().equals(order.getSourceType()), "仅销售出库单支持逐包裹打包");
 		Assert.isTrue(OutboundOrderStatus.PICKED.name().equals(order.getOrderStatus()),
-				"仅完成拣货和分货的出库单可以打包");
+				"仅完成拣货的出库单可以打包");
 		com.erp.admin.wms.model.entity.WmsSalesOutboundPackage pack = outboundPackageService
 				.listEntities(order.getId()).stream().filter(item -> java.util.Objects.equals(item.getId(), dto.getPackageId()))
 				.findFirst().orElse(null);
 		Assert.notNull(pack, "平台订单包裹不属于当前出库单");
-		outboundPackageService.packPackage(pack.getId(), dto.getPackerName(), order.getDocumentMode());
+        String operatorName = resolveOperatorName(operatorId);
+		outboundPackageService.packPackage(pack.getId(), operatorId,
+                StringUtils.hasText(operatorName) ? operatorName : dto.getPackerName(), order.getDocumentMode());
+		sortSlotService.markPacking(pack.getId());
 		if (outboundPackageService.allPacked(order.getId())) {
 			int claimed = salesOutboundMapper.casOrderStatus(order.getId(),
 					OutboundOrderStatus.PICKED.name(), OutboundOrderStatus.PACKED.name());
 			Assert.isTrue(claimed == 1, "出库单打包状态已变化，请刷新重试");
 			order.setPackMode("BY_ORDER");
-			order.setPackerName(dto.getPackerName());
+			order.setPackerName(StringUtils.hasText(operatorName) ? operatorName : dto.getPackerName());
 			order.setOrderStatus(OutboundOrderStatus.PACKED.name());
 			salesOutboundMapper.updateById(order);
 		}
@@ -192,12 +234,29 @@ public class OutboundShippingService {
 		Assert.notNull(order, "出库单不存在");
 		Assert.isTrue(OutboundSourceType.SALES.name().equals(order.getSourceType()), "仅销售出库单支持逐包裹复核");
 		Assert.isTrue(OutboundOrderStatus.PICKED.name().equals(order.getOrderStatus()),
-				"仅完成拣货和分货的出库单可以打包复核");
+				"仅完成拣货的出库单可以打包复核");
 		boolean belongs = outboundPackageService.listEntities(order.getId()).stream()
 				.anyMatch(pack -> java.util.Objects.equals(pack.getId(), dto.getPackageId()));
 		Assert.isTrue(belongs, "平台订单包裹不属于当前出库单");
 		outboundPackageService.scanPack(dto.getPackageId(), dto.getScanCode(), dto.getQuantity(),
-				Boolean.TRUE.equals(dto.getManual()), operatorId, order.getPackerName());
+				Boolean.TRUE.equals(dto.getManual()), dto.getManualReason(), operatorId,
+                resolveOperatorName(operatorId));
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void confirmPackageLabel(PackageLabelScanDTO dto, Long operatorId) {
+		assertPlatform();
+		SalesOutboundOrder order = salesOutboundMapper.selectByIdForUpdate(dto.getOutboundOrderId());
+		Assert.notNull(order, "出库单不存在");
+		Assert.isTrue(OutboundSourceType.SALES.name().equals(order.getSourceType()),
+				"仅销售出库单支持平台面单扫码");
+		Assert.isTrue(OutboundOrderStatus.PICKED.name().equals(order.getOrderStatus()),
+				"仅待打包的出库单可以扫描平台面单");
+		boolean belongs = outboundPackageService.listEntities(order.getId()).stream()
+				.anyMatch(pack -> java.util.Objects.equals(pack.getId(), dto.getPackageId()));
+		Assert.isTrue(belongs, "平台订单包裹不属于当前出库单");
+		outboundPackageService.confirmLabelAttached(dto.getPackageId(), dto.getScanCode(), operatorId,
+				resolveOperatorName(operatorId));
 	}
 
 	@Transactional(rollbackFor = Exception.class)
@@ -224,13 +283,184 @@ public class OutboundShippingService {
 		outboundPackageService.confirmExternalHandover(packageId);
 	}
 
+	@Transactional(rollbackFor = Exception.class)
+	public ShipResultVO shipPackage(ShipPackageDTO dto, Long operatorId) {
+		assertPlatform();
+		SalesOutboundOrder order = salesOutboundMapper.selectByIdForUpdate(dto.getOutboundOrderId());
+		Assert.notNull(order, "出库单不存在");
+		Assert.isTrue(OutboundSourceType.SALES.name().equals(order.getSourceType()),
+				"仅销售出库单支持按平台订单包裹签出");
+		Assert.isTrue(OutboundOrderStatus.PICKED.name().equals(order.getOrderStatus())
+						|| OutboundOrderStatus.PACKED.name().equals(order.getOrderStatus()),
+				"仅完成拣货的销售出库单可以签出已打包包裹");
+
+		com.erp.admin.wms.model.entity.WmsSalesOutboundPackage pack =
+				outboundPackageService.getForUpdate(dto.getPackageId());
+		Assert.notNull(pack, "平台订单包裹不存在");
+		Assert.isTrue(java.util.Objects.equals(order.getId(), pack.getOutboundOrderId()),
+				"平台订单包裹不属于当前出库单");
+		Assert.isTrue(SalesOutboundPackageService.PACK_PACKED.equals(pack.getPackStatus()),
+				"仅已完成打包的包裹可以签出");
+		Assert.isTrue(!SalesOutboundPackageService.SHIP_SHIPPED.equals(pack.getShipStatus()),
+				"该平台订单包裹已经签出，请勿重复操作");
+		outboundDocumentService.assertPackageReadyForShip(order, pack);
+
+		List<SalesOutboundOrderItem> packageItems = salesOutboundItemMapper
+				.selectPackageItemsForUpdate(order.getId(), pack.getErpOrderId());
+		Assert.notEmpty(packageItems, "平台订单包裹没有商品明细");
+		Map<String, Integer> requiredBySku = new LinkedHashMap<>();
+		for (SalesOutboundOrderItem item : packageItems) {
+			requiredBySku.merge(item.getSkuCode(), value(item.getQuantity()), Integer::sum);
+		}
+
+		List<WmsOutboundPickAllocation> allocations =
+				pickAllocationMapper.selectByOutboundOrderIdForUpdate(order.getId());
+		Assert.notEmpty(allocations, "出库单没有可消费的拣货分配");
+		assertPackageAllocationAvailable(requiredBySku, allocations);
+
+		boolean firstPackage = !outboundPackageService.anyShipped(order.getId());
+		BigDecimal operationFee = BigDecimal.ZERO;
+		BigDecimal shippingFee = BigDecimal.ZERO;
+		Long billingRecordId = null;
+		if (firstPackage) {
+			ShipDTO billingDto = new ShipDTO();
+			billingDto.setOutboundOrderId(order.getId());
+			billingDto.setChannel(dto.getChannel());
+			billingDto.setTrackingNo(dto.getTrackingNo());
+			billingDto.setWeight(dto.getWeight());
+			BigDecimal recorded = warehouseBillingService.recordOutbound(order, allocations, billingDto);
+			operationFee = recorded == null ? BigDecimal.ZERO : recorded;
+
+			shippingFee = resolveShippingFee(order);
+			if (order.getLogisticsProductId() != null && shippingFee.compareTo(BigDecimal.ZERO) > 0) {
+				String bizId = "SHIP:" + order.getId();
+				WmsClientBillingRecord existing = clientBillingRecordMapper.selectByBizId(bizId);
+				if (existing != null) {
+					billingRecordId = existing.getId();
+					shippingFee = existing.getAmount();
+				} else {
+					WmsClientBillingRecord record = new WmsClientBillingRecord();
+					record.setBizId(bizId);
+					record.setWmsTenantId(resolveParentOperatorId(order.getErpTenantId()));
+					record.setErpTenantId(order.getErpTenantId());
+					record.setOutboundOrderId(order.getId());
+					record.setFeeType("SHIPPING");
+					record.setAmount(shippingFee);
+					record.setCurrency("RUB");
+					record.setTrackingNo(dto.getTrackingNo());
+					record.setLogisticsProductId(order.getLogisticsProductId());
+					record.setBillMonth(order.getOutboundDate() == null ? null
+							: order.getOutboundDate().toString().substring(0, 7));
+					clientBillingRecordMapper.insert(record);
+					billingRecordId = record.getId();
+				}
+			}
+		}
+
+		Set<String> touchedSku = new LinkedHashSet<>();
+		Set<Long> touchedPallets = new LinkedHashSet<>();
+		consumePackageAllocations(requiredBySku, allocations, touchedSku, touchedPallets);
+
+		String channelName = resolveChannelName(dto.getChannel());
+		String operatorName = resolveOperatorName(operatorId);
+		outboundPackageService.markShipped(pack.getId(), dto.getChannel(), channelName,
+				dto.getTrackingNo(), dto.getWeight(), operatorId, operatorName);
+		sortSlotService.releaseByPackage(pack.getId());
+		erpOrderService.completeOutboundForWarehouse(
+				java.util.Collections.singletonList(pack.getErpOrderId()), order.getId(), order.getErpTenantId());
+
+		for (String sku : touchedSku) {
+			inventoryAggregator.refreshSnapshot(0L, order.getErpTenantId(), order.getWarehouseId(), sku);
+		}
+		for (Long palletId : touchedPallets) {
+			palletService.refreshAfterOutbound(palletId);
+		}
+
+		if (outboundPackageService.allShipped(order.getId())) {
+			int claimed = salesOutboundMapper.casOrderStatus(order.getId(),
+					OutboundOrderStatus.PACKED.name(), OutboundOrderStatus.SHIPPED.name());
+			Assert.isTrue(claimed == 1, "出库单签出状态已变化，请刷新重试");
+		}
+
+		ShipResultVO result = new ShipResultVO();
+		result.setTrackingNo(dto.getTrackingNo());
+		result.setChannelName(channelName);
+		result.setShippingFee(shippingFee);
+		result.setBillingRecordId(billingRecordId);
+		result.setWarehouseOperationFee(operationFee);
+		return result;
+	}
+
+	private void assertPackageAllocationAvailable(Map<String, Integer> requiredBySku,
+			List<WmsOutboundPickAllocation> allocations) {
+		for (Map.Entry<String, Integer> required : requiredBySku.entrySet()) {
+			int available = allocations.stream()
+					.filter(item -> required.getKey().equals(item.getSkuCode()))
+					.mapToInt(item -> Math.max(0, value(item.getTakeQty()) - value(item.getShippedQty())))
+					.sum();
+			Assert.isTrue(available >= required.getValue(),
+					"SKU[" + required.getKey() + "]剩余拣货分配不足，无法签出当前平台订单");
+		}
+	}
+
+	private void consumePackageAllocations(Map<String, Integer> requiredBySku,
+			List<WmsOutboundPickAllocation> allocations, Set<String> touchedSku, Set<Long> touchedPallets) {
+		for (Map.Entry<String, Integer> required : requiredBySku.entrySet()) {
+			int remaining = required.getValue();
+			for (WmsOutboundPickAllocation allocation : allocations) {
+				if (!required.getKey().equals(allocation.getSkuCode())) {
+					continue;
+				}
+				int available = Math.max(0, value(allocation.getTakeQty()) - value(allocation.getShippedQty()));
+				int take = Math.min(remaining, available);
+				if (take <= 0) {
+					continue;
+				}
+				WmsPhysicalInventory batch = physicalInventoryMapper.selectById(allocation.getPhysicalInventoryId());
+				Assert.notNull(batch, "拣货分配对应库存批次不存在: " + allocation.getPhysicalInventoryId());
+				int quantity = value(batch.getQuantity()) - take;
+				int reserved = value(batch.getReservedQty()) - take;
+				Assert.isTrue(quantity >= 0 && reserved >= 0,
+						"库存批次数量或预留数量不足: " + batch.getId());
+				batch.setQuantity(quantity);
+				batch.setReservedQty(reserved);
+				Assert.isTrue(physicalInventoryMapper.updateById(batch) == 1,
+						"库存批次版本冲突，请重试: " + batch.getId());
+
+				allocation.setShippedQty(value(allocation.getShippedQty()) + take);
+				Assert.isTrue(pickAllocationMapper.updateById(allocation) == 1,
+						"拣货分配消费状态更新失败，请重试");
+				touchedSku.add(allocation.getSkuCode());
+				if (batch.getPalletId() != null) {
+					touchedPallets.add(batch.getPalletId());
+				}
+				remaining -= take;
+				if (remaining == 0) {
+					break;
+				}
+			}
+			Assert.isTrue(remaining == 0, "SKU[" + required.getKey() + "]签出数量分配失败");
+		}
+	}
+
+	private static int value(Integer value) {
+		return value == null ? 0 : value;
+	}
+
     // ==================== 签出（扣库存 + 释放锁定 + 计费） ====================
 
     @Transactional(rollbackFor = Exception.class)
     public ShipResultVO ship(ShipDTO dto) {
+        return ship(dto, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ShipResultVO ship(ShipDTO dto, Long operatorId) {
         assertPlatform();
         SalesOutboundOrder order = salesOutboundMapper.selectById(dto.getOutboundOrderId());
         Assert.notNull(order, "出库单不存在");
+		Assert.isTrue(!OutboundSourceType.SALES.name().equals(order.getSourceType()),
+				"销售出库单必须按平台订单包裹逐个签出");
         String st = order.getOrderStatus();
         if (OutboundOrderStatus.SHIPPED.name().equals(st) || OutboundOrderStatus.COMPLETED.name().equals(st)) {
             throw new BusinessException(400, "该出库单已签出，请勿重复操作");
@@ -335,6 +565,9 @@ public class OutboundShippingService {
         order.setTrackingNo(dto.getTrackingNo());
         order.setWeight(dto.getWeight());
         order.setShippingFee(fee);
+        order.setShippedBy(operatorId);
+        order.setShippedByName(resolveOperatorName(operatorId));
+        order.setShippedTime(java.time.LocalDateTime.now());
         salesOutboundMapper.updateById(order);
         log.info("签出完成, outboundId={}, tracking={}, fee={}", order.getId(), dto.getTrackingNo(), fee);
 
@@ -349,18 +582,28 @@ public class OutboundShippingService {
 
     // ==================== 组装 / 辅助 ====================
 
-    private List<PackShipItemVO> buildItems(Long orderId) {
+    private List<PackShipItemVO> buildItems(Long orderId, Long erpTenantId) {
         List<SalesOutboundOrderItem> items = salesOutboundItemMapper.selectByOutboundOrderId(orderId);
         List<PackShipItemVO> result = new ArrayList<>();
         for (SalesOutboundOrderItem i : items) {
             PackShipItemVO vo = new PackShipItemVO();
             vo.setSkuCode(i.getSkuCode());
+            vo.setWarehouseSkuCode(warehouseSkuCodeService.build(erpTenantId, i.getSkuCode()));
             vo.setQty(i.getQuantity());
             // 下架 FIFO 仅取良品，故出库明细品质为良品；次品出库属特例（v2 支持）
             vo.setQuality("GOOD");
             result.add(vo);
         }
         return result;
+    }
+
+    private String resolveOperatorName(Long operatorId) {
+        if (operatorId == null) {
+            return null;
+        }
+        String name = outboundPickingMapper.selectPickerName(operatorId,
+                tenantIdentityService.currentIdentity(null).getTenantId());
+        return StringUtils.hasText(name) ? name : "用户#" + operatorId;
     }
 
     /**

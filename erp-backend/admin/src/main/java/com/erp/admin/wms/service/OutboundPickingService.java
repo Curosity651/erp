@@ -3,6 +3,7 @@ package com.erp.admin.wms.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.product.service.SkuBarcodeService;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.wms.mapper.OutboundPickingMapper;
 import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
@@ -18,6 +19,7 @@ import com.erp.admin.wms.model.dto.BatchPickDTO;
 import com.erp.admin.wms.model.dto.BatchPickPreviewDTO;
 import com.erp.admin.wms.model.dto.PickExceptionDTO;
 import com.erp.admin.wms.model.dto.PickLineScanDTO;
+import com.erp.admin.wms.model.dto.PickReturnScanDTO;
 import com.erp.admin.wms.model.dto.ResolvePickExceptionDTO;
 import com.erp.admin.wms.model.dto.PackageScanDTO;
 import com.erp.admin.wms.model.entity.SalesOutboundOrder;
@@ -50,6 +52,7 @@ import org.ballcat.mybatisplus.toolkit.PageUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -118,8 +121,10 @@ public class OutboundPickingService {
     private final WmsOutboundPickTaskLineMapper pickTaskLineMapper;
 
 	private final SalesOutboundPackageService outboundPackageService;
+	private final WmsSortSlotService sortSlotService;
 
     private final SkuBarcodeService skuBarcodeService;
+    private final WarehouseSkuCodeService warehouseSkuCodeService;
 
     private final WmsOutboundScanEventMapper scanEventMapper;
 
@@ -160,7 +165,9 @@ public class OutboundPickingService {
         Assert.notNull(vo, "出库单不存在");
         List<WmsOutboundPickAllocation> reserved = pickAllocationMapper.selectByOutboundOrderId(id);
         if (!reserved.isEmpty()) {
-            return reserved.stream().map(this::toAllocationVO).collect(Collectors.toList());
+            List<PickAllocationVO> result = reserved.stream().map(this::toAllocationVO).collect(Collectors.toList());
+            attachWarehouseSkuCodes(result, vo.getErpTenantId());
+            return result;
         }
         List<SalesOutboundOrderItem> items = salesOutboundItemMapper.selectByOutboundOrderId(id);
         Map<String, Integer> required = requiredBySku(items);
@@ -175,6 +182,7 @@ public class OutboundPickingService {
                 result.add(toAllocationVO(e.getKey(), t.batch, t.take));
             }
         }
+        attachWarehouseSkuCodes(result, vo.getErpTenantId());
         return result;
     }
 
@@ -238,6 +246,7 @@ public class OutboundPickingService {
             pl.setOutboundOrderCount(1);
             pl.setSalesOrderCount(nvl(vo.getSalesOrderCount()));
         }
+        attachWarehouseSkuCodes(lines, vo.getErpTenantId());
         pl.setOutboundOrders(taskOutbounds);
         pl.setAllocations(lines);
         return pl;
@@ -268,7 +277,7 @@ public class OutboundPickingService {
         assertPlatform();
         List<SalesOutboundOrder> orders = loadAndValidateOrders(dto.getOutboundOrderIds(), false, false);
         return buildBatchPreview(orders, safeMax(dto.getMaxOrdersPerTask()),
-                !Boolean.FALSE.equals(dto.getWholePalletPriority()));
+                !Boolean.FALSE.equals(dto.getWholePalletPriority()), dto.getUseSortSlots());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -300,7 +309,7 @@ public class OutboundPickingService {
             task.setWarehouseId(first.getWarehouseId());
             task.setErpTenantId(first.getErpTenantId());
             task.setSourceType(first.getSourceType());
-            task.setTaskType(group.size() == 1 ? "SINGLE" : "WAVE");
+            task.setTaskType(resolveTaskType(group, analysis));
             task.setTaskStatus("PICKING");
             task.setPickerId(dto.getPickerId());
             task.setPickerName(pickerName);
@@ -310,27 +319,37 @@ public class OutboundPickingService {
             task.setTotalQuantity(group.stream().mapToInt(o -> nvl(o.getTotalQuantity())).sum());
             task.setWholePalletCount(analysis.wholePalletIds.size());
             int packageCount = salesOrderCount(group);
-            boolean taskNeedsSorting = packageCount > 1
-                    && com.erp.admin.wms.model.enums.OutboundSourceType.SALES.name().equals(first.getSourceType());
+            boolean taskNeedsSorting = requiresSlotSorting(dto.getUseSortSlots(), first.getSourceType(), packageCount);
             task.setSecondaryOrderCount(taskNeedsSorting ? packageCount : 0);
             pickTaskMapper.insert(task);
 
-            int toteIndex = 1;
+			List<com.erp.admin.wms.model.entity.WmsSalesOutboundPackage> taskPackages = new ArrayList<>();
+			for (SalesOutboundOrder order : group) {
+				if (com.erp.admin.wms.model.enums.OutboundSourceType.SALES.name().equals(order.getSourceType())) {
+					taskPackages.addAll(outboundPackageService.prepareForPicking(order.getId(), taskNeedsSorting));
+				}
+			}
+			if (taskNeedsSorting) {
+				sortSlotService.reserveForTask(task.getId(), task.getWarehouseId(), taskPackages);
+			}
+
             for (SalesOutboundOrder order : group) {
                 WmsOutboundPickTaskOrder relation = new WmsOutboundPickTaskOrder();
                 relation.setTaskId(task.getId());
                 relation.setOutboundOrderId(order.getId());
                 relation.setOutboundNo(order.getOutboundNo());
-				// 一个任务内只要有多个平台订单包裹，就必须逐包裹分货，不能只看单张出库单。
+				// 一个任务内只要有多个平台订单包裹，就必须直接按最终包裹分货。
                 boolean sorting = taskNeedsSorting
                         && com.erp.admin.wms.model.enums.OutboundSourceType.SALES.name().equals(order.getSourceType());
                 relation.setSortRequired(sorting ? 1 : 0);
                 relation.setSortStatus(sorting ? "PENDING" : "NOT_REQUIRED");
-                relation.setToteNo(sorting ? String.format("B%02d", toteIndex++) : null);
-                pickTaskOrderMapper.insert(relation);
 				if (com.erp.admin.wms.model.enums.OutboundSourceType.SALES.name().equals(order.getSourceType())) {
-					outboundPackageService.assignSortCodes(order.getId(), relation.getToteNo(), sorting);
+					relation.setToteNo(sorting ? outboundPackageService.listEntities(order.getId()).stream()
+							.map(com.erp.admin.wms.model.entity.WmsSalesOutboundPackage::getSortCode)
+							.filter(StringUtils::hasText)
+							.collect(java.util.stream.Collectors.joining("、")) : null);
 				}
+                pickTaskOrderMapper.insert(relation);
 
                 order.setOrderStatus(OutboundOrderStatus.PICKING.name());
                 order.setPickMode(task.getTaskType());
@@ -388,28 +407,56 @@ public class OutboundPickingService {
         int remaining = nvl(line.getPlannedQty()) - nvl(line.getPickedQty());
         Assert.isTrue(remaining > 0, "该明细已经完成拣货");
         boolean manual = Boolean.TRUE.equals(dto.getManual());
-        if (!manual) {
-            Assert.hasText(dto.getLocationScanCode(), "请先扫描库位标签");
-            Assert.isTrue(line.getLocationCode() != null
-                            && line.getLocationCode().equalsIgnoreCase(dto.getLocationScanCode().trim()),
-                    "扫描库位与任务要求不一致，应前往: " + line.getLocationCode());
-        }
         boolean palletMatched = line.getPalletNo() != null
                 && line.getPalletNo().equalsIgnoreCase(dto.getScanCode().trim());
         boolean skuMatched = skuBarcodeService.matches(task.getErpTenantId(), line.getSkuCode(), dto.getScanCode());
-        Assert.isTrue(palletMatched || skuMatched,
-                "扫描商品或托盘与任务明细不一致，要求SKU: " + line.getSkuCode());
-        Assert.isTrue(dto.getQuantity() <= remaining,
-                "实拣数量超过剩余计划，当前剩余: " + remaining);
-
-        line.setPickedQty(nvl(line.getPickedQty()) + dto.getQuantity());
+        validatePickScan(line.getPickStrategy(), line.getLocationCode(), line.getSlotCode(), line.getPalletNo(),
+                dto.getLocationScanCode(), palletMatched, skuMatched, manual, dto.getManualReason());
+        String operatorName = resolveOperatorName(operatorId, platformTenantId);
+        if ("WHOLE_PALLET".equals(line.getPickStrategy())) {
+            completeWholePalletLines(task, line, dto, operatorId, operatorName);
+            return;
+        }
+        int scanQuantity = resolveScanQuantity(line.getPickStrategy(), dto.getQuantity(), remaining);
+        line.setPickedQty(nvl(line.getPickedQty()) + scanQuantity);
         line.setShortageQty(0);
         line.setExceptionReason(null);
         line.setLineStatus(nvl(line.getPickedQty()) == nvl(line.getPlannedQty())
                 ? "COMPLETED" : "IN_PROGRESS");
+        line.setPickedBy(operatorId);
+        line.setPickedByName(operatorName);
+        line.setPickTime(LocalDateTime.now());
         Assert.isTrue(pickTaskLineMapper.updateById(line) == 1, "拣货明细被其他操作更新，请刷新重试");
         recordScanEvent(task, line, null, "PICK", manual ? "MANUAL" : "SCAN",
-                dto.getScanCode(), line.getSkuCode(), dto.getQuantity(), operatorId, null);
+                dto.getScanCode(), line.getSkuCode(), scanQuantity, operatorId, dto.getManualReason());
+    }
+
+    private void completeWholePalletLines(WmsOutboundPickTask task, WmsOutboundPickTaskLine scannedLine,
+            PickLineScanDTO dto, Long operatorId, String operatorName) {
+        List<WmsOutboundPickTaskLine> palletLines = pickTaskLineMapper.selectByTaskId(task.getId()).stream()
+                .filter(line -> Objects.equals(scannedLine.getPalletId(), line.getPalletId()))
+                .filter(line -> "WHOLE_PALLET".equals(line.getPickStrategy()))
+                .collect(Collectors.toList());
+        Assert.notEmpty(palletLines, "整托拣货任务明细不存在");
+        LocalDateTime now = LocalDateTime.now();
+        for (WmsOutboundPickTaskLine candidate : palletLines) {
+            WmsOutboundPickTaskLine line = pickTaskLineMapper.selectByIdForUpdate(candidate.getId());
+            int remaining = nvl(line.getPlannedQty()) - nvl(line.getPickedQty());
+            if (remaining <= 0) {
+                continue;
+            }
+            line.setPickedQty(nvl(line.getPlannedQty()));
+            line.setShortageQty(0);
+            line.setExceptionReason(null);
+            line.setLineStatus("COMPLETED");
+            line.setPickedBy(operatorId);
+            line.setPickedByName(operatorName);
+            line.setPickTime(now);
+            Assert.isTrue(pickTaskLineMapper.updateById(line) == 1, "整托拣货明细更新失败，请刷新重试");
+            recordScanEvent(task, line, null, "PICK",
+                    Boolean.TRUE.equals(dto.getManual()) ? "MANUAL" : "PALLET_SCAN",
+                    dto.getScanCode(), line.getSkuCode(), remaining, operatorId, dto.getManualReason());
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -524,6 +571,9 @@ public class OutboundPickingService {
         }
 		task.setTaskStatus(hasSorting ? "SORTING" : "COMPLETED");
         pickTaskMapper.updateById(task);
+		if (hasSorting) {
+			sortSlotService.markTaskSorting(taskId);
+		}
     }
 
 	@Transactional(rollbackFor = Exception.class)
@@ -540,12 +590,13 @@ public class OutboundPickingService {
 				.anyMatch(pack -> Objects.equals(pack.getId(), dto.getPackageId()));
 		Assert.isTrue(packageBelongs, "该平台订单包裹不属于当前拣货任务");
 		outboundPackageService.scanSort(dto.getPackageId(), dto.getScanCode(), dto.getQuantity(),
-				Boolean.TRUE.equals(dto.getManual()), operatorId, task.getPickerName());
+				Boolean.TRUE.equals(dto.getManual()), dto.getManualReason(), operatorId,
+                resolveOperatorName(operatorId, platformTenantId));
 	}
 
 	/** 确认一个平台订单格口已完成分货；全部完成后自动进入待打包。 */
 	@Transactional(rollbackFor = Exception.class)
-	public void confirmPackageSort(Long taskId, Long packageId) {
+	public void confirmPackageSort(Long taskId, Long packageId, Long operatorId) {
 		Long platformTenantId = currentPlatformTenantId();
 		WmsOutboundPickTask task = pickTaskMapper.selectByIdForUpdate(taskId);
 		Assert.notNull(task, "拣货任务不存在");
@@ -553,7 +604,8 @@ public class OutboundPickingService {
 		Assert.isTrue("SORTING".equals(task.getTaskStatus()), "当前拣货任务不在分货中");
 
 		com.erp.admin.wms.model.entity.WmsSalesOutboundPackage pack = outboundPackageService
-				.confirmSorted(packageId, task.getPickerName());
+				.confirmSorted(packageId, operatorId, resolveOperatorName(operatorId, platformTenantId));
+		sortSlotService.markReady(packageId);
 		WmsOutboundPickTaskOrder targetRelation = pickTaskOrderMapper.selectByTaskId(taskId).stream()
 				.filter(relation -> Objects.equals(relation.getOutboundOrderId(), pack.getOutboundOrderId()))
 				.findFirst().orElse(null);
@@ -581,6 +633,36 @@ public class OutboundPickingService {
 			task.setTaskStatus("COMPLETED");
 			Assert.isTrue(pickTaskMapper.updateById(task) == 1, "拣货任务完成状态更新失败");
 		}
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void skipSorting(Long taskId) {
+		Long platformTenantId = currentPlatformTenantId();
+		WmsOutboundPickTask task = pickTaskMapper.selectByIdForUpdate(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		Assert.isTrue(Objects.equals(platformTenantId, task.getPlatformTenantId()), "无权操作该拣货任务");
+		Assert.isTrue("SORTING".equals(task.getTaskStatus()), "当前任务不在格口分货阶段");
+
+		for (WmsOutboundPickTaskOrder relation : pickTaskOrderMapper.selectByTaskId(taskId)) {
+			if (!Integer.valueOf(1).equals(relation.getSortRequired())) {
+				continue;
+			}
+			outboundPackageService.skipUnstartedSorting(relation.getOutboundOrderId());
+			SalesOutboundOrder order = salesOutboundMapper.selectByIdForUpdate(relation.getOutboundOrderId());
+			Assert.notNull(order, "出库单不存在: " + relation.getOutboundNo());
+			Assert.isTrue(OutboundOrderStatus.PICKING.name().equals(order.getOrderStatus()),
+					"出库单状态已变化: " + relation.getOutboundNo());
+			order.setOrderStatus(OutboundOrderStatus.PICKED.name());
+			Assert.isTrue(salesOutboundMapper.updateById(order) == 1, "出库单状态更新失败");
+			relation.setSortRequired(0);
+			relation.setSortStatus("NOT_REQUIRED");
+			relation.setToteNo(null);
+			Assert.isTrue(pickTaskOrderMapper.updateById(relation) == 1, "拣货任务分货状态更新失败");
+		}
+		task.setSecondaryOrderCount(0);
+		task.setTaskStatus("COMPLETED");
+		Assert.isTrue(pickTaskMapper.updateById(task) == 1, "拣货任务状态更新失败");
+		sortSlotService.releaseTask(taskId);
 	}
 
 	private void resumeTask(WmsOutboundPickTask task) {
@@ -709,7 +791,113 @@ public class OutboundPickingService {
 		allocation.setPickOrder(batch.getPickOrder());
 	}
 
+    public static void validatePickScan(String strategy, String locationCode, String slotCode, String palletNo,
+            String scannedLocation, boolean palletMatched, boolean skuMatched, boolean manual,
+            String manualReason) {
+        if (manual) {
+            if (!StringUtils.hasText(manualReason)) {
+                throw new IllegalArgumentException("手工登记必须填写原因");
+            }
+            return;
+        }
+        String expectedLocation = StringUtils.hasText(slotCode) ? slotCode : locationCode;
+        if (!StringUtils.hasText(scannedLocation)) {
+            throw new IllegalArgumentException("请先扫描托位标签");
+        }
+        if (!StringUtils.hasText(expectedLocation)
+                || !expectedLocation.equalsIgnoreCase(scannedLocation.trim())) {
+            throw new IllegalArgumentException("扫描托位与任务要求不一致，应前往: " + expectedLocation);
+        }
+        if ("WHOLE_PALLET".equals(strategy)) {
+            if (!palletMatched) {
+                throw new IllegalArgumentException("整托拣货必须扫描指定托盘: " + palletNo);
+            }
+        }
+        else if (!skuMatched) {
+            throw new IllegalArgumentException("拆零拣货必须扫描商品SKU，不能只扫描托盘");
+        }
+    }
+
+    public static int resolveScanQuantity(String strategy, Integer requested, int remaining) {
+        if (remaining <= 0) {
+            throw new IllegalArgumentException("当前明细没有剩余可操作数量");
+        }
+        if ("WHOLE_PALLET".equals(strategy)) {
+            return remaining;
+        }
+        if (requested == null || requested <= 0 || requested > remaining) {
+            throw new IllegalArgumentException("实拣数量必须在1到" + remaining + "之间");
+        }
+        return requested;
+    }
+
+    public static boolean requiresReturnBeforeShortClose(List<WmsOutboundPickTaskLine> lines) {
+        return lines != null && lines.stream()
+                .anyMatch(line -> nvl(line.getPickedQty()) > nvl(line.getReturnedQty()));
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void scanReturnLine(PickReturnScanDTO dto, Long operatorId) {
+        Long platformTenantId = currentPlatformTenantId();
+        WmsOutboundPickTask task = pickTaskMapper.selectByIdForUpdate(dto.getTaskId());
+        Assert.notNull(task, "拣货任务不存在");
+        Assert.isTrue(Objects.equals(platformTenantId, task.getPlatformTenantId()), "无权操作该拣货任务");
+        Assert.isTrue("RETURNING".equals(task.getTaskStatus()), "当前任务不在返库中");
+
+        WmsOutboundPickTaskLine line = pickTaskLineMapper.selectByIdForUpdate(dto.getLineId());
+        Assert.notNull(line, "返库明细不存在");
+        Assert.isTrue(Objects.equals(task.getId(), line.getTaskId()), "返库明细不属于当前任务");
+        int remaining = nvl(line.getReturnRequiredQty()) - nvl(line.getReturnedQty());
+        Assert.isTrue(remaining > 0, "该明细已经完成返库");
+        boolean manual = Boolean.TRUE.equals(dto.getManual());
+        boolean palletMatched = line.getPalletNo() != null
+                && line.getPalletNo().equalsIgnoreCase(dto.getScanCode().trim());
+        boolean skuMatched = skuBarcodeService.matches(task.getErpTenantId(), line.getSkuCode(), dto.getScanCode());
+        validatePickScan(line.getPickStrategy(), line.getLocationCode(), line.getSlotCode(), line.getPalletNo(),
+                dto.getLocationScanCode(), palletMatched, skuMatched, manual, dto.getManualReason());
+        int returnQuantity = resolveScanQuantity(line.getPickStrategy(), dto.getQuantity(), remaining);
+        String operatorName = resolveOperatorName(operatorId, platformTenantId);
+
+        line.setReturnedQty(nvl(line.getReturnedQty()) + returnQuantity);
+        line.setReturnBy(operatorId);
+        line.setReturnByName(operatorName);
+        line.setReturnTime(LocalDateTime.now());
+        line.setLineStatus(nvl(line.getReturnedQty()) >= nvl(line.getReturnRequiredQty())
+                ? "RETURNED" : "RETURNING");
+        Assert.isTrue(pickTaskLineMapper.updateById(line) == 1, "返库明细被其他操作更新，请刷新重试");
+        recordScanEvent(task, line, null, "RETURN", manual ? "MANUAL" : "SCAN",
+                dto.getScanCode(), line.getSkuCode(), returnQuantity, operatorId, dto.getManualReason());
+
+        List<WmsOutboundPickTaskLine> lines = pickTaskLineMapper.selectByTaskId(task.getId());
+        boolean allReturned = lines.stream().allMatch(item ->
+                nvl(item.getReturnedQty()) >= nvl(item.getReturnRequiredQty()));
+        if (allReturned) {
+            finalizeShortClose(task);
+        }
+    }
+
 	private void closeShortTask(WmsOutboundPickTask task) {
+        List<WmsOutboundPickTaskLine> lines = pickTaskLineMapper.selectByTaskId(task.getId());
+        if (requiresReturnBeforeShortClose(lines)) {
+            for (WmsOutboundPickTaskLine candidate : lines) {
+                WmsOutboundPickTaskLine line = pickTaskLineMapper.selectByIdForUpdate(candidate.getId());
+                if (nvl(line.getPickedQty()) > 0) {
+                    line.setReturnRequiredQty(nvl(line.getPickedQty()));
+                    line.setReturnedQty(0);
+                    line.setLineStatus("RETURNING");
+                    Assert.isTrue(pickTaskLineMapper.updateById(line) == 1, "返库任务明细创建失败");
+                }
+            }
+            task.setTaskStatus("RETURNING");
+            task.setExceptionLineId(null);
+            task.setExceptionReason("短拣关闭，等待已拣商品返库");
+            Assert.isTrue(pickTaskMapper.updateById(task) == 1, "返库任务状态更新失败");
+            return;
+        }
+        finalizeShortClose(task);
+	}
+
+    private void finalizeShortClose(WmsOutboundPickTask task) {
 		for (WmsOutboundPickTaskOrder relation : pickTaskOrderMapper.selectByTaskId(task.getId())) {
 			SalesOutboundOrder order = salesOutboundMapper.selectByIdForUpdate(relation.getOutboundOrderId());
 			if (order != null) {
@@ -720,6 +908,7 @@ public class OutboundPickingService {
 		}
 		task.setTaskStatus("CANCELLED");
 		Assert.isTrue(pickTaskMapper.updateById(task) == 1, "缺货任务关闭失败");
+		sortSlotService.releaseTask(task.getId());
 	}
 
 	private void recordScanEvent(WmsOutboundPickTask task, WmsOutboundPickTaskLine line,
@@ -735,10 +924,19 @@ public class OutboundPickingService {
 		event.setSkuCode(skuCode);
 		event.setQuantity(quantity == null ? 0 : quantity);
 		event.setOperatorId(operatorId);
-		event.setOperatorName(task == null ? null : task.getPickerName());
+		event.setOperatorName(resolveOperatorName(operatorId,
+                task == null ? currentPlatformTenantId() : task.getPlatformTenantId()));
 		event.setRemark(remark);
 		scanEventMapper.insert(event);
 	}
+
+    private String resolveOperatorName(Long operatorId, Long platformTenantId) {
+        if (operatorId == null) {
+            return null;
+        }
+        String name = outboundPickingMapper.selectPickerName(operatorId, platformTenantId);
+        return StringUtils.hasText(name) ? name : "用户#" + operatorId;
+    }
 
     // ==================== 批次预留 / 释放（供确认/取消/下架复用） ====================
 
@@ -941,7 +1139,8 @@ public class OutboundPickingService {
         }
     }
 
-    private BatchPickPreviewVO buildBatchPreview(List<SalesOutboundOrder> orders, int maxOrders, boolean wholePriority) {
+    private BatchPickPreviewVO buildBatchPreview(List<SalesOutboundOrder> orders, int maxOrders,
+            boolean wholePriority, Boolean useSortSlots) {
         List<PickTaskPreviewVO> tasks = new ArrayList<>();
         for (List<SalesOutboundOrder> group : splitGroups(orders, maxOrders)) {
             TaskAnalysis analysis = analyze(group, wholePriority);
@@ -953,7 +1152,7 @@ public class OutboundPickingService {
             vo.setErpTenantId(first.getErpTenantId());
             vo.setOwnerName(names == null ? null : names.getOwnerName());
             vo.setSourceType(first.getSourceType());
-            vo.setTaskType(group.size() == 1 ? "SINGLE" : "WAVE");
+            vo.setTaskType(resolveTaskType(group, analysis));
             vo.setOutboundOrderIds(group.stream().map(SalesOutboundOrder::getId).collect(Collectors.toList()));
             vo.setOrderCount(group.size());
             vo.setSalesOrderCount(salesOrderCount(group));
@@ -961,8 +1160,8 @@ public class OutboundPickingService {
             vo.setTotalQuantity(group.stream().mapToInt(o -> nvl(o.getTotalQuantity())).sum());
             vo.setWholePalletCount(analysis.wholePalletIds.size());
             int packageCount = salesOrderCount(group);
-            vo.setSecondaryOrderCount(com.erp.admin.wms.model.enums.OutboundSourceType.SALES.name()
-                    .equals(first.getSourceType()) && packageCount > 1 ? packageCount : 0);
+            vo.setSecondaryOrderCount(requiresSlotSorting(useSortSlots, first.getSourceType(), packageCount)
+                    ? packageCount : 0);
             tasks.add(vo);
         }
         BatchPickPreviewVO result = new BatchPickPreviewVO();
@@ -976,6 +1175,17 @@ public class OutboundPickingService {
         return result;
     }
 
+    private static String resolveTaskType(List<SalesOutboundOrder> group, TaskAnalysis analysis) {
+        boolean palletDirect = group.size() == 1
+                && !analysis.lines.isEmpty()
+                && analysis.lines.values().stream().allMatch(line -> line.batch.getPalletId() != null
+                        && analysis.wholePalletIds.contains(line.batch.getPalletId()));
+        if (palletDirect) {
+            return "PALLET_DIRECT";
+        }
+        return group.size() == 1 ? "SINGLE" : "WAVE";
+    }
+
     private List<List<SalesOutboundOrder>> splitGroups(List<SalesOutboundOrder> orders, int maxOrders) {
         Map<String, List<SalesOutboundOrder>> grouped = new LinkedHashMap<>();
         for (SalesOutboundOrder order : orders) {
@@ -985,11 +1195,43 @@ public class OutboundPickingService {
         List<List<SalesOutboundOrder>> result = new ArrayList<>();
         for (List<SalesOutboundOrder> group : grouped.values()) {
             group.sort(Comparator.comparing(SalesOutboundOrder::getId));
-            for (int from = 0; from < group.size(); from += maxOrders) {
-                result.add(new ArrayList<>(group.subList(from, Math.min(group.size(), from + maxOrders))));
-            }
+            result.addAll(splitByPackageCapacity(group, maxOrders));
         }
         return result;
+    }
+
+    /**
+     * 按最终包裹/格口容量拆分任务；单张出库单作为业务整体，绝不跨任务拆分。
+     */
+    public static List<List<SalesOutboundOrder>> splitByPackageCapacity(
+            List<SalesOutboundOrder> orders, int maxPackages) {
+        List<List<SalesOutboundOrder>> result = new ArrayList<>();
+        if (orders == null || orders.isEmpty()) {
+            return result;
+        }
+        int capacity = Math.max(1, maxPackages);
+        List<SalesOutboundOrder> current = new ArrayList<>();
+        int currentPackages = 0;
+        for (SalesOutboundOrder order : orders) {
+            int orderPackages = Math.max(1, nvl(order.getOrderCount()));
+            if (!current.isEmpty() && currentPackages + orderPackages > capacity) {
+                result.add(current);
+                current = new ArrayList<>();
+                currentPackages = 0;
+            }
+            current.add(order);
+            currentPackages += orderPackages;
+        }
+        if (!current.isEmpty()) {
+            result.add(current);
+        }
+        return result;
+    }
+
+    public static boolean requiresSlotSorting(Boolean useSortSlots, String sourceType, int packageCount) {
+        return Boolean.TRUE.equals(useSortSlots)
+                && com.erp.admin.wms.model.enums.OutboundSourceType.SALES.name().equals(sourceType)
+                && packageCount > 1;
     }
 
     private TaskAnalysis analyze(List<SalesOutboundOrder> orders, boolean wholePriority) {
@@ -1096,6 +1338,7 @@ public class OutboundPickingService {
             int available = reservedForOrder > 0 ? reservedForOrder : publicAvailable;
             OutboundOrderItemVO vo = new OutboundOrderItemVO();
             vo.setSkuCode(e.getKey());
+            vo.setWarehouseSkuCode(warehouseSkuCodeService.build(order.getErpTenantId(), e.getKey()));
             vo.setRequiredQty(e.getValue());
             vo.setAvailableQty(available);
             vo.setOwnReservedQty(reservedForOrder);
@@ -1104,6 +1347,14 @@ public class OutboundPickingService {
             result.add(vo);
         }
         return result;
+    }
+
+    private void attachWarehouseSkuCodes(List<PickAllocationVO> lines, Long erpTenantId) {
+        for (PickAllocationVO line : lines) {
+            if (StringUtils.hasText(line.getSkuCode())) {
+                line.setWarehouseSkuCode(warehouseSkuCodeService.build(erpTenantId, line.getSkuCode()));
+            }
+        }
     }
 
     private Map<String, Integer> requiredBySku(List<SalesOutboundOrderItem> items) {
@@ -1163,6 +1414,8 @@ public class OutboundPickingService {
         vo.setPickedQty(nvl(line.getPickedQty()));
         vo.setRemainingQty(Math.max(nvl(line.getPlannedQty()) - nvl(line.getPickedQty()), 0));
         vo.setShortageQty(nvl(line.getShortageQty()));
+        vo.setReturnRequiredQty(nvl(line.getReturnRequiredQty()));
+        vo.setReturnedQty(nvl(line.getReturnedQty()));
         vo.setLineStatus(line.getLineStatus());
         vo.setExceptionReason(line.getExceptionReason());
         vo.setPalletId(line.getPalletId());

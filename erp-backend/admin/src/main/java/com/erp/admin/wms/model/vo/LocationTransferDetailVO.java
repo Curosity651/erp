@@ -19,4 +19,7 @@ public class LocationTransferDetailVO extends LocationTransferPageVO {
 	@Schema(title = "明细列表")
 	private List<LocationTransferItemVO> items;
 
+	@Schema(title = "调整完成后需要更新标签的托盘")
+	private List<PalletSummaryVO> printablePallets;
+
 }

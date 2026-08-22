@@ -9,6 +9,8 @@ import com.erp.admin.wms.model.vo.StocktakeDetailVO;
 import com.erp.admin.wms.model.vo.StocktakePageVO;
 import com.erp.admin.wms.model.vo.StocktakeStatsVO;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 
@@ -63,5 +65,23 @@ public interface StocktakeMapper extends ExtendMapper<StocktakeOrder> {
 	 * @return List<StocktakeStatsVO> 统计信息列表
 	 */
 	List<StocktakeStatsVO> selectStatsByIds(@Param("ids") Collection<Long> ids);
+
+	@Select("SELECT id FROM wms_warehouse WHERE id = #{warehouseId} AND deleted = 0 FOR UPDATE")
+	Long lockWarehouse(@Param("warehouseId") Long warehouseId);
+
+	@Select("SELECT * FROM wms_stocktake_order WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+	StocktakeOrder selectByIdForUpdate(@Param("id") Long id);
+
+	@Update("UPDATE wms_stocktake_order SET order_status = #{targetStatus}, update_time = NOW() "
+			+ "WHERE id = #{id} AND order_status = #{expectedStatus} AND deleted = 0")
+	int casStatus(@Param("id") Long id, @Param("expectedStatus") String expectedStatus,
+			@Param("targetStatus") String targetStatus);
+
+	@Select("SELECT COUNT(*) FROM wms_stocktake_location_task t "
+			+ "JOIN wms_stocktake_order o ON o.id = t.stocktake_order_id AND o.deleted = 0 "
+			+ "WHERE t.warehouse_id = #{warehouseId} AND t.location_code = #{locationCode} "
+			+ "AND o.order_status IN ('COUNTING','REVIEWING','READY')")
+	int countActiveLocationFreeze(@Param("warehouseId") Long warehouseId,
+			@Param("locationCode") String locationCode);
 
 }

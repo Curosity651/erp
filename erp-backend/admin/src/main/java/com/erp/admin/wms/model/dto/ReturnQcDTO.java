@@ -41,7 +41,7 @@ public class ReturnQcDTO {
         @Schema(title = "残次品数量")
         private Integer damagedQty;
 
-        @Schema(title = "良品回库分区 RETURN/STANDARD")
+        @Schema(title = "良品回库分区，固定为 RETURN")
         private String qualifiedZone;
 
         @Schema(title = "良品回库库位")

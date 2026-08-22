@@ -100,6 +100,12 @@
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a @click="handleViewDetail(record)">查看</a>
+          <a
+            v-if="record.orderStatus !== InboundStatus.DRAFT && record.orderStatus !== InboundStatus.CANCELLED"
+            @click="handlePrint(record)"
+          >
+            打印
+          </a>
           <a v-if="canEdit(record.orderStatus)" @click="handleEdit(record)">编辑</a>
           <template
             v-if="
@@ -170,10 +176,13 @@ import {
   submitInbound,
   cancelInbound,
   deletePurchaseInbound,
-  exportPurchaseInbound
+  exportPurchaseInbound,
+  getPurchaseInboundDetail
 } from '@/api/wms/purchase-inbound'
 import type { PurchaseInboundPageVO, PurchaseInboundQO } from '@/api/wms/purchase-inbound/types'
 import { InboundStatus } from '@/api/wms/purchase-inbound/types'
+import { isSuccess } from '@/api'
+import { printPurchaseInbound } from './inbound-print'
 
 defineOptions({ name: 'PurchaseInboundPage' })
 
@@ -273,6 +282,27 @@ const handleEdit = (record: PurchaseInboundPageVO) => {
 
 const handleViewDetail = (record: PurchaseInboundPageVO) => {
   detailDrawerRef.value?.open(record.id)
+}
+
+const handlePrint = async (record: PurchaseInboundPageVO) => {
+  const printPopup = window.open('', '_blank', 'width=900,height=760')
+  if (!printPopup) {
+    message.warning('打印窗口被浏览器拦截，请允许本站弹出窗口后重试')
+    return
+  }
+  printPopup.document.write('<p style="font-family:sans-serif;padding:24px">正在生成入库单...</p>')
+  try {
+    const result = await getPurchaseInboundDetail(record.id)
+    if (!isSuccess(result) || !result.data) {
+      printPopup.close()
+      message.error(result.message || '加载入库单失败')
+      return
+    }
+    await printPurchaseInbound(result.data, printPopup)
+  } catch (error) {
+    printPopup.close()
+    message.error(error instanceof Error ? error.message : '打印入库单失败')
+  }
 }
 
 const handleSubmit = (record: PurchaseInboundPageVO) => {

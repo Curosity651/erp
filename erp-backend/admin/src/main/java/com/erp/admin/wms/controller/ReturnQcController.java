@@ -4,6 +4,7 @@ import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
 import com.erp.admin.wms.model.qo.ReturnQO;
 import com.erp.admin.wms.model.vo.PalletSlotVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.model.vo.ReturnOrderVO;
 import com.erp.admin.wms.model.vo.WarehouseOptionVO;
 import com.erp.admin.wms.service.ReturnQcService;
@@ -50,6 +51,13 @@ public class ReturnQcController {
     @PreAuthorize("hasAuthority('wms:return-qc:oper')")
     public ApiResult<ReturnOrderVO> detail(@PathVariable("id") Long id) {
         return ApiResult.ok(returnQcService.getDetail(id));
+    }
+
+    @Operation(summary = "查询退货质检完成后需要打印或更新的托盘标签")
+    @GetMapping("/{id}/pallets")
+    @PreAuthorize("hasAuthority('wms:return-qc:oper')")
+    public ApiResult<List<PalletSummaryVO>> pallets(@PathVariable("id") Long id) {
+        return ApiResult.ok(returnQcService.listQcPallets(id));
     }
 
     @Operation(summary = "查询本退货单货主可使用的退货仓库")
@@ -99,8 +107,9 @@ public class ReturnQcController {
     @PreAuthorize("hasAuthority('wms:return-qc:oper')")
     public ApiResult<java.util.List<String>> availableLocations(
             @RequestParam("returnOrderId") Long returnOrderId,
+            @RequestParam(value = "warehouseId", required = false) Long warehouseId,
             @RequestParam("zone") String zone) {
-        return ApiResult.ok(returnQcService.listAvailableLocations(returnOrderId, zone));
+        return ApiResult.ok(returnQcService.listAvailableLocations(returnOrderId, warehouseId, zone));
     }
 
 }

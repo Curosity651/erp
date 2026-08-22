@@ -21,11 +21,22 @@
             o.reason,
             o.remark,
             o.complete_time,
+            o.create_by,
+            COALESCE(NULLIF(create_user.nickname, ''), create_user.username) AS create_by_name,
+            o.complete_by,
+            COALESCE(
+                NULLIF(complete_user.nickname, ''),
+                complete_user.username,
+                NULLIF(create_user.nickname, ''),
+                create_user.username
+            ) AS operator_user_name,
             o.create_time
         FROM wms_location_transfer_order o
         LEFT JOIN wms_warehouse w ON o.warehouse_id = w.id
         LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
         LEFT JOIN sys_tenant op ON op.id = COALESCE(o.wms_tenant_id, t.parent_wms_tenant_id)
+        LEFT JOIN sys_user create_user ON create_user.user_id = o.create_by AND create_user.deleted = 0
+        LEFT JOIN sys_user complete_user ON complete_user.user_id = o.complete_by AND complete_user.deleted = 0
         <where>
             AND o.deleted = 0
             <if test="qo.transferNo != null and qo.transferNo != ''">
@@ -39,6 +50,9 @@
             </if>
             <if test="qo.wmsTenantId != null">
                 AND t.parent_wms_tenant_id = #{qo.wmsTenantId}
+            </if>
+            <if test="qo.operatorUserId != null">
+                AND COALESCE(o.complete_by, o.create_by) = #{qo.operatorUserId}
             </if>
             <if test="qo.orderStatus != null and qo.orderStatus != ''">
                 AND o.order_status = #{qo.orderStatus}
@@ -75,11 +89,22 @@
             o.reason,
             o.remark,
             o.complete_time,
+            o.create_by,
+            COALESCE(NULLIF(create_user.nickname, ''), create_user.username) AS create_by_name,
+            o.complete_by,
+            COALESCE(
+                NULLIF(complete_user.nickname, ''),
+                complete_user.username,
+                NULLIF(create_user.nickname, ''),
+                create_user.username
+            ) AS operator_user_name,
             o.create_time
         FROM wms_location_transfer_order o
         LEFT JOIN wms_warehouse w ON o.warehouse_id = w.id
         LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
         LEFT JOIN sys_tenant op ON op.id = COALESCE(o.wms_tenant_id, t.parent_wms_tenant_id)
+        LEFT JOIN sys_user create_user ON create_user.user_id = o.create_by AND create_user.deleted = 0
+        LEFT JOIN sys_user complete_user ON complete_user.user_id = o.complete_by AND complete_user.deleted = 0
         WHERE o.id = #{id} AND o.deleted = 0
     </select>
 

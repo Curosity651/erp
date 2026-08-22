@@ -82,6 +82,13 @@
             text="撤销"
             @confirm="handleCancel(record)"
           />
+          <confirm-text-button
+            v-if="record.orderStatus === 'PENDING_DESTROY' && hasPermission('wms:adjustment:confirm')"
+            title="请确认仓库已经实际销毁该批货物。确认后将扣减库存且不可撤销。"
+            text="确认销毁"
+            @confirm="handleDestroy(record)"
+          />
+          <a v-if="record.orderStatus === 'SCRAPPED'" @click="handlePrint(record)">打印</a>
         </operation-group>
       </template>
     </template>
@@ -104,7 +111,15 @@ import { useAuthorize } from '@/hooks/permission'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 import { mergePageParam } from '@/utils/page-utils'
 import { doRequest } from '@/utils/axios/request'
-import { pageAdjustment, cancelScrap } from '@/api/wms/adjustment'
+import {
+  pageAdjustment,
+  cancelScrap,
+  destroyScrap,
+  getScrapPallets
+} from '@/api/wms/adjustment'
+import { isSuccess } from '@/api'
+import { message } from 'ant-design-vue'
+import { printPalletLabels } from '@/views/platform/pallet/pallet-label-print'
 import { ScrapStatusList } from '@/api/wms/adjustment/types'
 import type { AdjustmentPageVO, AdjustmentQO, ScrapStatus } from '@/api/wms/adjustment/types'
 import ScrapCreateDrawer from './ScrapCreateDrawer.vue'
@@ -164,13 +179,41 @@ const columns: ProColumns[] = [
   { title: '状态', key: 'status', width: 110 },
   { title: '报废原因', dataIndex: 'adjustmentReason', width: 150, ellipsis: true },
   { title: '创建时间', dataIndex: 'createTime', width: 170 },
-  { key: 'operate', title: '操作', align: 'center', width: 130, fixed: 'right' }
+  { key: 'operate', title: '操作', align: 'center', width: 190, fixed: 'right' }
 ]
 
 const handleNew = () => createRef.value?.open()
 const handleViewDetail = (r: AdjustmentPageVO) => detailRef.value?.open(r.id)
 const handleCancel = (r: AdjustmentPageVO) => {
   doRequest(cancelScrap(r.id), { successMessage: '已撤销', onSuccess: () => reloadTable() })
+}
+const handleDestroy = (r: AdjustmentPageVO) => {
+  doRequest(destroyScrap(r.id), {
+    successMessage: '已确认销毁，库存及托盘已更新',
+    onSuccess: () => reloadTable()
+  })
+}
+const handlePrint = async (r: AdjustmentPageVO) => {
+  const printPage = window.open('', '_blank', 'width=760,height=680')
+  if (!printPage) {
+    message.warning('打印窗口被浏览器拦截，请允许弹出窗口后重试')
+    return
+  }
+  printPage.document.write('<!doctype html><title>正在准备托盘标签...</title><p>正在准备托盘标签...</p>')
+  printPage.document.close()
+  try {
+    const response = await getScrapPallets(r.id)
+    const pallets = isSuccess(response) ? response.data || [] : []
+    if (!pallets.length) {
+      printPage.close()
+      message.info('本次报废后没有需要更新的托盘标签；整托清空的托盘已关闭')
+      return
+    }
+    await printPalletLabels(pallets, printPage)
+  } catch (error: any) {
+    printPage.close()
+    message.error(error?.message || '托盘标签加载失败')
+  }
 }
 </script>
 

@@ -15,7 +15,7 @@
       <template v-if="column.key === 'warehouseInfo'">
         <div class="wh-info-cell">
           <div class="wh-name">
-            <a v-if="record.locationGenerated === 1" @click="handleManage(record)">
+            <a v-if="(record.assignableRackCount || 0) > 0" @click="handleManage(record)">
               {{ record.warehouseName }}
             </a>
             <span v-else>{{ record.warehouseName }}</span>
@@ -30,27 +30,29 @@
 
       <!-- 分配情况：总排数 / 已分配 / 未分配 -->
       <template v-else-if="column.key === 'rackStat'">
-        <template v-if="record.locationGenerated === 1">
+        <template v-if="(record.assignableRackCount || 0) > 0">
           <span class="rack-stat">
             总 <b>{{ record.rackTotal ?? 0 }}</b> 排 ·
             <span class="assigned">已分配 {{ record.rackAssigned ?? 0 }}</span> ·
+            <span class="reserved">合同预留 {{ record.rackReserved ?? 0 }}</span> ·
             <span class="idle">未分配 {{ record.rackUnassigned ?? 0 }}</span>
           </span>
         </template>
-        <span v-else class="muted">未设计</span>
+        <span v-else class="muted">无可分配排</span>
       </template>
 
       <!-- 库位状态 -->
       <template v-else-if="column.key === 'genStatus'">
-        <a-tag v-if="record.locationGenerated === 1" color="green">已生成</a-tag>
-        <a-tag v-else color="default">未生成</a-tag>
+        <a-tag v-if="(record.assignableRackCount || 0) > 0" color="green">可分配</a-tag>
+        <a-tag v-else-if="record.locationConfigured" color="orange">仅公共库位</a-tag>
+        <a-tag v-else color="default">未配置</a-tag>
       </template>
 
       <!-- 操作 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="record.locationGenerated === 1" @click="handleManage(record)">管理货架分配</a>
-          <a-tooltip v-else title="请先在『库位管理』生成库位">
+          <a v-if="(record.assignableRackCount || 0) > 0" @click="handleManage(record)">管理货架分配</a>
+          <a-tooltip v-else title="请先在『库位管理』添加非公共库位">
             <span style="color: #bfbfbf">管理货架分配</span>
           </a-tooltip>
         </operation-group>
@@ -79,6 +81,7 @@ defineOptions({ name: 'RackAssignmentPage' })
 type RackWarehouseRow = WarehouseStructure & {
   rackTotal?: number
   rackAssigned?: number
+  rackReserved?: number
   rackUnassigned?: number
 }
 
@@ -101,7 +104,10 @@ const tableRequest: TableRequest = async params => {
     ) {
       return false
     }
-    if (kw.generatedStatus !== undefined && (w.locationGenerated ?? 0) !== kw.generatedStatus) {
+    if (
+      kw.configuredStatus !== undefined &&
+      (w.locationConfigured ? 1 : 0) !== kw.configuredStatus
+    ) {
       return false
     }
     return true
@@ -112,15 +118,16 @@ const tableRequest: TableRequest = async params => {
   const start = (current - 1) * pageSize
   const pageRecords = filtered.slice(start, start + pageSize)
 
-  // 汇总每个（已生成库位的）仓库的货架分配情况：总排数/已分配/未分配
+  // 汇总每个存在可分配逻辑库位的仓库：总排数/已分配/未分配
   await Promise.all(
     pageRecords.map(async w => {
       const row = w as RackWarehouseRow
-      if (w.locationGenerated !== 1) return
+      if ((w.assignableRackCount || 0) === 0) return
       const pr = await previewRacks(w.id)
       const racks = isSuccess(pr) ? pr.data || [] : []
       row.rackTotal = racks.length
       row.rackAssigned = racks.filter(r => r.status === 'OCCUPIED').length
+      row.rackReserved = racks.filter(r => r.status === 'RESERVED').length
       row.rackUnassigned = racks.filter(r => r.status === 'IDLE').length
     })
   )
@@ -203,6 +210,10 @@ const columns: ProColumns[] = [
 
 .rack-stat .assigned {
   color: #52c41a;
+}
+
+.rack-stat .reserved {
+  color: #d48806;
 }
 
 .rack-stat .idle {

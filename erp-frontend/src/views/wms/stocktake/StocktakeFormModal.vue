@@ -114,6 +114,7 @@
                 v-model:value="form.specialOwnerId"
                 width="100%"
                 placeholder="可选，不选则包含全部货主"
+                @change="handleSpecialOwnerChange"
               />
             </a-form-item>
           </a-col>
@@ -121,9 +122,13 @@
             <a-form-item label="指定 SKU">
               <a-select
                 v-model:value="form.specialSkuCodes"
-                mode="tags"
-                :token-separators="[',', ' ', '\n']"
-                placeholder="输入 SKU 后回车，可输入多个"
+                mode="multiple"
+                show-search
+                allow-clear
+                :loading="skuLoading"
+                :options="skuOptions"
+                :filter-option="filterSku"
+                :placeholder="form.warehouseId ? '请选择 SKU，可输入编码或名称搜索' : '请先选择仓库'"
               />
             </a-form-item>
           </a-col>
@@ -166,8 +171,12 @@ import {
 } from '@ant-design/icons-vue'
 import WarehouseSelect from '@/components/Lov/WarehouseSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
-import { createStocktake } from '@/api/wms/stocktake'
-import type { StocktakeDTO, StocktakeMode } from '@/api/wms/stocktake/types'
+import { createStocktake, getSelectableSkus } from '@/api/wms/stocktake'
+import type {
+  AvailableSkuVO,
+  StocktakeDTO,
+  StocktakeMode
+} from '@/api/wms/stocktake/types'
 import { listLocations, listVirtualLocations } from '@/api/wms/location-mgmt'
 import type { WmsLocation } from '@/api/wms/location-mgmt/types'
 import { isSuccess } from '@/api'
@@ -176,8 +185,10 @@ const emit = defineEmits<{ (e: 'submit-success', id: number): void }>()
 const visible = ref(false)
 const submitting = ref(false)
 const locationsLoading = ref(false)
+const skuLoading = ref(false)
 const locations = ref<WmsLocation[]>([])
 const virtualLocations = ref<WmsLocation[]>([])
+const selectableSkus = ref<AvailableSkuVO[]>([])
 const formRef = ref<FormInstance>()
 
 const today = () => {
@@ -208,14 +219,55 @@ const modes = [
 const locationOptions = computed(() =>
   locations.value
     .filter(item => item.isVirtual !== 1)
+    .sort((a, b) => naturalCompare(a.locationCode, b.locationCode))
     .map(item => ({ label: item.locationCode, value: item.id }))
 )
 const virtualLocationOptions = computed(() =>
-  virtualLocations.value.map(item => ({ label: item.locationCode, value: item.id }))
+  [...virtualLocations.value]
+    .sort((a, b) => naturalCompare(a.locationCode, b.locationCode))
+    .map(item => ({ label: item.locationCode, value: item.id }))
 )
+const skuOptions = computed(() => {
+  const merged = new Map<string, AvailableSkuVO>()
+  for (const item of selectableSkus.value) {
+    const current = merged.get(item.skuCode)
+    if (current) {
+      current.stockQuantity += item.stockQuantity || 0
+      current.ownerName = '多个货主'
+    } else {
+      merged.set(item.skuCode, { ...item })
+    }
+  }
+  return [...merged.values()]
+    .sort((a, b) => naturalCompare(a.skuCode, b.skuCode))
+    .map(item => ({
+      value: item.skuCode,
+      label: `${item.warehouseSkuCode || item.skuCode} · ${
+        item.skuBrief?.skuName || item.skuBrief?.skuChineseName || '未命名商品'
+      } · 库存 ${item.stockQuantity || 0}`,
+      searchText: [
+        item.skuCode,
+        item.warehouseSkuCode,
+        item.skuBrief?.skuName,
+        item.skuBrief?.skuChineseName,
+        item.ownerName
+      ].filter(Boolean).join(' ').toLowerCase()
+    }))
+})
+
+function naturalCompare(left?: string, right?: string) {
+  return (left || '').localeCompare(right || '', 'zh-CN', {
+    numeric: true,
+    sensitivity: 'base'
+  })
+}
 
 function filterLocation(input: string, option: any) {
   return String(option.label).toLowerCase().includes(input.toLowerCase())
+}
+
+function filterSku(input: string, option: any) {
+  return String(option.searchText || option.label).includes(input.trim().toLowerCase())
 }
 
 function selectMode(mode: StocktakeMode) {
@@ -223,6 +275,7 @@ function selectMode(mode: StocktakeMode) {
   form.stocktakeScope = mode === 'FULL' ? 'ALL' : 'PARTIAL'
   if (mode !== 'SPECIAL') form.virtualLocationOnly = false
   form.locationIds = []
+  if (mode === 'SPECIAL') void loadSelectableSkus()
 }
 
 function handleSpecialTypeChange() {
@@ -232,19 +285,44 @@ function handleSpecialTypeChange() {
   form.specialSearchAll = false
 }
 
+async function handleSpecialOwnerChange() {
+  form.specialSkuCodes = []
+  await loadSelectableSkus()
+}
+
+async function loadSelectableSkus() {
+  selectableSkus.value = []
+  if (!form.warehouseId || form.virtualLocationOnly) return
+  skuLoading.value = true
+  try {
+    const result = await getSelectableSkus(
+      form.warehouseId,
+      undefined,
+      form.specialOwnerId
+    )
+    if (isSuccess(result)) selectableSkus.value = result.data || []
+  } finally {
+    skuLoading.value = false
+  }
+}
+
 async function handleWarehouseChange() {
   form.locationIds = []
   locations.value = []
   virtualLocations.value = []
+  selectableSkus.value = []
+  form.specialSkuCodes = []
   if (!form.warehouseId) return
   locationsLoading.value = true
   try {
-    const [physicalResult, virtualResult] = await Promise.all([
+    const [physicalResult, virtualResult, skuResult] = await Promise.all([
       listLocations(form.warehouseId),
-      listVirtualLocations(form.warehouseId)
+      listVirtualLocations(form.warehouseId),
+      getSelectableSkus(form.warehouseId, undefined, form.specialOwnerId)
     ])
     if (isSuccess(physicalResult)) locations.value = physicalResult.data || []
     if (isSuccess(virtualResult)) virtualLocations.value = virtualResult.data || []
+    if (isSuccess(skuResult)) selectableSkus.value = skuResult.data || []
   } finally {
     locationsLoading.value = false
   }
@@ -291,6 +369,7 @@ defineExpose({
     Object.assign(form, newForm())
     locations.value = []
     virtualLocations.value = []
+    selectableSkus.value = []
     visible.value = true
   }
 })

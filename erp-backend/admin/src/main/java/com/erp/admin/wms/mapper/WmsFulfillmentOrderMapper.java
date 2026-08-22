@@ -13,4 +13,7 @@ public interface WmsFulfillmentOrderMapper extends BaseMapper<WmsFulfillmentOrde
 
 	int transit(@Param("id") Long id, @Param("from") FulfillmentStatus from,
 			@Param("to") FulfillmentStatus to);
+
+	int transitWithReason(@Param("id") Long id, @Param("from") FulfillmentStatus from,
+			@Param("to") FulfillmentStatus to, @Param("reason") String reason);
 }

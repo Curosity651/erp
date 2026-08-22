@@ -8,9 +8,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.product.mapper.SkuMapper;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
@@ -45,14 +45,24 @@ public class LocationCapacityService {
 		if (inventory == null) {
 			inventory = Collections.emptyList();
 		}
-		Set<String> existingCodes = inventory.stream().map(WmsLocationInventory::getSkuCode)
-				.collect(Collectors.toSet());
-		Map<String, Sku> skuByCode = new HashMap<>();
-		if (!existingCodes.isEmpty()) {
-			List<Sku> skus = skuMapper.selectBySkuCodes(existingCodes);
-			if (skus != null) {
-				skuByCode = skus.stream().collect(Collectors.toMap(Sku::getSkuCode, sku -> sku));
+		Map<Long, Set<String>> codesByTenant = new HashMap<>();
+		for (WmsLocationInventory row : inventory) {
+			if (value(row.getQuantity()) <= 0) {
+				continue;
 			}
+			Assert.notNull(row.getErpTenantId(), "库位库存缺少货主归属：" + row.getSkuCode());
+			codesByTenant.computeIfAbsent(row.getErpTenantId(), key -> new HashSet<>()).add(row.getSkuCode());
+		}
+		Map<Long, Map<String, Sku>> skuByTenant = new HashMap<>();
+		for (Map.Entry<Long, Set<String>> entry : codesByTenant.entrySet()) {
+			List<Sku> skus = TenantContext.runAs(entry.getKey(), () -> skuMapper.selectBySkuCodes(entry.getValue()));
+			Map<String, Sku> byCode = new HashMap<>();
+			if (skus != null) {
+				for (Sku sku : skus) {
+					byCode.putIfAbsent(sku.getSkuCode(), sku);
+				}
+			}
+			skuByTenant.put(entry.getKey(), byCode);
 		}
 
 		long occupiedVolume = 0L;
@@ -62,7 +72,7 @@ public class LocationCapacityService {
 			if (value(row.getQuantity()) <= 0) {
 				continue;
 			}
-			Sku sku = skuByCode.get(row.getSkuCode());
+			Sku sku = skuByTenant.get(row.getErpTenantId()).get(row.getSkuCode());
 			Assert.notNull(sku, "SKU不存在或无权访问：" + row.getSkuCode());
 			PlacementLine line = fromSku(sku, row.getQuantity());
 			occupiedVolume = Math.addExact(occupiedVolume, line.totalVolumeMm3());

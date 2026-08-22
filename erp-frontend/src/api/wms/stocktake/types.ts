@@ -141,6 +141,8 @@ export interface StocktakePageVO {
   confirmTime?: string
   // 确认人名称
   confirmByName?: string
+  // 实际盘点操作人，多人以顿号分隔
+  operatorNames?: string
   // 创建人名称
   createByName?: string
   // 创建时间
@@ -165,8 +167,11 @@ export interface StocktakeItemVO {
   id: number
   locationTaskId?: number
   physicalInventoryId?: number
+  sourceInventoryId?: number
   palletId?: number
   slotId?: number
+  capacityPercent?: number
+  manualFull?: number
   // 货主ID（同一skuCode在不同货主下可重名，须以货主+skuCode区分）
   erpTenantId?: number
   // 货主名称
@@ -174,7 +179,10 @@ export interface StocktakeItemVO {
   wmsTenantId?: number
   // SKU编码
   skuCode: string
+  warehouseSkuCode?: string
   zoneId?: number
+  zoneName?: string
+  zoneType?: string
   locationCode?: string
   slotCode?: string
   quality?: string
@@ -224,6 +232,8 @@ export interface StocktakeExtraItemDTO {
   actualQuantity: number
   slotCode?: string
   palletId?: number
+  capacityPercent?: number
+  manualFull?: boolean
   quality?: string
   inboundDate?: string
   remark?: string
@@ -298,6 +308,9 @@ export interface StocktakeDiffItemVO {
  */
 export interface AvailableSkuVO {
   skuCode: string
+  warehouseSkuCode?: string
+  erpTenantId?: number
+  ownerName?: string
   skuBrief?: SkuBriefVO
   stockQuantity: number
 }

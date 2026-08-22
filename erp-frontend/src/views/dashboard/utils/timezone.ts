@@ -48,7 +48,7 @@ export function getMoscowYesterday(): { start: string; end: string } {
  */
 export function getMoscowLastNDays(days: number): { start: string; end: string } {
   const now = getMoscowNow()
-  const start = now.subtract(days, 'day')
+  const start = now.subtract(Math.max(0, days - 1), 'day')
   return {
     start: start.format('YYYY-MM-DD'),
     end: now.format('YYYY-MM-DD')

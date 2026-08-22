@@ -5,23 +5,27 @@ import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.order.service.ErpOrderService;
 import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.erp.admin.wms.mapper.OutboundShippingMapper;
+import com.erp.admin.wms.mapper.OutboundPickingMapper;
 import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
 import com.erp.admin.wms.mapper.WmsClientBillingRecordMapper;
 import com.erp.admin.wms.mapper.WmsOutboundPickAllocationMapper;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.model.dto.PackDTO;
+import com.erp.admin.wms.model.dto.ShipPackageDTO;
 import com.erp.admin.wms.model.dto.ShipDTO;
 import com.erp.admin.wms.model.entity.SalesOutboundOrder;
 import com.erp.admin.wms.model.entity.SalesOutboundOrderItem;
 import com.erp.admin.wms.model.entity.WmsOutboundPickAllocation;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import com.erp.admin.wms.model.entity.WmsSalesOutboundPackage;
 import com.erp.admin.wms.model.enums.OutboundOrderStatus;
 import com.erp.admin.wms.service.OutboundShippingService;
 import com.erp.admin.wms.service.WmsInventoryAggregator;
 import com.erp.admin.wms.service.WmsPalletService;
 import com.erp.admin.wms.service.SalesOutboundPackageService;
 import com.erp.admin.wms.service.WarehouseOutboundDocumentService;
+import com.erp.admin.wms.service.WmsSortSlotService;
 import org.ballcat.common.core.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +55,7 @@ class OutboundShippingServiceTest {
 
     private OutboundShippingMapper shippingMapper;
     private SalesOutboundMapper orderMapper;
+    private OutboundPickingMapper pickingMapper;
     private SalesOutboundItemMapper itemMapper;
     private WmsPhysicalInventoryMapper physMapper;
     private WmsOutboundPickAllocationMapper allocMapper;
@@ -64,12 +69,15 @@ class OutboundShippingServiceTest {
     private SalesOutboundPackageService packageService;
     private WarehouseOutboundDocumentService documentService;
     private WarehouseBillingService warehouseBillingService;
+    private com.erp.admin.product.service.WarehouseSkuCodeService warehouseSkuCodeService;
+    private WmsSortSlotService sortSlotService;
     private OutboundShippingService service;
 
     @BeforeEach
     void setUp() {
         shippingMapper = mock(OutboundShippingMapper.class);
         orderMapper = mock(SalesOutboundMapper.class);
+        pickingMapper = mock(OutboundPickingMapper.class);
         itemMapper = mock(SalesOutboundItemMapper.class);
         physMapper = mock(WmsPhysicalInventoryMapper.class);
         allocMapper = mock(WmsOutboundPickAllocationMapper.class);
@@ -81,14 +89,17 @@ class OutboundShippingServiceTest {
         palletService = mock(WmsPalletService.class);
         erpOrderService = mock(ErpOrderService.class);
         packageService = mock(SalesOutboundPackageService.class);
+        sortSlotService = mock(WmsSortSlotService.class);
         documentService = mock(WarehouseOutboundDocumentService.class);
         warehouseBillingService = mock(WarehouseBillingService.class);
+        warehouseSkuCodeService = mock(com.erp.admin.product.service.WarehouseSkuCodeService.class);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
-        service = new OutboundShippingService(shippingMapper, orderMapper, itemMapper, physMapper, allocMapper,
+        service = new OutboundShippingService(shippingMapper, orderMapper, pickingMapper, itemMapper, physMapper, allocMapper,
                 billingMapper, aggregator, logisticsProductService, sysTenantMapper, tis, palletService,
-                erpOrderService, packageService, documentService, warehouseBillingService);
+                erpOrderService, packageService, documentService, warehouseBillingService, warehouseSkuCodeService,
+                sortSlotService);
     }
 
     private SalesOutboundOrder order(long id, String status) {
@@ -133,7 +144,7 @@ class OutboundShippingServiceTest {
     @Test
     void ship_deducts_batch_and_releases_reserved_and_marks_shipped() {
         SalesOutboundOrder outbound = order(1, OutboundOrderStatus.PACKED.name());
-        outbound.setSourceType("SALES");
+        outbound.setSourceType("CUSTOM");
         when(packageService.allPacked(1L)).thenReturn(true);
         when(orderMapper.selectById(1L)).thenReturn(outbound);
         SalesOutboundOrderItem item = new SalesOutboundOrderItem();
@@ -226,6 +237,101 @@ class OutboundShippingServiceTest {
         verify(physMapper, never()).updateById(any());
     }
 
+    @Test
+    void shipPackage_allows_current_packed_package_while_other_packages_are_not_packed() {
+        SalesOutboundOrder outbound = order(1, OutboundOrderStatus.PICKED.name());
+        outbound.setSourceType("SALES");
+        when(orderMapper.selectByIdForUpdate(1L)).thenReturn(outbound);
+        WmsSalesOutboundPackage pack = packageEntity(11L, 1L, 88L);
+        when(packageService.getForUpdate(11L)).thenReturn(pack);
+
+        SalesOutboundOrderItem packageItem = new SalesOutboundOrderItem();
+        packageItem.setErpOrderId(88L);
+        packageItem.setSkuCode("SKU1");
+        packageItem.setQuantity(2);
+        when(itemMapper.selectPackageItemsForUpdate(1L, 88L))
+                .thenReturn(Collections.singletonList(packageItem));
+
+        WmsOutboundPickAllocation allocation = new WmsOutboundPickAllocation();
+        allocation.setId(101L);
+        allocation.setOutboundOrderId(1L);
+        allocation.setPhysicalInventoryId(100L);
+        allocation.setSkuCode("SKU1");
+        allocation.setTakeQty(5);
+        allocation.setShippedQty(0);
+        when(allocMapper.selectByOutboundOrderIdForUpdate(1L))
+                .thenReturn(Collections.singletonList(allocation));
+        when(allocMapper.updateById(any(WmsOutboundPickAllocation.class))).thenReturn(1);
+
+        WmsPhysicalInventory batch = new WmsPhysicalInventory();
+        batch.setId(100L);
+        batch.setQuantity(10);
+        batch.setReservedQty(5);
+        when(physMapper.selectById(100L)).thenReturn(batch);
+        when(physMapper.updateById(any(WmsPhysicalInventory.class))).thenReturn(1);
+        when(packageService.allShipped(1L)).thenReturn(false);
+
+        service.shipPackage(shipPackageDto(1L, 11L, "OZON_A", "PKG-TRK-1"), 99L);
+
+        verify(documentService).assertPackageReadyForShip(outbound, pack);
+        assertThat(batch.getQuantity()).isEqualTo(8);
+        assertThat(batch.getReservedQty()).isEqualTo(3);
+        assertThat(allocation.getShippedQty()).isEqualTo(2);
+        verify(packageService).markShipped(eq(11L), eq("OZON_A"), anyString(),
+                eq("PKG-TRK-1"), eq(new BigDecimal("1.5")), eq(99L), any());
+        verify(orderMapper, never()).casOrderStatus(anyLong(), anyString(), anyString());
+        verify(erpOrderService).completeOutboundForWarehouse(Collections.singletonList(88L), 1L, 6L);
+        verify(sortSlotService).releaseByPackage(11L);
+    }
+
+    @Test
+    void shipPackage_last_package_completes_master_order() {
+        SalesOutboundOrder outbound = order(1, OutboundOrderStatus.PACKED.name());
+        outbound.setSourceType("SALES");
+        when(orderMapper.selectByIdForUpdate(1L)).thenReturn(outbound);
+        WmsSalesOutboundPackage pack = packageEntity(12L, 1L, 89L);
+        when(packageService.getForUpdate(12L)).thenReturn(pack);
+
+        SalesOutboundOrderItem packageItem = new SalesOutboundOrderItem();
+        packageItem.setErpOrderId(89L);
+        packageItem.setSkuCode("SKU2");
+        packageItem.setQuantity(1);
+        when(itemMapper.selectPackageItemsForUpdate(1L, 89L))
+                .thenReturn(Collections.singletonList(packageItem));
+
+        WmsOutboundPickAllocation allocation = new WmsOutboundPickAllocation();
+        allocation.setId(102L);
+        allocation.setOutboundOrderId(1L);
+        allocation.setPhysicalInventoryId(200L);
+        allocation.setSkuCode("SKU2");
+        allocation.setTakeQty(1);
+        allocation.setShippedQty(0);
+        when(allocMapper.selectByOutboundOrderIdForUpdate(1L))
+                .thenReturn(Collections.singletonList(allocation));
+        when(allocMapper.selectByOutboundOrderId(1L))
+                .thenReturn(Collections.singletonList(allocation));
+        when(allocMapper.updateById(any(WmsOutboundPickAllocation.class))).thenReturn(1);
+
+        WmsPhysicalInventory batch = new WmsPhysicalInventory();
+        batch.setId(200L);
+        batch.setQuantity(1);
+        batch.setReservedQty(1);
+        when(physMapper.selectById(200L)).thenReturn(batch);
+        when(physMapper.updateById(any(WmsPhysicalInventory.class))).thenReturn(1);
+        when(packageService.allShipped(1L)).thenReturn(true);
+        when(orderMapper.casOrderStatus(1L, OutboundOrderStatus.PACKED.name(),
+                OutboundOrderStatus.SHIPPED.name())).thenReturn(1);
+
+        service.shipPackage(shipPackageDto(1L, 12L, "YANDEX", "PKG-TRK-2"), 99L);
+
+        verify(orderMapper).casOrderStatus(1L, OutboundOrderStatus.PACKED.name(),
+                OutboundOrderStatus.SHIPPED.name());
+        verify(packageService).markShipped(eq(12L), eq("YANDEX"), anyString(),
+                eq("PKG-TRK-2"), eq(new BigDecimal("1.5")), eq(99L), any());
+        assertThat(batch.getQuantity()).isZero();
+        assertThat(allocation.getShippedQty()).isEqualTo(1);
+    }
+
     private ShipDTO shipDto() {
         ShipDTO dto = new ShipDTO();
         dto.setOutboundOrderId(1L);
@@ -233,6 +339,26 @@ class OutboundShippingServiceTest {
         dto.setTrackingNo("TRK123");
         dto.setWeight(new BigDecimal("1.5"));
         return dto;
+    }
+
+    private ShipPackageDTO shipPackageDto(long outboundId, long packageId, String channel, String trackingNo) {
+        ShipPackageDTO dto = new ShipPackageDTO();
+        dto.setOutboundOrderId(outboundId);
+        dto.setPackageId(packageId);
+        dto.setChannel(channel);
+        dto.setTrackingNo(trackingNo);
+        dto.setWeight(new BigDecimal("1.5"));
+        return dto;
+    }
+
+    private WmsSalesOutboundPackage packageEntity(long id, long outboundId, long erpOrderId) {
+        WmsSalesOutboundPackage pack = new WmsSalesOutboundPackage();
+        pack.setId(id);
+        pack.setOutboundOrderId(outboundId);
+        pack.setErpOrderId(erpOrderId);
+        pack.setPackStatus(SalesOutboundPackageService.PACK_PACKED);
+        pack.setShipStatus(SalesOutboundPackageService.SHIP_PENDING);
+        return pack;
     }
 
 }

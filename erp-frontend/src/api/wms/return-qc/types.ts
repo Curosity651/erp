@@ -2,9 +2,9 @@
  * 海外仓平台 · 海外仓作业 · 退货质检 类型契约（业务需求 1.4）。
  *
  * 退货 = 带质检的重新入库：RETURN_PENDING 待收货 → QC_PENDING 待质检 → (逐SKU判定+上架) → COMPLETED。
- * QC 通过 → 退货区/标准区(quality=GOOD, 可分配, 生成新批次 FIFO 重排)；
- * QC 失败 → 不良品区(quality=DAMAGED, 不可分配)；FAIL 且电子类强制拍照(BR-04)。
- * 对齐后端表 wms_inbound_order(source_type=RETURN) + wms_return_qc_item / wms_physical_inventory / wms_zone。
+ * QC 通过 → 退货区(quality=GOOD, 可分配, 生成新批次 FIFO 重排)；
+ * QC 失败 → 不良品区(quality=DEFECTIVE, 不可分配)；FAIL 且电子类强制拍照(BR-04)。
+ * 对齐后端表 wms_inbound_order(source_type=RETURN) + wms_return_qc_item / wms_location_inventory / wms_zone。
  * 目前前端以 mock 驱动（见 ./mock），后端需按本契约实现（接口清单见 ./index 注释）。
  */
 
@@ -21,12 +21,12 @@ export type QcResult = 'PASS' | 'FAIL' | 'MIXED'
 /** 回库分区 */
 export type ReturnZone =
   | 'RETURN' // 退货区（GOOD 可分配）
-  | 'STANDARD' // 标准区（GOOD 可分配）
   | 'DEFECTIVE' // 不良品区（DAMAGED 不可分配）
 
 /** 退货单明细 */
 export interface ReturnOrderItemVO {
   skuCode: string
+  warehouseSkuCode?: string
   skuName?: string
   // 电子类（影响 QC_FAIL 是否强制拍照）
   electronic: boolean
@@ -49,7 +49,7 @@ export interface ReturnOrderItemVO {
   // 质检结果（质检后回填）
   qcResult?: QcResult
   zone?: ReturnZone
-  quality?: 'GOOD' | 'DAMAGED'
+  quality?: 'GOOD' | 'DEFECTIVE' | 'DAMAGED'
   locationCode?: string
   qcRemark?: string
   // 质检照片 OSS 文件ID（sys_file.id），只读回显用

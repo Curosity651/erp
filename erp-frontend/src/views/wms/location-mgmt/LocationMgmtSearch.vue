@@ -21,12 +21,12 @@
           </a-form-item>
         </a-col>
         <a-col :xl="6" :lg="8" :md="12" :sm="24">
-          <a-form-item label="库位状态">
+          <a-form-item label="配置状态">
             <a-select
-              v-model:value="formModel.generatedStatus"
-              placeholder="请选择库位状态"
+              v-model:value="formModel.configuredStatus"
+              placeholder="请选择配置状态"
               allow-clear
-              :options="generatedOptions"
+              :options="configuredOptions"
             />
           </a-form-item>
         </a-col>
@@ -45,8 +45,8 @@ import { Form } from 'ant-design-vue'
 export interface LocationMgmtQuery {
   warehouseName?: string
   warehouseCode?: string
-  /** 1=已生成 0=未生成 undefined=全部 */
-  generatedStatus?: number
+  /** 1=已配置 0=未配置 undefined=全部 */
+  configuredStatus?: number
 }
 
 const useForm = Form.useForm
@@ -57,15 +57,15 @@ const props = withDefaults(defineProps<{ loading?: boolean }>(), { loading: fals
 
 const emits = defineEmits<{ (e: 'search', params: LocationMgmtQuery): void }>()
 
-const generatedOptions = [
-  { label: '已生成', value: 1 },
-  { label: '未生成', value: 0 }
+const configuredOptions = [
+  { label: '已配置', value: 1 },
+  { label: '未配置', value: 0 }
 ]
 
 const formModel = reactive<LocationMgmtQuery>({
   warehouseName: undefined,
   warehouseCode: undefined,
-  generatedStatus: undefined
+  configuredStatus: undefined
 })
 
 const { resetFields } = useForm(formModel)

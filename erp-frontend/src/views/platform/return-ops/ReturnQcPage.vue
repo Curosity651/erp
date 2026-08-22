@@ -74,7 +74,8 @@
           <a v-if="record.status === 'RETURN_PENDING'" class="danger-link" @click="handleCloseReturn(record)">关闭</a>
           <a v-else-if="record.status === 'QC_PENDING'" @click="openQc(record)">质检</a>
           <a v-else-if="record.status === 'COMPLETED'" @click="openQc(record, true)">查看</a>
-          <span v-else style="color: rgba(0, 0, 0, 0.25)">—</span>
+          <a v-if="record.status === 'COMPLETED'" @click="handlePrint(record)">打印</a>
+          <span v-if="record.status === 'CLOSED'" style="color: rgba(0, 0, 0, 0.25)">—</span>
         </operation-group>
       </template>
     </template>
@@ -99,8 +100,9 @@ import { SearchActions } from '@/components/Search'
 import WmsOperatorSelect from '@/components/Lov/WmsOperatorSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
 import { mergePageParam } from '@/utils/page-utils'
-import { closeReturn, pageReturns } from '@/api/wms/return-qc'
+import { closeReturn, getReturnQcPallets, pageReturns } from '@/api/wms/return-qc'
 import { isSuccess } from '@/api'
+import { printPalletLabels } from '@/views/platform/pallet/pallet-label-print'
 import type { ReturnOrderVO, ReturnQO, ReturnStatus } from '@/api/wms/return-qc/types'
 import { RETURN_STATUS_TEXT, RETURN_STATUS_BADGE, RETURN_STATUS_OPTIONS } from './constants'
 import ReturnReceiveModal from './ReturnReceiveModal.vue'
@@ -156,7 +158,7 @@ const columns: ProColumns[] = [
   { title: 'SKU/件数', key: 'skuSummary', width: 120 },
   { title: '状态', key: 'status', width: 120 },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
-  { title: '操作', key: 'operate', width: 90, align: 'center', fixed: 'right' }
+  { title: '操作', key: 'operate', width: 130, align: 'center', fixed: 'right' }
 ]
 
 const receiveOpen = ref(false)
@@ -187,6 +189,29 @@ const handleCloseReturn = (record: ReturnOrderVO) => {
       reloadTable(false)
     }
   })
+}
+
+const handlePrint = async (record: ReturnOrderVO) => {
+  const printPage = window.open('', '_blank', 'width=760,height=680')
+  if (!printPage) {
+    message.warning('打印窗口被浏览器拦截，请允许弹出窗口后重试')
+    return
+  }
+  printPage.document.write('<!doctype html><title>正在准备托盘标签...</title><p>正在准备托盘标签...</p>')
+  printPage.document.close()
+  try {
+    const response = await getReturnQcPallets(record.id)
+    const pallets = isSuccess(response) ? response.data || [] : []
+    if (!pallets.length) {
+      printPage.close()
+      message.warning('该退货质检单没有可打印的托盘标签')
+      return
+    }
+    await printPalletLabels(pallets, printPage)
+  } catch (error: any) {
+    printPage.close()
+    message.error(error?.message || '托盘标签加载失败')
+  }
 }
 </script>
 

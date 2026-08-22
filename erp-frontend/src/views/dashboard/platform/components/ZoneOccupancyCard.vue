@@ -3,7 +3,7 @@
     <template #title>
       <div class="card-title">
         <PieChartOutlined class="card-icon" />
-        <span>分区占用</span>
+        <span>分区库存分布</span>
       </div>
     </template>
     <div v-if="hasData" class="chart-container">
@@ -61,7 +61,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     series: [
       {
-        name: '分区占用',
+        name: '分区库存分布',
         type: 'pie',
         radius: ['42%', '66%'],
         center: ['50%', '46%'],

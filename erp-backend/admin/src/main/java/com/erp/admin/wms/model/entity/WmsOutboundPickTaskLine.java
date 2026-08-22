@@ -29,9 +29,17 @@ public class WmsOutboundPickTaskLine {
     private Integer plannedQty;
     private Integer pickedQty;
     private Integer shortageQty;
+    private Integer returnRequiredQty;
+    private Integer returnedQty;
     private String exceptionReason;
     private String pickStrategy;
     private String lineStatus;
+    private Long pickedBy;
+    private String pickedByName;
+    private LocalDateTime pickTime;
+    private Long returnBy;
+    private String returnByName;
+    private LocalDateTime returnTime;
     @Version
     private Integer version;
     @TableField(fill = FieldFill.INSERT)

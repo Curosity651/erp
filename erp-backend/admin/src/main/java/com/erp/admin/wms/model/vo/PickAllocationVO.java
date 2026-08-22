@@ -21,6 +21,9 @@ public class PickAllocationVO {
     @Schema(title = "SKU编码")
     private String skuCode;
 
+    @Schema(title = "海外仓内部SKU")
+    private String warehouseSkuCode;
+
     @Schema(title = "SKU名称")
     private String skuName;
 
@@ -47,6 +50,12 @@ public class PickAllocationVO {
 
     @Schema(title = "已报告缺货数量")
     private Integer shortageQty;
+
+    @Schema(title = "应返库数量")
+    private Integer returnRequiredQty;
+
+    @Schema(title = "已返库数量")
+    private Integer returnedQty;
 
     @Schema(title = "明细状态 PENDING/IN_PROGRESS/COMPLETED/EXCEPTION")
     private String lineStatus;

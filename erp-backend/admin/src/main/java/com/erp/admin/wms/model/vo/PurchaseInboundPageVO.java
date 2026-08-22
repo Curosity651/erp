@@ -34,6 +34,9 @@ public class PurchaseInboundPageVO {
     @Schema(title = "货主名称")
     private String ownerName;
 
+    @Schema(title = "Owner code")
+    private String ownerCode;
+
     @Schema(title = "所属WMS服务商ID")
     private Long operatorId;
 
@@ -63,6 +66,24 @@ public class PurchaseInboundPageVO {
 
     @Schema(title = "单据状态")
     private String orderStatus;
+
+    @Schema(title = "收货操作员ID")
+    private Long receiveBy;
+
+    @Schema(title = "收货操作员名称")
+    private String receiveByName;
+
+    @Schema(title = "收货时间")
+    private LocalDateTime receiveTime;
+
+    @Schema(title = "上架操作员ID")
+    private Long putawayBy;
+
+    @Schema(title = "上架操作员名称")
+    private String putawayByName;
+
+    @Schema(title = "上架时间")
+    private LocalDateTime putawayTime;
 
     @Schema(title = "入库明细摘要，如 SKU001×100, SKU002×95")
     private String itemSummary;

@@ -10,6 +10,8 @@ import java.util.Map;
 
 import com.erp.admin.wms.mapper.InventoryMapper;
 import com.erp.admin.wms.mapper.StockFlowMapper;
+import com.erp.admin.tenant.mapper.SysTenantMapper;
+import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.model.dto.PutawayDTO;
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
@@ -17,6 +19,7 @@ import com.erp.admin.wms.model.entity.WmsPallet;
 import com.erp.admin.wms.model.vo.PalletSlotVO;
 import com.erp.admin.wms.model.entity.Inventory;
 import com.erp.admin.wms.model.entity.StockFlow;
+import com.erp.admin.wms.model.entity.WmsLocationSlot;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.core.exception.BusinessException;
@@ -25,6 +28,7 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
 import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 
 /**
  * 批次级库存 SSOT 服务（D1·方案②）。
@@ -54,6 +58,10 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 
 	private final WmsPalletService palletService;
 
+	private final SysTenantMapper sysTenantMapper;
+
+	private final StocktakeFreezeService stocktakeFreezeService;
+
 	/**
 	 * Returns the stock that automatic outbound picking can actually allocate.
 	 */
@@ -64,7 +72,6 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		}
 		List<WmsPhysicalInventory> batches = this.baseMapper.selectList(
 				WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
-						.eq(WmsPhysicalInventory::getWmsTenantId, 0L)
 						.eq(WmsPhysicalInventory::getErpTenantId, erpTenantId)
 						.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
 						.in(WmsPhysicalInventory::getSkuCode, skuCodes)
@@ -91,7 +98,6 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		}
 		List<WmsPhysicalInventory> batches = this.baseMapper.selectList(
 				WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
-						.eq(WmsPhysicalInventory::getWmsTenantId, 0L)
 						.eq(WmsPhysicalInventory::getErpTenantId, erpTenantId)
 						.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
 						.in(WmsPhysicalInventory::getSkuCode, skuCodes)
@@ -127,8 +133,9 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public WmsPhysicalInventory putaway(PutawayDTO dto) {
+		stocktakeFreezeService.assertLocationMutable(dto.getWarehouseId(), dto.getLocationCode());
 		Long uid = currentUserId();
-		long wmsTenantId = dto.getWmsTenantId() == null ? 0L : dto.getWmsTenantId();
+		long wmsTenantId = resolveWmsTenantId(dto.getErpTenantId(), dto.getWmsTenantId());
 		String quality = dto.getQuality() == null ? QUALITY_GOOD : dto.getQuality();
 		int allocatable = dto.getAllocatable() == null ? 1 : dto.getAllocatable();
 		LocalDate inboundDate = dto.getInboundDate() == null ? LocalDate.now(ZoneOffset.UTC) : dto.getInboundDate();
@@ -260,6 +267,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 				batch.getErpTenantId(), batch.getWarehouseId(), batch.getSkuCode());
 		int after = damaged ? buckets.damaged : buckets.available;
 		writeScrapFlow(batch, qty, before, after, sourceNo);
+		palletService.refreshAfterInventoryChange(batch.getPalletId());
 	}
 
 	/**
@@ -269,21 +277,31 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 	 * @param qty                移动数量（>0，且不超过源批可用）
 	 * @param targetLocationCode 目标库位编码
 	 * @param targetZoneId       目标库位分区ID
-	 * @param toGood             是否落库后置为良品（退货区→标准区时为 true）
+	 * @param targetAllocatable  目标分区是否参与可出库分配
 	 * @param sourceNo           流水来源单号（可空）
 	 */
 	@Transactional(rollbackFor = Exception.class)
-	public void locationTransfer(Long sourceBatchId, int qty, String targetLocationCode, Long targetZoneId,
-			boolean toGood, String sourceNo) {
+	public WmsPallet locationTransfer(Long sourceBatchId, int qty, String targetLocationCode, Long targetZoneId,
+			int targetAllocatable, String sourceNo) {
+		return locationTransfer(sourceBatchId, qty, targetLocationCode, targetZoneId,
+				null, null, targetAllocatable, sourceNo);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public WmsPallet locationTransfer(Long sourceBatchId, int qty, String targetLocationCode, Long targetZoneId,
+			Long targetSlotId, Long targetPalletId, int targetAllocatable, String sourceNo) {
 		WmsPhysicalInventory source = requireBatch(sourceBatchId);
+		stocktakeFreezeService.assertLocationMutable(source.getWarehouseId(), targetLocationCode);
 		int available = source.getQuantity() - safeReserved(source);
 		if (qty <= 0 || qty > available) {
 			throw new BusinessException(400, "移库数量非法：源批次[" + sourceBatchId + "]可用" + available + "，请求" + qty);
 		}
-		String targetQuality = toGood ? QUALITY_GOOD : source.getQuality();
-		int targetAllocatable = QUALITY_GOOD.equals(targetQuality) ? 1 : 0;
-		WmsPallet targetPallet = palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
-				source.getErpTenantId(), source.getSkuCode(), targetQuality, qty);
+		String targetQuality = source.getQuality();
+		WmsPallet targetPallet = targetSlotId == null && targetPalletId == null
+				? palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
+						source.getErpTenantId(), source.getSkuCode(), targetQuality, qty)
+				: palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
+						targetSlotId, targetPalletId, source.getErpTenantId(), source.getSkuCode(), targetQuality, qty);
 
 		// 源批扣减
 		source.setQuantity(source.getQuantity() - qty);
@@ -337,10 +355,94 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 				source.getSkuCode());
 		palletService.refreshAfterInventoryChange(source.getPalletId());
 		palletService.refreshAfterInventoryChange(targetPallet.getId());
-		writeTransferFlow(source, qty, targetLocationCode, targetQuality, sourceNo, uid);
+		writeTransferFlow(source, source.getLocationCode(), qty, targetLocationCode, targetQuality, sourceNo, uid);
+		return targetPallet;
 	}
 
-	private void writeTransferFlow(WmsPhysicalInventory source, int qty, String targetLocationCode,
+	@Transactional(rollbackFor = Exception.class)
+	public void wholePalletTransfer(Long palletId, String targetLocationCode, Long targetZoneId,
+			int targetAllocatable, String sourceNo) {
+		wholePalletTransfer(palletId, targetLocationCode, targetZoneId, null, targetAllocatable, sourceNo);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void wholePalletTransfer(Long palletId, String targetLocationCode, Long targetZoneId,
+			Long targetSlotId, int targetAllocatable, String sourceNo) {
+		List<WmsPhysicalInventory> batches = this.baseMapper.selectByPalletIdForUpdate(palletId);
+		Assert.notEmpty(batches, "源托盘没有可移动库存");
+		stocktakeFreezeService.assertLocationMutable(batches.get(0).getWarehouseId(),
+				batches.get(0).getLocationCode());
+		stocktakeFreezeService.assertLocationMutable(batches.get(0).getWarehouseId(), targetLocationCode);
+		Assert.isTrue(batches.stream().allMatch(batch -> safeReserved(batch) == 0),
+				"整托存在已预留库存，不能整托调整");
+		String sourceLocationCode = batches.get(0).getLocationCode();
+		boolean fromVirtual = batches.stream().allMatch(this::containerStored);
+		Assert.isTrue(fromVirtual || batches.stream().noneMatch(this::containerStored),
+				"源托盘同时存在物理和虚拟库存，不能整托调整");
+		WmsLocationSlot targetSlot;
+		if (fromVirtual) {
+			targetSlot = targetSlotId == null
+					? palletService.moveWholePalletFromVirtual(palletId, targetLocationCode)
+					: palletService.moveWholePalletFromVirtual(palletId, targetLocationCode, targetSlotId);
+		}
+		else {
+			targetSlot = targetSlotId == null
+					? palletService.moveWholePallet(palletId, targetLocationCode)
+					: palletService.moveWholePallet(palletId, targetLocationCode, targetSlotId);
+		}
+		Long uid = currentUserId();
+		for (WmsPhysicalInventory batch : batches) {
+			Assert.isTrue(sourceLocationCode.equals(batch.getLocationCode()), "源托盘库存位置不一致，不能整托调整");
+			batch.setLocationCode(targetLocationCode);
+			batch.setSlotId(targetSlot.getId());
+			batch.setZoneId(targetZoneId);
+			batch.setAllocatable(targetAllocatable);
+			batch.setContainerStored(0);
+			batch.setOriginLocationCode(null);
+			batch.setUpdateBy(uid);
+			updateBatchLocked(batch);
+			writeTransferFlow(batch, sourceLocationCode, batch.getQuantity(), targetLocationCode,
+					batch.getQuality(), sourceNo, uid);
+			aggregator.refreshSnapshot(batch.getWmsTenantId(), batch.getErpTenantId(),
+					batch.getWarehouseId(), batch.getSkuCode());
+		}
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void wholePalletToContainer(Long palletId, String targetLocationCode, Long targetZoneId,
+			String sourceNo) {
+		List<WmsPhysicalInventory> batches = this.baseMapper.selectByPalletIdForUpdate(palletId);
+		Assert.notEmpty(batches, "源托盘没有可移动库存");
+		stocktakeFreezeService.assertLocationMutable(batches.get(0).getWarehouseId(),
+				batches.get(0).getLocationCode());
+		stocktakeFreezeService.assertLocationMutable(batches.get(0).getWarehouseId(), targetLocationCode);
+		Assert.isTrue(batches.stream().allMatch(batch -> safeReserved(batch) == 0),
+				"整托存在已预留库存，不能移入虚拟库位");
+		String sourceLocationCode = batches.get(0).getLocationCode();
+		palletService.moveWholePalletToVirtual(palletId, targetLocationCode);
+		Long uid = currentUserId();
+		for (WmsPhysicalInventory batch : batches) {
+			Assert.isTrue(sourceLocationCode.equals(batch.getLocationCode()),
+					"源托盘库存位置不一致，不能整托调整");
+			String originLocation = containerStored(batch) && batch.getOriginLocationCode() != null
+					? batch.getOriginLocationCode() : batch.getLocationCode();
+			batch.setLocationCode(targetLocationCode);
+			batch.setSlotId(null);
+			batch.setZoneId(targetZoneId);
+			batch.setAllocatable(1);
+			batch.setContainerStored(1);
+			batch.setOriginLocationCode(originLocation);
+			batch.setUpdateBy(uid);
+			updateBatchLocked(batch);
+			writeContainerFlow(batch, batch.getQuantity(), sourceLocationCode, targetLocationCode,
+					"CONTAINER_IN", "整托移入虚拟库位 " + sourceLocationCode + "→" + targetLocationCode,
+					sourceNo, uid);
+			aggregator.refreshSnapshot(batch.getWmsTenantId(), batch.getErpTenantId(),
+					batch.getWarehouseId(), batch.getSkuCode());
+		}
+	}
+
+	private void writeTransferFlow(WmsPhysicalInventory source, String sourceLocationCode, int qty, String targetLocationCode,
 			String targetQuality, String sourceNo, Long uid) {
 		StockFlow flow = new StockFlow();
 		flow.setWarehouseId(source.getWarehouseId());
@@ -360,7 +462,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		flow.setSourceType("LOCATION_TRANSFER");
 		flow.setSourceId(0L);
 		flow.setSourceNo(sourceNo == null ? "" : sourceNo);
-		flow.setRemark("库内移库 " + source.getLocationCode() + "→" + targetLocationCode);
+		flow.setRemark("库内移库 " + sourceLocationCode + "→" + targetLocationCode);
 		flow.setCreateBy(uid);
 		stockFlowMapper.insert(flow);
 	}
@@ -379,6 +481,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 	public void moveToContainer(Long sourceBatchId, int qty, String containerLocationCode, Long containerZoneId,
 			String sourceNo) {
 		WmsPhysicalInventory source = requireBatch(sourceBatchId);
+		stocktakeFreezeService.assertLocationMutable(source.getWarehouseId(), containerLocationCode);
 		int available = source.getQuantity() - safeReserved(source);
 		if (qty <= 0 || qty > available) {
 			throw new BusinessException(400, "入箱数量非法：源批次[" + sourceBatchId + "]可用" + available + "，请求" + qty);
@@ -407,6 +510,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 
 		if (target != null) {
 			target.setQuantity(target.getQuantity() + qty);
+			target.setAllocatable(1);
 			target.setUpdateBy(uid);
 			updateBatchLocked(target);
 		}
@@ -425,7 +529,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 			nb.setQuality(source.getQuality());
 			nb.setLocationCode(containerLocationCode);
 			nb.setZoneId(containerZoneId);
-			nb.setAllocatable(source.getAllocatable());
+			nb.setAllocatable(1);
 			nb.setContainerStored(1);
 			nb.setOriginLocationCode(originLocation);
 			nb.setCreateBy(uid);
@@ -447,13 +551,15 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 	 * @param sourceBatchId      集装箱源批次ID
 	 * @param qty                取回数量
 	 * @param targetLocationCode 回落目标库位编码（默认原库位）
-	 * @param targetZoneId       目标分区ID（标准区）
+	 * @param targetZoneId       目标分区ID
+	 * @param targetAllocatable  目标分区是否参与可出库分配
 	 * @param sourceNo           流水来源单号
 	 */
 	@Transactional(rollbackFor = Exception.class)
-	public void retrieveFromContainer(Long sourceBatchId, int qty, String targetLocationCode, Long targetZoneId,
-			String sourceNo) {
+	public WmsPallet retrieveFromContainer(Long sourceBatchId, int qty, String targetLocationCode, Long targetZoneId,
+			Long targetSlotId, Long targetPalletId, int targetAllocatable, String sourceNo) {
 		WmsPhysicalInventory source = requireBatch(sourceBatchId);
+		stocktakeFreezeService.assertLocationMutable(source.getWarehouseId(), targetLocationCode);
 		if (!containerStored(source)) {
 			throw new BusinessException(400, "该批次不在集装箱中，无需取回：" + sourceBatchId);
 		}
@@ -462,8 +568,12 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 			throw new BusinessException(400, "取回数量非法：集装箱批次[" + sourceBatchId + "]可用" + available + "，请求" + qty);
 		}
 		Long uid = currentUserId();
-		WmsPallet targetPallet = palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
-				source.getErpTenantId(), source.getSkuCode(), source.getQuality(), qty);
+		WmsPallet targetPallet = targetSlotId == null && targetPalletId == null
+				? palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
+						source.getErpTenantId(), source.getSkuCode(), source.getQuality(), qty)
+				: palletService.allocateForTransfer(source.getWarehouseId(), targetLocationCode,
+						targetSlotId, targetPalletId, source.getErpTenantId(), source.getSkuCode(),
+						source.getQuality(), qty);
 
 		source.setQuantity(source.getQuantity() - qty);
 		source.setUpdateBy(uid);
@@ -485,6 +595,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		if (target != null) {
 			target.setQuantity(target.getQuantity() + qty);
 			target.setZoneId(targetZoneId);
+			target.setAllocatable(targetAllocatable);
 			target.setUpdateBy(uid);
 			updateBatchLocked(target);
 		}
@@ -505,7 +616,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 			nb.setPalletId(targetPallet.getId());
 			nb.setSlotId(targetPallet.getCurrentSlotId());
 			nb.setZoneId(targetZoneId);
-			nb.setAllocatable(source.getAllocatable());
+			nb.setAllocatable(targetAllocatable);
 			nb.setContainerStored(0);
 			nb.setCreateBy(uid);
 			nb.setUpdateBy(uid);
@@ -514,9 +625,23 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 
 		aggregator.refreshSnapshot(source.getWmsTenantId(), source.getErpTenantId(), source.getWarehouseId(),
 				source.getSkuCode());
+		palletService.refreshAfterInventoryChange(source.getPalletId());
 		palletService.refreshAfterInventoryChange(targetPallet.getId());
 		writeContainerFlow(source, qty, source.getLocationCode(), targetLocationCode, "CONTAINER_OUT",
 				"集装箱取回 " + source.getLocationCode() + "→" + targetLocationCode, sourceNo, uid);
+		return targetPallet;
+	}
+
+	long resolveWmsTenantId(Long erpTenantId, Long requestedWmsTenantId) {
+		Assert.notNull(erpTenantId, "货主不能为空");
+		SysTenant owner = sysTenantMapper.selectById(erpTenantId);
+		Assert.notNull(owner, "货主不存在：" + erpTenantId);
+		Long expected = owner.getParentWmsTenantId();
+		Assert.notNull(expected, "货主未关联 WMS 服务商：" + erpTenantId);
+		if (requestedWmsTenantId != null && requestedWmsTenantId > 0) {
+			Assert.isTrue(expected.equals(requestedWmsTenantId), "上架库存的服务商归属与货主不一致");
+		}
+		return expected;
 	}
 
 	private boolean containerStored(WmsPhysicalInventory batch) {
@@ -653,6 +778,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 		if (batch == null) {
 			throw new BusinessException(404, "批次不存在：" + batchId);
 		}
+		stocktakeFreezeService.assertLocationMutable(batch.getWarehouseId(), batch.getLocationCode());
 		return batch;
 	}
 
@@ -717,7 +843,7 @@ public class WmsPhysicalInventoryService extends ExtendServiceImpl<WmsPhysicalIn
 	 * 某仓库已占用库位编码集合（存在批次即占用；上架库位独占校验用）。
 	 */
 	public List<String> occupiedLocationCodes(Long warehouseId) {
-		return this.baseMapper.listOccupiedLocationCodes(warehouseId);
+		return this.baseMapper.listBlockingPhysicalLocationCodes(warehouseId);
 	}
 
 	/**

@@ -19,14 +19,27 @@ public class AdjustmentItemVO {
 	@Schema(title = "SKU编码")
 	private String skuCode;
 
+	private String warehouseSkuCode;
+
 	@Schema(title = "SKU简要信息")
 	private SkuBriefVO skuBrief;
 
 	@Schema(title = "目标批次ID")
 	private Long physicalInventoryId;
 
+	private Long sourceInventoryId;
+
 	@Schema(title = "库位编码")
 	private String locationCode;
+
+	@Schema(title = "托盘ID")
+	private Long palletId;
+
+	@Schema(title = "托盘号")
+	private String palletNo;
+
+	@Schema(title = "托位编码")
+	private String slotCode;
 
 	@Schema(title = "品质 GOOD/DAMAGED")
 	private String quality;

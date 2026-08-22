@@ -1,33 +1,71 @@
 <template>
   <div class="page">
     <a-form layout="inline" :model="filters" class="filters">
-      <a-form-item label="仓库">
-        <a-select
-          v-model:value="filters.warehouseId"
+      <a-form-item label="托盘号">
+        <a-input
+          v-model:value="filters.palletNo"
           allow-clear
-          placeholder="全部仓库"
-          :options="warehouseOptions"
-          style="width: 190px"
+          placeholder="输入托盘号"
+          style="width: 180px"
+          @press-enter="load"
         />
       </a-form-item>
-      <a-form-item label="SKU">
-        <a-input
-          v-model:value="filters.skuCode"
+      <a-form-item label="货主">
+        <a-select
+          v-model:value="filters.erpTenantId"
           allow-clear
-          placeholder="SKU 编码"
-          style="width: 160px"
+          show-search
+          option-filter-prop="label"
+          placeholder="全部货主"
+          :options="ownerOptions"
+          style="width: 180px"
+        />
+      </a-form-item>
+      <a-form-item label="服务商">
+        <a-select
+          v-model:value="filters.wmsTenantId"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部服务商"
+          :options="operatorOptions"
+          style="width: 180px"
         />
       </a-form-item>
       <a-form-item label="状态">
         <a-select
           v-model:value="filters.status"
           allow-clear
+          placeholder="全部状态"
           :options="statusOptions"
           style="width: 130px"
         />
       </a-form-item>
+      <a-form-item label="仓库">
+        <a-select
+          v-model:value="filters.warehouseId"
+          allow-clear
+          show-search
+          option-filter-prop="label"
+          placeholder="全部仓库"
+          :options="warehouseOptions"
+          style="width: 190px"
+        />
+      </a-form-item>
+      <a-form-item label="层位">
+        <a-input
+          v-model:value="filters.slotCode"
+          allow-clear
+          placeholder="输入层位编码"
+          style="width: 180px"
+          @press-enter="load"
+        />
+      </a-form-item>
       <a-form-item>
-        <a-button type="primary" :loading="loading" @click="load">查询</a-button>
+        <a-space>
+          <a-button type="primary" :loading="loading" @click="load">查询</a-button>
+          <a-button @click="resetFilters">重置</a-button>
+        </a-space>
       </a-form-item>
     </a-form>
 
@@ -36,9 +74,10 @@
       :loading="loading"
       :data-source="rows"
       :columns="columns"
-      :pagination="{ pageSize: 20, showSizeChanger: true }"
+      :pagination="pagination"
       :scroll="{ x: 1200 }"
       size="middle"
+      @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'type'">
@@ -144,7 +183,8 @@ import { isSuccess } from '@/api'
 import { getWarehouseOptions } from '@/api/wms/warehouse'
 import { calibratePallet, listPallets } from '@/api/wms/pallet'
 import type { PalletSummaryVO } from '@/api/wms/pallet'
-import QRCode from 'qrcode'
+import { listAllErpTenants, listWmsOperators } from '@/api/tenant'
+import { printPalletLabels } from './pallet-label-print'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -153,7 +193,23 @@ const current = ref<PalletSummaryVO>()
 const detailOpen = ref(false)
 const capacityOpen = ref(false)
 const warehouseOptions = ref<{ value: number; label: string }[]>([])
-const filters = reactive<{ warehouseId?: number; skuCode?: string; status?: string }>({})
+const ownerOptions = ref<{ value: number; label: string }[]>([])
+const operatorOptions = ref<{ value: number; label: string }[]>([])
+const pagination = reactive({
+  current: 1,
+  pageSize: 20,
+  showSizeChanger: true,
+  pageSizeOptions: ['10', '20', '50', '100'],
+  showTotal: (total: number) => `共 ${total} 条`
+})
+const filters = reactive<{
+  palletNo?: string
+  erpTenantId?: number
+  wmsTenantId?: number
+  status?: string
+  warehouseId?: number
+  slotCode?: string
+}>({})
 const capacity = reactive<{
   palletId?: number
   capacityPercent: number
@@ -165,9 +221,6 @@ const marks = { 25: '25%', 50: '50%', 75: '75%', 100: '满' }
 const statusOptions = [
   { value: 'PARTIAL', label: '半托' },
   { value: 'FULL', label: '满托' },
-  { value: 'ALLOCATED', label: '已分配' },
-  { value: 'PICKING', label: '拣货中' },
-  { value: 'LOCKED', label: '已锁定' },
   { value: 'CLOSED', label: '已关闭' }
 ]
 const columns = [
@@ -189,6 +242,7 @@ const itemColumns = [
 ]
 
 async function load() {
+  pagination.current = 1
   loading.value = true
   try {
     const response = await listPallets(filters)
@@ -196,6 +250,21 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function handleTableChange(next: { current?: number; pageSize?: number }) {
+  pagination.current = next.current || 1
+  pagination.pageSize = next.pageSize || 20
+}
+
+async function resetFilters() {
+  filters.palletNo = undefined
+  filters.erpTenantId = undefined
+  filters.wmsTenantId = undefined
+  filters.status = undefined
+  filters.warehouseId = undefined
+  filters.slotCode = undefined
+  await load()
 }
 
 function showDetail(record: PalletSummaryVO) {
@@ -230,15 +299,8 @@ async function saveCapacity() {
   }
 }
 
-async function printLabel(record: PalletSummaryVO) {
-  const page = window.open('', '_blank', 'width=700,height=600')
-  if (!page) return
-  const qr = await QRCode.toDataURL(record.palletNo, { margin: 1, width: 220 })
-  page.document.write(
-    `<html><head><title>${record.palletNo}</title><style>@page{size:80mm 50mm;margin:0}body{font-family:Arial,"Microsoft YaHei";margin:0}.label{width:80mm;height:50mm;padding:4mm;display:grid;grid-template-columns:32mm 1fr;box-sizing:border-box;gap:4mm;align-items:center}img{width:30mm;height:30mm}h1{font-size:16pt;margin:0 0 2mm}.owner{font-size:10pt;font-weight:700}.service{font-size:8pt;color:#555}.items{font-size:8pt;line-height:1.4;margin-top:2mm}</style></head><body><div class="label"><img src="${qr}"><div><h1>${record.palletNo}</h1><div class="owner">货主：${record.ownerName || '-'}</div><div class="service">服务商：${record.wmsTenantName || '-'}</div><div class="items">${record.items.map(item => `${item.skuCode} × ${item.quantity}`).join('<br>')}</div></div></div></body></html>`
-  )
-  page.document.close()
-  page.print()
+function printLabel(record: PalletSummaryVO) {
+  void printPalletLabels([record])
 }
 
 function typeText(value: string) {
@@ -264,11 +326,7 @@ function statusText(value: string) {
       {
         PARTIAL: '半托',
         FULL: '满托',
-        ALLOCATED: '已分配',
-        PICKING: '拣货中',
-        SHIPPED: '已发货',
-        CLOSED: '已关闭',
-        LOCKED: '已锁定'
+        CLOSED: '已关闭'
       } as Record<string, string>
     )[value] || value
   )
@@ -278,17 +336,29 @@ function statusColor(value: string) {
     ? 'success'
     : value === 'CLOSED'
       ? 'default'
-      : value === 'LOCKED'
-        ? 'error'
-        : 'processing'
+      : 'processing'
 }
 
 onMounted(async () => {
-  const response = await getWarehouseOptions()
-  if (isSuccess(response))
-    warehouseOptions.value = (response.data || []).map(item => ({
+  const [warehouseResponse, ownerResponse, operatorResponse] = await Promise.all([
+    getWarehouseOptions(),
+    listAllErpTenants(),
+    listWmsOperators()
+  ])
+  if (isSuccess(warehouseResponse))
+    warehouseOptions.value = (warehouseResponse.data || []).map(item => ({
       value: item.id,
       label: item.warehouseName
+    }))
+  if (isSuccess(ownerResponse))
+    ownerOptions.value = (ownerResponse.data || []).map(item => ({
+      value: item.id,
+      label: `${item.tenantName}（${item.tenantCode}）`
+    }))
+  if (isSuccess(operatorResponse))
+    operatorOptions.value = (operatorResponse.data || []).map(item => ({
+      value: item.id,
+      label: `${item.tenantName}（${item.tenantCode}）`
     }))
   await load()
 })

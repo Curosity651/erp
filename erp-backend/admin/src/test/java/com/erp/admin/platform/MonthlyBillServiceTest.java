@@ -1,11 +1,15 @@
 package com.erp.admin.platform;
 
 import com.erp.admin.platform.finance.mapper.WmsMonthlyBillMapper;
+import com.erp.admin.platform.finance.mapper.WmsBillingRecordMapper;
 import com.erp.admin.platform.finance.model.dto.GenerateBillDTO;
 import com.erp.admin.platform.finance.model.entity.WmsMonthlyBill;
 import com.erp.admin.platform.finance.model.vo.FeeAmountRow;
 import com.erp.admin.platform.finance.model.vo.GenerateBillResultVO;
 import com.erp.admin.platform.finance.service.MonthlyBillService;
+import com.erp.admin.platform.finance.service.WarehouseBillingService;
+import com.erp.admin.system.model.vo.SysFileVO;
+import com.erp.admin.system.service.SysFileService;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import org.ballcat.common.core.exception.BusinessException;
@@ -35,16 +39,22 @@ class MonthlyBillServiceTest {
 
     private WmsMonthlyBillMapper mapper;
     private TenantIdentityService tis;
+    private WmsBillingRecordMapper billingRecordMapper;
+    private WarehouseBillingService warehouseBillingService;
+    private SysFileService sysFileService;
     private MonthlyBillService service;
 
     @BeforeEach
     void setUp() {
         mapper = mock(WmsMonthlyBillMapper.class);
+        billingRecordMapper = mock(WmsBillingRecordMapper.class);
+        warehouseBillingService = mock(WarehouseBillingService.class);
+        sysFileService = mock(SysFileService.class);
         tis = mock(TenantIdentityService.class);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
-        service = new MonthlyBillService(mapper, tis);
+        service = new MonthlyBillService(mapper, billingRecordMapper, warehouseBillingService, sysFileService, tis);
     }
 
     private FeeAmountRow fee(String type, String amt) {
@@ -122,11 +132,21 @@ class MonthlyBillServiceTest {
 
     @Test
     void pay_requires_confirmed() {
+        SysFileVO voucher = new SysFileVO();
+        voucher.setContentType("application/pdf");
+        when(sysFileService.getFileInfo(10L)).thenReturn(voucher);
         WmsMonthlyBill draft = new WmsMonthlyBill();
         draft.setId(1L);
         draft.setStatus("DRAFT");
         when(mapper.selectById(1L)).thenReturn(draft);
-        assertThatThrownBy(() -> service.pay(1L)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.pay(1L, 10L)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void pay_requires_payment_voucher() {
+        assertThatThrownBy(() -> service.pay(1L, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("付款凭证");
     }
 
     @Test

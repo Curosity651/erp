@@ -7,6 +7,8 @@ public class InventoryReservationRequest {
 
 	private Long fulfillmentOrderId;
 
+	private Long fulfillmentItemId;
+
 	private Long tenantId;
 
 	private Long wmsTenantId;

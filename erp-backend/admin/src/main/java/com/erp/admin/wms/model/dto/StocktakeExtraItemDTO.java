@@ -4,6 +4,9 @@ import lombok.Data;
 
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.DecimalMax;
+import javax.validation.constraints.DecimalMin;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
@@ -27,6 +30,12 @@ public class StocktakeExtraItemDTO {
 	private Long palletId;
 
 	private String quality = "GOOD";
+
+	@DecimalMin(value = "0.01", message = "托盘利用率必须大于0")
+	@DecimalMax(value = "100", message = "托盘利用率不能超过100")
+	private BigDecimal capacityPercent;
+
+	private Boolean manualFull;
 
 	private LocalDate inboundDate;
 

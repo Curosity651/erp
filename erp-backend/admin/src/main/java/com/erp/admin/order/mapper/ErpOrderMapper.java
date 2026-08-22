@@ -1,5 +1,6 @@
 package com.erp.admin.order.mapper;
 
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -18,6 +19,7 @@ import com.erp.admin.order.model.qo.ErpOrderQO;
 import com.erp.admin.order.model.qo.PendingOrderQO;
 import com.erp.admin.wms.model.dto.PlatformSkuSalesDTO;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
@@ -31,6 +33,14 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
  * @author erp 2025-09-27 23:16:08
  */
 public interface ErpOrderMapper extends ExtendMapper<ErpOrder> {
+
+	@InterceptorIgnore(tenantLine = "true")
+	@Update("UPDATE erp_order SET warehouse_fulfillment_status = #{status}, "
+			+ "fulfillment_order_id = COALESCE(#{fulfillmentOrderId}, fulfillment_order_id), update_time = NOW() "
+			+ "WHERE id = #{orderId} AND tenant_id = #{erpTenantId}")
+	int updateWarehouseFulfillmentStatus(@Param("orderId") Long orderId,
+			@Param("erpTenantId") Long erpTenantId, @Param("status") String status,
+			@Param("fulfillmentOrderId") Long fulfillmentOrderId);
 
 	/**
 	 * 通用订单分页查询（XML 动态 SQL）
@@ -227,8 +237,13 @@ public interface ErpOrderMapper extends ExtendMapper<ErpOrder> {
 			@Param("version") Integer version);
 
 	/** 海外仓签出后将订单从 ALLOCATED 推进到 COMPLETED。 */
+	@InterceptorIgnore(tenantLine = "true")
 	int completeOutboundWithVersion(@Param("id") Long id, @Param("outboundOrderId") Long outboundOrderId,
 			@Param("version") Integer version);
+
+	@InterceptorIgnore(tenantLine = "true")
+	@Select("SELECT * FROM erp_order WHERE id = #{id} AND tenant_id = #{tenantId}")
+	ErpOrder selectForWarehouseComplete(@Param("id") Long id, @Param("tenantId") Long tenantId);
 
 	/** 原子取得平台确认执行权；处理中超过十分钟的请求允许恢复。 */
 	@Update("UPDATE erp_order SET confirm_state = 'PROCESSING', confirm_started_at = NOW(), update_time = NOW() " +

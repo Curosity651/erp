@@ -23,7 +23,7 @@ public class RackVO {
 	@Schema(title = "排号")
 	private String rackNo;
 
-	@Schema(title = "状态 IDLE空闲/OCCUPIED占用")
+	@Schema(title = "状态 IDLE空闲/RESERVED合同预留/OCCUPIED占用")
 	private String status;
 
 	@Schema(title = "分配记录ID")
@@ -35,6 +35,15 @@ public class RackVO {
 	@Schema(title = "分配给的WMS服务商名称")
 	private String assignedWmsTenantName;
 
+	@Schema(title = "是否由服务合同控制")
+	private Boolean contractControlled;
+
+	@Schema(title = "服务合同ID")
+	private Long contractId;
+
+	@Schema(title = "服务合同编号")
+	private String contractNo;
+
 	@Schema(title = "月租金")
 	private BigDecimal monthlyFee;
 
@@ -43,6 +52,9 @@ public class RackVO {
 
 	@Schema(title = "结束日期")
 	private LocalDate effectiveTo;
+
+	@Schema(title = "备注")
+	private String remark;
 
 	@Schema(title = "是否即将到期(≤30天)")
 	private Boolean expiringSoon;

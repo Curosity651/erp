@@ -28,10 +28,13 @@ public class WmsServiceContract {
     private BigDecimal serviceAmount;
     private BigDecimal monthlyServiceRecognition;
     private String contractFileUrl;
+    private Long contractFileId;
     private String contractStatus;
+    private String paymentStatus;
+    private LocalDateTime receivedTime;
+    private LocalDateTime settledTime;
     private String remark;
     private Long createBy;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
-

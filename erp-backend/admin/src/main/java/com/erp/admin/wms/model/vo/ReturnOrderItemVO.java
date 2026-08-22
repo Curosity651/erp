@@ -16,6 +16,8 @@ public class ReturnOrderItemVO {
 
     private String skuCode;
 
+    private String warehouseSkuCode;
+
     private String skuName;
 
     @Schema(title = "电子类 → FAIL 是否强制拍照")

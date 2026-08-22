@@ -25,12 +25,12 @@
         </div>
       </template>
 
-      <!-- 结构 -->
+      <!-- 库位布局 -->
       <template v-else-if="column.key === 'structure'">
-        <span v-if="record.rackRows">
-          {{ record.rackRows }} 排 · {{ record.actualPhysicalLocationCount || 0 }} 库位
+        <span v-if="record.locationConfigured">
+          {{ record.actualRackCount || 0 }} 排 · {{ record.actualPhysicalLocationCount || 0 }} 库位
         </span>
-        <span v-else class="muted">未设计</span>
+        <span v-else class="muted">未配置</span>
       </template>
 
       <!-- 库位数 -->
@@ -40,8 +40,8 @@
 
       <!-- 状态 -->
       <template v-else-if="column.key === 'genStatus'">
-        <a-tag v-if="record.locationGenerated === 1" color="green">已生成</a-tag>
-        <a-tag v-else color="default">未生成</a-tag>
+        <a-tag v-if="record.locationConfigured" color="green">已配置</a-tag>
+        <a-tag v-else color="default">未配置</a-tag>
       </template>
 
       <!-- 操作 -->
@@ -95,7 +95,10 @@ const tableRequest: TableRequest = async params => {
     ) {
       return false
     }
-    if (kw.generatedStatus !== undefined && (w.locationGenerated ?? 0) !== kw.generatedStatus) {
+    if (
+      kw.configuredStatus !== undefined &&
+      (w.locationConfigured ? 1 : 0) !== kw.configuredStatus
+    ) {
       return false
     }
     return true
@@ -130,7 +133,7 @@ const handleInventory = (record: WarehouseStructure) => {
 
 const columns: ProColumns[] = [
   { title: '仓库信息', key: 'warehouseInfo', width: 220, fixed: 'left' },
-  { title: '结构', key: 'structure', width: 140 },
+  { title: '库位布局', key: 'structure', width: 160 },
   { title: '库位数', key: 'locationCount', width: 90, align: 'center' },
   { title: '状态', key: 'genStatus', width: 100, align: 'center' },
   { title: '操作', key: 'operate', width: 150, align: 'center', fixed: 'right' }

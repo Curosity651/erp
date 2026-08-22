@@ -26,7 +26,8 @@ public class ServiceContractCreateDTO {
     private BigDecimal subscriptionTotal;
     private BigDecimal refundableRate;
     private String contractFileUrl;
+    @NotNull(message = "请上传合同PDF文件")
+    private Long contractFileId;
     private String remark;
     private List<String> rackNos;
 }
-

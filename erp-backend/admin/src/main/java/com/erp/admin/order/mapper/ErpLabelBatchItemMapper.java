@@ -17,6 +17,19 @@ public interface ErpLabelBatchItemMapper extends ExtendMapper<ErpLabelBatchItem>
 		return this.selectList(w);
 	}
 
+	default Long selectLatestBatchIdByOrderIds(Collection<Long> orderIds) {
+		if (orderIds == null || orderIds.isEmpty()) {
+			return null;
+		}
+		List<ErpLabelBatchItem> items = this.selectList(
+				WrappersX.lambdaQueryX(ErpLabelBatchItem.class)
+						.select(ErpLabelBatchItem::getBatchId)
+						.in(ErpLabelBatchItem::getOrderId, orderIds)
+						.orderByDesc(ErpLabelBatchItem::getBatchId)
+						.last("limit 1"));
+		return items.isEmpty() ? null : items.get(0).getBatchId();
+	}
+
 	default int updateItemStatusAndFail(Long batchId, Long orderId, String status, String failCode, String errorMsg) {
 		LambdaUpdateWrapper<ErpLabelBatchItem> uw = Wrappers.lambdaUpdate(ErpLabelBatchItem.class);
 		uw.eq(ErpLabelBatchItem::getBatchId, batchId).eq(ErpLabelBatchItem::getOrderId, orderId)
@@ -53,5 +66,4 @@ public interface ErpLabelBatchItemMapper extends ExtendMapper<ErpLabelBatchItem>
 		return this.update(null, uw);
 	}
 }
-
 

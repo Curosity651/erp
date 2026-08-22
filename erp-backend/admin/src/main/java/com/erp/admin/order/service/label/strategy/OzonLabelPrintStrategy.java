@@ -1,7 +1,9 @@
 package com.erp.admin.order.service.label.strategy;
 
 import java.util.Base64;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -20,6 +22,8 @@ import com.erp.admin.order.service.ozon.OzonPlatformApi;
 import com.erp.admin.platform.PlatformEnum;
 import com.erp.admin.platform.credential.CredentialService;
 import com.erp.admin.platform.ozon.credential.OzonCredential;
+import com.erp.admin.platform.ozon.model.response.posting.OzonBarcodes;
+import com.erp.admin.platform.ozon.model.response.posting.OzonPosting;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.shop.model.entity.Shop;
 import com.erp.admin.shop.service.ShopService;
@@ -74,7 +78,8 @@ public class OzonLabelPrintStrategy implements LabelPrintStrategy {
 
         // 筛选缺失面单的订单，按店铺分组同步
         Map<Long, List<ErpOrder>> ordersByShop = orders.stream()
-                .filter(order -> !StringUtils.hasText(order.getLabelBase64()))
+                .filter(order -> !StringUtils.hasText(order.getLabelBase64())
+                        || !StringUtils.hasText(order.getLabelVerifyCodes()))
                 .collect(Collectors.groupingBy(ErpOrder::getShopId));
 
         Map<Long, String> failReasons = new HashMap<>();
@@ -212,16 +217,22 @@ public class OzonLabelPrintStrategy implements LabelPrintStrategy {
             }
 
             // 从 Ozon API 获取面单 PDF
-            byte[] fileContent = ozonPlatformApi.getPackageLabel(credential, postingNumber);
-            if (fileContent == null || fileContent.length == 0) {
-                log.warn("[OZON][LABEL] 获取面单失败，返回数据为空: orderId={}", order.getId());
-                failReasons.put(order.getId(), "面单未获取（平台返回为空）");
-                return;
+            String labelBase64 = order.getLabelBase64();
+            if (!StringUtils.hasText(labelBase64)) {
+                byte[] fileContent = ozonPlatformApi.getPackageLabel(credential, postingNumber);
+                if (fileContent == null || fileContent.length == 0) {
+                    log.warn("[OZON][LABEL] 获取面单失败，返回数据为空: orderId={}", order.getId());
+                    failReasons.put(order.getId(), "面单未获取（平台返回为空）");
+                    return;
+                }
+                labelBase64 = Base64.getEncoder().encodeToString(fileContent);
             }
 
-            // 转 Base64 并保存
-            String labelBase64 = Base64.getEncoder().encodeToString(fileContent);
-            labelService.updateOrderLabel(order.getId(), labelBase64);
+            OzonPosting posting = ozonPlatformApi
+                    .batchFetchPostings(credential, java.util.Collections.singletonList(postingNumber))
+                    .get(postingNumber);
+            labelService.updateOrderLabel(order.getId(), labelBase64,
+                    collectVerifyCodes(order, posting));
 
             // 更新内存中的订单对象，供后续流程使用
             order.setLabelBase64(labelBase64);
@@ -233,6 +244,34 @@ public class OzonLabelPrintStrategy implements LabelPrintStrategy {
             log.error("[OZON][LABEL] 同步面单失败: orderId={}, error={}",
                     order.getId(), e.getMessage(), e);
         }
+    }
+
+    private List<String> collectVerifyCodes(ErpOrder order, OzonPosting posting) {
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        if (StringUtils.hasText(order.getPlatformOrderId())) {
+            codes.add(order.getPlatformOrderId().trim());
+        }
+        if (StringUtils.hasText(order.getShipmentId())) {
+            codes.add(order.getShipmentId().trim());
+        }
+        if (posting != null) {
+            if (StringUtils.hasText(posting.getPostingNumber())) {
+                codes.add(posting.getPostingNumber().trim());
+            }
+            if (StringUtils.hasText(posting.getOrderNumber())) {
+                codes.add(posting.getOrderNumber().trim());
+            }
+            OzonBarcodes barcodes = posting.getBarcodes();
+            if (barcodes != null) {
+                if (StringUtils.hasText(barcodes.getUpperBarcode())) {
+                    codes.add(barcodes.getUpperBarcode().trim());
+                }
+                if (StringUtils.hasText(barcodes.getLowerBarcode())) {
+                    codes.add(barcodes.getLowerBarcode().trim());
+                }
+            }
+        }
+        return new ArrayList<>(codes);
     }
 
     /**

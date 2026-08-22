@@ -95,6 +95,12 @@ public class SalesOutboundOrder {
     @Schema(title = "面单跟踪号（签出后回填）")
     private String trackingNo;
 
+    private Long shippedBy;
+
+    private String shippedByName;
+
+    private LocalDateTime shippedTime;
+
     @Schema(title = "称重kg（签出后回填）")
     private java.math.BigDecimal weight;
 

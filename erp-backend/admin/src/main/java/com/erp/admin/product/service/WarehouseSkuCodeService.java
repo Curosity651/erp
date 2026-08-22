@@ -23,9 +23,15 @@ public class WarehouseSkuCodeService {
 		Assert.hasText(skuCode, "SKU不能为空");
 		SysTenant owner = tenantMapper.selectById(erpTenantId);
 		Assert.notNull(owner, "货主不存在");
-		Assert.hasText(owner.getTenantName(), "货主名称未配置，无法生成仓库内部SKU");
-		String ownerName = owner.getTenantName().trim().replaceAll("\\s+", "_");
-		return ownerName.toUpperCase(Locale.ROOT) + "-" + skuCode.trim();
+		Assert.hasText(owner.getWarehouseSkuPrefix(), "货主仓库SKU前缀未配置，无法生成内部SKU");
+		return owner.getWarehouseSkuPrefix().trim().toUpperCase(Locale.ROOT) + "-" + skuCode.trim();
+	}
+
+	public static String normalizePrefix(String ownerName) {
+		Assert.hasText(ownerName, "货主名称不能为空");
+		String prefix = ownerName.trim().replaceAll("\\s+", "_").toUpperCase(Locale.ROOT);
+		Assert.isTrue(prefix.length() <= 32, "货主名称生成的仓库SKU前缀不能超过32个字符");
+		return prefix;
 	}
 
 	public boolean matches(Long erpTenantId, String skuCode, String scanCode) {
@@ -38,6 +44,22 @@ public class WarehouseSkuCodeService {
 		catch (IllegalArgumentException ex) {
 			return false;
 		}
+	}
+
+	public String extractSkuCode(Long erpTenantId, String warehouseSkuCode) {
+		if (erpTenantId == null || !StringUtils.hasText(warehouseSkuCode)) {
+			return null;
+		}
+		SysTenant owner = tenantMapper.selectById(erpTenantId);
+		if (owner == null || !StringUtils.hasText(owner.getWarehouseSkuPrefix())) {
+			return null;
+		}
+		String prefix = owner.getWarehouseSkuPrefix().trim().toUpperCase(Locale.ROOT) + "-";
+		String code = warehouseSkuCode.trim();
+		if (!code.toUpperCase(Locale.ROOT).startsWith(prefix) || code.length() <= prefix.length()) {
+			return null;
+		}
+		return code.substring(prefix.length());
 	}
 
 }

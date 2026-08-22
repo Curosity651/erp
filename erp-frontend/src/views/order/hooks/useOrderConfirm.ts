@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 import { message } from 'ant-design-vue'
 import type { BaseOrderVO } from '@/api/order/types.ts'
 import { submitOrderFulfillment } from '@/api/order/fulfillment'
+import { warehouseFulfillmentBlockReason } from './fulfillment-confirm'
 
 export interface UseOrderConfirmOptions<T extends BaseOrderVO> {
   /** 判断订单是否可确认 */
@@ -22,9 +23,7 @@ export interface UseOrderConfirmOptions<T extends BaseOrderVO> {
 /**
  * 订单确认发货 composable（三平台通用）
  */
-export function useOrderConfirm<T extends BaseOrderVO>(
-  options: UseOrderConfirmOptions<T>
-) {
+export function useOrderConfirm<T extends BaseOrderVO>(options: UseOrderConfirmOptions<T>) {
   const confirmModal = reactive({
     open: false,
     loading: false,
@@ -39,10 +38,11 @@ export function useOrderConfirm<T extends BaseOrderVO>(
     const ineligible: (T & { reason: string })[] = []
 
     for (const r of list) {
-      if (options.canConfirm(r)) {
+      const fulfillmentReason = warehouseFulfillmentBlockReason(r)
+      if (!fulfillmentReason && options.canConfirm(r)) {
         eligible.push(r)
       } else {
-        ineligible.push({ ...r, reason: options.reasonOf(r) })
+        ineligible.push({ ...r, reason: fulfillmentReason || options.reasonOf(r) })
       }
     }
 

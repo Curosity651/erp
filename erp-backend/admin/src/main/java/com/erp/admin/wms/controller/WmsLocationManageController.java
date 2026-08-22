@@ -14,6 +14,8 @@ import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.vo.WarehouseStructureVO;
+import com.erp.admin.wms.model.vo.WarehouseLocationSummaryVO;
+import com.erp.admin.wms.model.vo.LocationSlotSummaryVO;
 import com.erp.admin.wms.service.WarehouseService;
 import com.erp.admin.wms.service.WmsLocationGenerator;
 import com.erp.admin.wms.service.WmsLocationService;
@@ -21,6 +23,7 @@ import com.erp.admin.wms.service.VirtualLocationService;
 import com.erp.admin.wms.service.WmsPhysicalInventoryService;
 import com.erp.admin.wms.service.WmsStructureLockService;
 import com.erp.admin.wms.service.WmsZoneService;
+import com.erp.admin.wms.service.WmsPalletService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -65,12 +68,19 @@ public class WmsLocationManageController {
 
 	private final VirtualLocationService virtualLocationService;
 
+	private final WmsPalletService wmsPalletService;
+
 	@Operation(summary = "自有仓库列表（含结构参数）")
 	@GetMapping("/warehouses")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<List<WarehouseStructureVO>> warehouses() {
-		List<WarehouseStructureVO> list = warehouseService.listOwnWarehouses(null).stream().map(w -> {
+		List<Warehouse> warehouses = warehouseService.listOwnWarehouses(null);
+		Map<Long, WarehouseLocationSummaryVO> summaries = wmsLocationService
+			.summarizeByWarehouseIds(warehouses.stream().map(Warehouse::getId).collect(Collectors.toList()))
+			.stream().collect(Collectors.toMap(WarehouseLocationSummaryVO::getWarehouseId, row -> row));
+		List<WarehouseStructureVO> list = warehouses.stream().map(w -> {
 			WarehouseStructureVO vo = new WarehouseStructureVO();
+			WarehouseLocationSummaryVO summary = summaries.get(w.getId());
 			vo.setId(w.getId());
 			vo.setWarehouseCode(w.getWarehouseCode());
 			vo.setWarehouseName(w.getWarehouseName());
@@ -90,18 +100,14 @@ public class WmsLocationManageController {
 			vo.setDefaultPalletHeightMm(w.getDefaultPalletHeightMm());
 			vo.setDefaultPalletMaxWeightKg(w.getDefaultPalletMaxWeightKg());
 			vo.setDefaultPalletUtilization(w.getDefaultPalletUtilization());
-			// 结构锁定状态（有货占用 / 已分配服务商 → 前端置灰保存结构·重新生成）
-			WmsStructureLockService.LockInfo lock = wmsStructureLockService.compute(w.getId());
-			vo.setStructureLocked(lock.isLocked());
-			vo.setOccupied(lock.occupied);
-			vo.setOccupiedLocationCount(lock.occupiedLocationCount);
-			vo.setAssigned(lock.assigned);
-			vo.setAssignedRackCount(lock.assignedRackCount);
-			vo.setAssignedOperatorNames(lock.assignedOperatorNames);
-			vo.setActivePalletCount(lock.activePalletCount);
-			vo.setUnfinishedTransferCount(lock.unfinishedTransferCount);
-			vo.setInProgressStocktakeCount(lock.inProgressStocktakeCount);
-			vo.setActualPhysicalLocationCount(Math.toIntExact(wmsLocationService.countPhysicalByWarehouse(w.getId())));
+			int actualLocationCount = summary == null || summary.getActualLocationCount() == null
+					? 0 : summary.getActualLocationCount();
+			vo.setActualPhysicalLocationCount(actualLocationCount);
+			vo.setActualRackCount(summary == null || summary.getActualRackCount() == null
+					? 0 : summary.getActualRackCount());
+			vo.setAssignableRackCount(summary == null || summary.getAssignableRackCount() == null
+					? 0 : summary.getAssignableRackCount());
+			vo.setLocationConfigured(actualLocationCount > 0);
 			vo.setActualPalletSlotCount(wmsLocationGenerator.countPhysicalSlots(w.getId()));
 			return vo;
 		}).collect(Collectors.toList());
@@ -118,9 +124,8 @@ public class WmsLocationManageController {
 	@Operation(summary = "更新托盘规则（不重新生成库位）")
 	@PatchMapping("/pallet-rules")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
-	public ApiResult<Void> updatePalletRules(@Validated @RequestBody WarehousePalletRuleDTO dto) {
-		warehouseService.updatePalletRules(dto);
-		return ApiResult.ok();
+	public ApiResult<Integer> updatePalletRules(@Validated @RequestBody WarehousePalletRuleDTO dto) {
+		return ApiResult.ok(warehouseService.updatePalletRules(dto));
 	}
 
 	@Operation(summary = "仓库分区列表")
@@ -199,6 +204,7 @@ public class WmsLocationManageController {
 	@GetMapping("/occupied-locations")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<List<String>> occupiedLocations(@RequestParam("warehouseId") Long warehouseId) {
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		return ApiResult.ok(wmsPhysicalInventoryService.occupiedLocationCodes(warehouseId));
 	}
 
@@ -206,7 +212,22 @@ public class WmsLocationManageController {
 	@PostMapping("/locations/move-zone")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<Integer> moveLocationZone(@Validated @RequestBody MoveLocationZoneDTO dto) {
+		warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
 		return ApiResult.ok(wmsZoneService.moveLocationsToZone(dto.getWarehouseId(), dto.getLocationIds(), dto.getZoneId()));
+	}
+
+	@GetMapping("/slot-summary")
+	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
+	public ApiResult<List<LocationSlotSummaryVO>> slotSummary(@RequestParam("warehouseId") Long warehouseId) {
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
+		return ApiResult.ok(wmsPalletService.listSlotSummaries(warehouseId));
+	}
+
+	@GetMapping("/structure-lock")
+	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
+	public ApiResult<WmsStructureLockService.LockInfo> structureLock(@RequestParam("warehouseId") Long warehouseId) {
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
+		return ApiResult.ok(wmsStructureLockService.compute(warehouseId));
 	}
 
 	// ==================== 虚拟库位（收纳积压货：服务商不可见、货主数量不变、不参与自动发货） ====================

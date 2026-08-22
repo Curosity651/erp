@@ -18,6 +18,7 @@
         b.status,
         DATE_FORMAT(b.confirmed_time, '%Y-%m-%d %H:%i:%s') AS confirmedTime,
         DATE_FORMAT(b.paid_time, '%Y-%m-%d %H:%i:%s') AS paidTime,
+        b.payment_voucher_file_id AS paymentVoucherFileId,
         b.remark
     </sql>
 

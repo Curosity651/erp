@@ -61,7 +61,7 @@ const transferId = ref<number>()
 const rows = ref<PlanRow[]>([])
 
 const columns = [
-  { title: 'SKU', dataIndex: 'skuCode', width: 150, ellipsis: true },
+  { title: '内部 SKU', dataIndex: 'warehouseSkuCode', width: 180, ellipsis: true },
   { title: '来源库位', key: 'source', width: 130 },
   { title: '数量', dataIndex: 'quantity', width: 80, align: 'right' as const },
   { title: '目标物理库位', key: 'target' }

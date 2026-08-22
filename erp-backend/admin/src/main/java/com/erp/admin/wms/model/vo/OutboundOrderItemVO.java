@@ -15,6 +15,8 @@ public class OutboundOrderItemVO {
     @Schema(title = "SKU编码")
     private String skuCode;
 
+    private String warehouseSkuCode;
+
     @Schema(title = "SKU名称")
     private String skuName;
 

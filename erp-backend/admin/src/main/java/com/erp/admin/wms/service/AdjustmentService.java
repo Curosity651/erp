@@ -5,20 +5,29 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.wms.mapper.AdjustmentMapper;
+import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.model.dto.AdjustmentDTO;
 import com.erp.admin.wms.model.dto.AdjustmentItemDTO;
 import com.erp.admin.wms.model.entity.AdjustmentOrder;
 import com.erp.admin.wms.model.entity.AdjustmentOrderItem;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import com.erp.admin.wms.model.entity.WmsLocationInventory;
+import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.enums.AdjustmentStatus;
 import com.erp.admin.wms.model.enums.AdjustmentType;
 import com.erp.admin.wms.model.qo.AdjustmentQO;
@@ -26,6 +35,8 @@ import com.erp.admin.wms.model.vo.AdjustmentDetailVO;
 import com.erp.admin.wms.model.vo.AdjustmentItemVO;
 import com.erp.admin.wms.model.vo.AdjustmentPageVO;
 import com.erp.admin.wms.model.vo.AdjustmentStatsVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
+import com.erp.admin.wms.model.vo.ScrapBatchVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.core.exception.BusinessException;
@@ -43,7 +54,8 @@ import org.springframework.util.Assert;
  * 报废单服务（原「库存调整单」收敛为仅「报废」，并改为货主审批流）。
  *
  * <p>流程：<b>平台</b>发起报废(选货主+仓+具体批次+数量)→发起即<b>冻结</b>待报废批次(reserved_qty)
- * →状态 PENDING_OWNER 待货主确认；<b>货主</b>确认→真正扣减批次(quantity)、写 SCRAP 流水→SCRAPPED；
+ * →状态 PENDING_OWNER 待货主确认；<b>货主</b>同意→PENDING_DESTROY；
+ * <b>海外仓</b>确认实际销毁→真正扣减批次(quantity)、写 SCRAP 流水→SCRAPPED；
  * 货主驳回或平台撤销→释放冻结→REJECTED / CANCELLED。批次真源操作见 {@link WmsPhysicalInventoryService}。
  *
  * @author erp
@@ -62,9 +74,21 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 
 	private final WmsPhysicalInventoryService physicalInventoryService;
 
+	private final WmsLocationInventoryMapper locationInventoryMapper;
+
+	private final LocationInventoryService locationInventoryService;
+
+	private final WmsLocationService wmsLocationService;
+
+	private final WmsZoneService wmsZoneService;
+
+	private final WmsPalletService palletService;
+
 	private final TenantIdentityService tenantIdentityService;
 
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
+
+	private final WarehouseSkuCodeService warehouseSkuCodeService;
 
 	// ==================== 查询 ====================
 
@@ -117,8 +141,49 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		}
 
 		List<AdjustmentItemVO> items = adjustmentItemService.getVoListByAdjustmentOrderId(id);
+		items.forEach(item -> item.setWarehouseSkuCode(
+				warehouseSkuCodeService.build(detail.getErpTenantId(), item.getSkuCode())));
 		detail.setItems(items);
 		return detail;
+	}
+
+	public List<ScrapBatchVO> listScrapCandidates(Long erpTenantId, Long warehouseId) {
+		assertPlatform();
+		Assert.notNull(erpTenantId, "货主不能为空");
+		Assert.notNull(warehouseId, "仓库不能为空");
+		Map<Long, WmsLocation> locations = wmsLocationService.listByWarehouse(warehouseId).stream()
+				.collect(Collectors.toMap(WmsLocation::getId, Function.identity()));
+		Map<Long, String> zoneTypes = wmsZoneService.listByWarehouse(warehouseId).stream()
+				.collect(Collectors.toMap(WmsZone::getId, WmsZone::getZoneType, (left, right) -> left));
+		List<WmsLocationInventory> inventories = locationInventoryMapper.selectList(
+				Wrappers.<WmsLocationInventory>lambdaQuery()
+						.eq(WmsLocationInventory::getErpTenantId, erpTenantId)
+						.eq(WmsLocationInventory::getWarehouseId, warehouseId)
+						.gt(WmsLocationInventory::getQuantity, 0));
+		List<ScrapBatchVO> result = new ArrayList<>();
+		for (WmsLocationInventory inventory : inventories) {
+			WmsLocation location = locations.get(inventory.getLocationId());
+			if (location == null || !"DEFECTIVE".equals(zoneTypes.get(location.getZoneId()))
+					|| !("DEFECTIVE".equals(inventory.getQuality()) || "DAMAGED".equals(inventory.getQuality()))) {
+				continue;
+			}
+			ScrapBatchVO vo = new ScrapBatchVO();
+			vo.setId(inventory.getId());
+			vo.setSourceInventoryId(inventory.getId());
+			vo.setSkuCode(inventory.getSkuCode());
+			vo.setWarehouseSkuCode(warehouseSkuCodeService.build(
+					erpTenantId, inventory.getSkuCode()));
+			vo.setLocationCode(location.getLocationCode());
+			vo.setQuality(inventory.getQuality());
+			vo.setQuantity(inventory.getQuantity());
+			vo.setReservedQty(inventory.getReservedQuantity());
+			vo.setZoneId(location.getZoneId());
+			result.add(vo);
+		}
+		result.sort(Comparator.comparing(ScrapBatchVO::getLocationCode,
+				Comparator.nullsLast(WmsPalletService::compareNatural))
+				.thenComparing(ScrapBatchVO::getSkuCode, Comparator.nullsLast(String::compareToIgnoreCase)));
+		return result;
 	}
 
 	/**
@@ -148,22 +213,26 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		// 加载并校验批次（存在 / 属本仓本货主 / 可用充足），构建明细
 		List<AdjustmentOrderItem> items = new ArrayList<>();
 		for (AdjustmentItemDTO d : dto.getItems()) {
-			Assert.notNull(d.getPhysicalInventoryId(), "目标批次不能为空");
-			WmsPhysicalInventory batch = physicalInventoryService.getById(d.getPhysicalInventoryId());
-			Assert.notNull(batch, "批次不存在：" + d.getPhysicalInventoryId());
-			Assert.isTrue(dto.getWarehouseId().equals(batch.getWarehouseId()), "批次不属于所选仓库");
-			Assert.isTrue(dto.getErpTenantId().equals(batch.getErpTenantId()), "批次不属于所选货主");
-			int reserved = batch.getReservedQty() == null ? 0 : batch.getReservedQty();
-			int available = batch.getQuantity() - reserved;
+			Assert.notNull(d.getSourceInventoryId(), "目标库存不能为空");
+			WmsLocationInventory inventory = locationInventoryMapper.selectForUpdate(d.getSourceInventoryId());
+			Assert.notNull(inventory, "库存不存在：" + d.getSourceInventoryId());
+			Assert.isTrue(dto.getWarehouseId().equals(inventory.getWarehouseId()), "库存不属于所选仓库");
+			Assert.isTrue(dto.getErpTenantId().equals(inventory.getErpTenantId()), "库存不属于所选货主");
+			WmsLocation location = wmsLocationService.getById(inventory.getLocationId());
+			Assert.notNull(location, "库存库位不存在");
+			WmsZone zone = wmsZoneService.getById(location.getZoneId());
+			validateScrapCandidate(inventory.getQuality(), zone == null ? null : zone.getZoneType());
+			int reserved = inventory.getReservedQuantity() == null ? 0 : inventory.getReservedQuantity();
+			int available = inventory.getQuantity() - reserved;
 			Assert.isTrue(d.getQuantity() != null && d.getQuantity() > 0 && d.getQuantity() <= available,
-					String.format("批次[%s]报废数量(%s)超过可用(%d)", batch.getLocationCode(), d.getQuantity(), available));
+					String.format("库位[%s]报废数量(%s)超过可用(%d)", location.getLocationCode(), d.getQuantity(), available));
 
 			AdjustmentOrderItem item = new AdjustmentOrderItem();
-			item.setPhysicalInventoryId(batch.getId());
+			item.setSourceInventoryId(inventory.getId());
 			item.setErpTenantId(dto.getErpTenantId());
-			item.setSkuCode(batch.getSkuCode());
-			item.setLocationCode(batch.getLocationCode());
-			item.setQuality(batch.getQuality());
+			item.setSkuCode(inventory.getSkuCode());
+			item.setLocationCode(location.getLocationCode());
+			item.setQuality(inventory.getQuality());
 			item.setQuantity(d.getQuantity());
 			item.setRemark(d.getRemark());
 			items.add(item);
@@ -187,7 +256,7 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 
 		// 冻结待报废批次（同事务；任一不足则整单回滚）
 		for (AdjustmentOrderItem item : items) {
-			physicalInventoryService.reserveBatch(item.getPhysicalInventoryId(), item.getQuantity());
+			locationInventoryService.reserveInventory(item.getSourceInventoryId(), item.getQuantity());
 		}
 
 		log.info("平台发起报废, id={}, no={}, erpTenantId={}, items={}", order.getId(), order.getAdjustmentNo(),
@@ -205,6 +274,10 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		Assert.isTrue(AdjustmentStatus.PENDING_OWNER.name().equals(order.getOrderStatus()),
 				"只有待货主确认的报废单可以撤销");
 		releaseAll(id);
+		if (baseMapper.casStatus(id, AdjustmentStatus.PENDING_OWNER.name(),
+				AdjustmentStatus.CANCELLED.name()) != 1) {
+			throw new BusinessException(409, "报废单状态已变化，请刷新后重试");
+		}
 		order.setOrderStatus(AdjustmentStatus.CANCELLED.name());
 		this.updateById(order);
 		log.info("平台撤销报废, id={}, no={}", order.getId(), order.getAdjustmentNo());
@@ -213,7 +286,7 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 	// ==================== 货主：确认 / 驳回 ====================
 
 	/**
-	 * 货主确认销毁（仅待货主确认，且为本货主）：逐批次真正扣减 + 写 SCRAP 流水 → SCRAPPED。
+	 * 货主同意报废（仅待货主确认，且为本货主）：只推进审批状态，不扣减库存。
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public void ownerConfirm(Long id) {
@@ -222,22 +295,42 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		Assert.isTrue(AdjustmentStatus.PENDING_OWNER.name().equals(order.getOrderStatus()),
 				"只有待货主确认的报废单可以确认");
 
-		List<AdjustmentOrderItem> items = adjustmentItemService.getByAdjustmentOrderId(id);
-		Assert.notEmpty(items, "报废明细为空");
-		for (AdjustmentOrderItem item : items) {
-			physicalInventoryService.scrapBatch(item.getPhysicalInventoryId(), item.getQuantity(),
-					order.getAdjustmentNo());
+		if (baseMapper.casStatus(id, AdjustmentStatus.PENDING_OWNER.name(),
+				AdjustmentStatus.PENDING_DESTROY.name()) != 1) {
+			throw new BusinessException(409, "报废单状态已变化，请刷新后重试");
 		}
 
 		LocalDateTime now = LocalDateTime.now();
 		Long uid = currentUserId();
-		order.setOrderStatus(AdjustmentStatus.SCRAPPED.name());
+		order.setOrderStatus(AdjustmentStatus.PENDING_DESTROY.name());
 		order.setOwnerActionTime(now);
 		order.setOwnerActionBy(uid);
+		this.updateById(order);
+		log.info("货主同意报废, id={}, no={}", order.getId(), order.getAdjustmentNo());
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void destroy(Long id) {
+		assertPlatform();
+		AdjustmentOrder order = requireOrder(id);
+		Assert.isTrue(AdjustmentStatus.PENDING_DESTROY.name().equals(order.getOrderStatus()),
+				"只有货主已同意的报废单可以确认销毁");
+		if (baseMapper.casStatus(id, AdjustmentStatus.PENDING_DESTROY.name(),
+				AdjustmentStatus.SCRAPPED.name()) != 1) {
+			throw new BusinessException(409, "报废单状态已变化，请刷新后重试");
+		}
+		List<AdjustmentOrderItem> items = adjustmentItemService.getByAdjustmentOrderId(id);
+		Assert.notEmpty(items, "报废明细为空");
+		for (AdjustmentOrderItem item : items) {
+			locationInventoryService.scrapReservedInventory(item.getSourceInventoryId(), item.getQuantity());
+		}
+		LocalDateTime now = LocalDateTime.now();
+		Long uid = currentUserId();
+		order.setOrderStatus(AdjustmentStatus.SCRAPPED.name());
 		order.setConfirmTime(now);
 		order.setConfirmBy(uid);
 		this.updateById(order);
-		log.info("货主确认报废销毁, id={}, no={}", order.getId(), order.getAdjustmentNo());
+		log.info("海外仓确认实际销毁, id={}, no={}", order.getId(), order.getAdjustmentNo());
 	}
 
 	/**
@@ -249,8 +342,13 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		assertOwnerOf(order);
 		Assert.isTrue(AdjustmentStatus.PENDING_OWNER.name().equals(order.getOrderStatus()),
 				"只有待货主确认的报废单可以驳回");
+		Assert.hasText(reason, "请填写驳回原因");
 
 		releaseAll(id);
+		if (baseMapper.casStatus(id, AdjustmentStatus.PENDING_OWNER.name(),
+				AdjustmentStatus.REJECTED.name()) != 1) {
+			throw new BusinessException(409, "报废单状态已变化，请刷新后重试");
+		}
 		order.setOrderStatus(AdjustmentStatus.REJECTED.name());
 		order.setRejectReason(reason);
 		order.setOwnerActionTime(LocalDateTime.now());
@@ -282,7 +380,54 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 	private void releaseAll(Long orderId) {
 		List<AdjustmentOrderItem> items = adjustmentItemService.getByAdjustmentOrderId(orderId);
 		for (AdjustmentOrderItem item : items) {
-			physicalInventoryService.releaseBatch(item.getPhysicalInventoryId(), item.getQuantity());
+			locationInventoryService.releaseInventory(item.getSourceInventoryId(), item.getQuantity());
+		}
+	}
+
+	public List<PalletSummaryVO> listPrintablePallets(Long orderId) {
+		AdjustmentOrder order = requireOrder(orderId);
+		AdjustmentDetailVO detail = getDetail(orderId);
+		Assert.isTrue(AdjustmentStatus.SCRAPPED.name().equals(detail.getOrderStatus()),
+				"报废完成后才能打印更新后的托盘标签");
+		return Collections.emptyList();
+	}
+
+	public static void validateScrapCandidate(String quality, String zoneType) {
+		Assert.isTrue("DEFECTIVE".equalsIgnoreCase(quality) || "DAMAGED".equalsIgnoreCase(quality),
+				"报废只允许选择不良品");
+		Assert.isTrue("DEFECTIVE".equalsIgnoreCase(zoneType), "报废只允许选择不良品区库存");
+	}
+
+	private boolean isDefectiveZone(WmsPhysicalInventory batch, Long warehouseId) {
+		if (batch.getZoneId() == null) {
+			return false;
+		}
+		WmsZone zone = wmsZoneService.getById(batch.getZoneId());
+		return zone != null && warehouseId.equals(zone.getWarehouseId())
+				&& "DEFECTIVE".equals(zone.getZoneType());
+	}
+
+	private void enrichPallets(List<AdjustmentItemVO> items) {
+		Map<Long, WmsPhysicalInventory> batches = new java.util.LinkedHashMap<>();
+		for (AdjustmentItemVO item : items) {
+			WmsPhysicalInventory batch = physicalInventoryService.getById(item.getPhysicalInventoryId());
+			if (batch != null) {
+				batches.put(item.getPhysicalInventoryId(), batch);
+				item.setPalletId(batch.getPalletId());
+				item.setSlotCode(batch.getLocationCode());
+			}
+		}
+		Set<Long> palletIds = batches.values().stream().map(WmsPhysicalInventory::getPalletId)
+				.filter(id -> id != null).collect(Collectors.toSet());
+		Map<Long, PalletSummaryVO> pallets = palletService.summaries(palletIds).stream()
+				.collect(Collectors.toMap(PalletSummaryVO::getId, Function.identity()));
+		for (AdjustmentItemVO item : items) {
+			WmsPhysicalInventory batch = batches.get(item.getPhysicalInventoryId());
+			PalletSummaryVO pallet = batch == null ? null : pallets.get(batch.getPalletId());
+			if (pallet != null) {
+				item.setPalletNo(pallet.getPalletNo());
+				item.setSlotCode(pallet.getSlotCode());
+			}
 		}
 	}
 

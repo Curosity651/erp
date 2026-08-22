@@ -24,7 +24,7 @@
       <a-table :data-source="lines" :pagination="false" row-key="skuCode" size="small">
         <a-table-column title="SKU" :width="200">
           <template #default="{ record }">
-            <div>{{ record.skuCode }}</div>
+            <div>{{ record.warehouseSkuCode || record.skuCode }}</div>
             <div class="sku-name">{{ record.skuName }}</div>
           </template>
         </a-table-column>

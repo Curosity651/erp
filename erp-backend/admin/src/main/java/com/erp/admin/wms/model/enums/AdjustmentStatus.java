@@ -18,7 +18,12 @@ public enum AdjustmentStatus {
 	PENDING_OWNER("PENDING_OWNER", "待货主确认"),
 
 	/**
-	 * 已销毁（货主确认后真正扣减批次库存）
+	 * 货主已同意，等待海外仓执行实际销毁。
+	 */
+	PENDING_DESTROY("PENDING_DESTROY", "待仓库销毁"),
+
+	/**
+	 * 已销毁（海外仓确认实际销毁后真正扣减批次库存）
 	 */
 	SCRAPPED("SCRAPPED", "已销毁"),
 

@@ -2,6 +2,7 @@ package com.erp.admin.wms.service;
 
 import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.product.service.SkuBriefService;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.converter.StocktakeItemConverter;
@@ -38,6 +39,8 @@ public class StocktakeItemService extends ExtendServiceImpl<StocktakeItemMapper,
 	private final SkuBriefService skuBriefService;
 
 	private final SysTenantMapper sysTenantMapper;
+
+	private final WarehouseSkuCodeService warehouseSkuCodeService;
 
 	/**
 	 * 根据盘点单ID查询明细列表
@@ -144,6 +147,8 @@ public class StocktakeItemService extends ExtendServiceImpl<StocktakeItemMapper,
 			String ownerName = owner == null ? null : ownerNameMap.get(owner);
 			group.forEach(vo -> vo.setOwnerName(ownerName));
 			if (owner != null) {
+				group.forEach(vo -> vo.setWarehouseSkuCode(
+						warehouseSkuCodeService.build(owner, vo.getSkuCode())));
 				TenantContext.runAs(owner, () -> {
 					skuBriefService.enrichForQuery(group, StocktakeItemVO::getSkuCode, StocktakeItemVO::setSkuBrief);
 					return null;

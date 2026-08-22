@@ -15,6 +15,8 @@ import com.erp.admin.common.tenant.WmsTenantContext;
 import com.erp.admin.wms.converter.WarehouseConverter;
 import com.erp.admin.wms.mapper.WarehouseMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
+import com.erp.admin.wms.mapper.WmsLocationSlotMapper;
+import com.erp.admin.wms.mapper.WmsPalletMapper;
 import com.erp.admin.wms.model.dto.WarehousePalletRuleDTO;
 import com.erp.admin.wms.model.dto.WarehouseDTO;
 import com.erp.admin.wms.model.entity.Warehouse;
@@ -43,6 +45,15 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 
 	@org.springframework.beans.factory.annotation.Autowired
 	private WmsRackAssignmentMapper rackAssignmentMapper;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	private WmsLocationSlotMapper locationSlotMapper;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	private WmsPalletMapper palletMapper;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	private WmsZoneService wmsZoneService;
 
 	/**
 	 * OWN 仓可见性作用域：无上下文→null(系统任务看全部)；海外仓平台→全部 OWN 仓；
@@ -120,7 +131,14 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 
 		Warehouse warehouse = WarehouseConverter.INSTANCE.dtoToEntity(dto);
 
-		return this.save(warehouse);
+		if (!this.save(warehouse)) {
+			return false;
+		}
+		int createdZones = wmsZoneService.initDefaultZones(warehouse.getId());
+		if (createdZones != 4) {
+			throw new IllegalStateException("仓库默认分区初始化不完整");
+		}
+		return true;
 	}
 
 	/**
@@ -143,7 +161,7 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 	 * Updates pallet rules without changing the physical location structure.
 	 */
 	@Transactional(rollbackFor = Exception.class)
-	public void updatePalletRules(WarehousePalletRuleDTO dto) {
+	public int updatePalletRules(WarehousePalletRuleDTO dto) {
 		validateOperableOwnWarehouse(dto.getId());
 		Warehouse current = baseMapper.selectByIdForUpdate(dto.getId());
 		if (current == null) {
@@ -161,6 +179,9 @@ public class WarehouseService extends ExtendServiceImpl<WarehouseMapper, Warehou
 		if (!updateById(update)) {
 			throw new IllegalStateException("托盘规则保存失败，请刷新后重试");
 		}
+		locationSlotMapper.updateMaxWeightByWarehouse(dto.getId(), dto.getDefaultPalletMaxWeightKg());
+		return Math.toIntExact(palletMapper.countOverweightByWarehouse(dto.getId(),
+				dto.getDefaultPalletMaxWeightKg()));
 	}
 
 	/**

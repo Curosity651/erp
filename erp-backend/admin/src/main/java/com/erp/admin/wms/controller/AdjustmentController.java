@@ -4,6 +4,8 @@ import com.erp.admin.wms.model.dto.AdjustmentDTO;
 import com.erp.admin.wms.model.qo.AdjustmentQO;
 import com.erp.admin.wms.model.vo.AdjustmentDetailVO;
 import com.erp.admin.wms.model.vo.AdjustmentPageVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
+import com.erp.admin.wms.model.vo.ScrapBatchVO;
 import com.erp.admin.wms.service.AdjustmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,6 +56,14 @@ public class AdjustmentController {
 		return ApiResult.ok(adjustmentService.getDetail(id));
 	}
 
+	@Operation(summary = "查询所选货主在本仓不良品区的可报废批次")
+	@GetMapping("/scrap-batches")
+	@PreAuthorize("@per.hasPermission('wms:adjustment:add')")
+	public ApiResult<List<ScrapBatchVO>> scrapBatches(@RequestParam Long erpTenantId,
+			@RequestParam Long warehouseId) {
+		return ApiResult.ok(adjustmentService.listScrapCandidates(erpTenantId, warehouseId));
+	}
+
 	@Operation(summary = "平台发起报废")
 	@OperationLog(bizType = "报废单管理", successMessage = "发起成功")
 	@PostMapping
@@ -71,13 +81,29 @@ public class AdjustmentController {
 		return ApiResult.ok();
 	}
 
-	@Operation(summary = "货主确认销毁")
-	@OperationLog(bizType = "报废单管理", successMessage = "已确认销毁")
+	@Operation(summary = "货主同意报废")
+	@OperationLog(bizType = "报废单管理", successMessage = "已同意报废")
 	@PatchMapping("/owner-confirm")
 	@PreAuthorize("@per.hasPermission('wms:scrap:confirm')")
 	public ApiResult<Void> ownerConfirm(@RequestParam Long id) {
 		adjustmentService.ownerConfirm(id);
 		return ApiResult.ok();
+	}
+
+	@Operation(summary = "海外仓确认实际销毁")
+	@OperationLog(bizType = "报废单管理", successMessage = "已确认实际销毁")
+	@PatchMapping("/destroy")
+	@PreAuthorize("@per.hasPermission('wms:adjustment:confirm')")
+	public ApiResult<Void> destroy(@RequestParam Long id) {
+		adjustmentService.destroy(id);
+		return ApiResult.ok();
+	}
+
+	@Operation(summary = "查询报废后需要重新打印的托盘标签")
+	@GetMapping("/pallets")
+	@PreAuthorize("@per.hasPermission('wms:adjustment:read')")
+	public ApiResult<List<PalletSummaryVO>> pallets(@RequestParam Long id) {
+		return ApiResult.ok(adjustmentService.listPrintablePallets(id));
 	}
 
 	@Operation(summary = "货主驳回报废")

@@ -1,6 +1,8 @@
 package com.erp.admin.wms.service;
 
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -38,19 +40,30 @@ public class FulfillmentOrderService {
 		String sourceType = command.getSourceType().trim().toUpperCase(Locale.ROOT);
 		WmsFulfillmentOrder existing = orderMapper.selectBySource(sourceType, command.getSourceOrderId());
 		if (existing != null) {
+			Assert.isTrue(existing.getFulfillmentStatus() != FulfillmentStatus.CANCELLED
+					&& existing.getFulfillmentStatus() != FulfillmentStatus.CANCEL_RETURNING,
+					"该订单的仓库履约已取消，不允许再次提交");
 			return existing.getId();
 		}
 
 		WmsFulfillmentOrder order = buildOrder(command, sourceType);
 		Assert.isTrue(orderMapper.insert(order) == 1, "履约单创建失败");
+		List<WmsFulfillmentItem> persistedItems = new ArrayList<>();
 		for (FulfillmentCreateCommand.Item source : command.getItems()) {
 			WmsFulfillmentItem item = buildItem(order.getId(), source);
 			Assert.isTrue(itemMapper.insert(item) == 1, "履约商品快照保存失败");
+			persistedItems.add(item);
 		}
-		reservationService.reserve(order.getId(), command);
+		reservationService.reserve(order.getId(), command, persistedItems);
 		Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.DRAFT,
 				FulfillmentStatus.WAITING_SHELF) == 1, "履约单状态已变化，请重试");
 		return order.getId();
+	}
+
+	public FulfillmentStatus statusOf(Long fulfillmentId) {
+		WmsFulfillmentOrder order = orderMapper.selectById(fulfillmentId);
+		Assert.notNull(order, "履约单不存在");
+		return order.getFulfillmentStatus();
 	}
 
 	@Transactional(rollbackFor = Exception.class)

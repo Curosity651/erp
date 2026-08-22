@@ -29,6 +29,15 @@ public class LocationTransferItemDTO {
 	@Schema(title = "目标库位编码")
 	private String targetLocationCode;
 
+	@Schema(title = "调整方式：PARTIAL拆零移库 / WHOLE_PALLET整托移库")
+	private String moveMode;
+
+	@Schema(title = "目标托位ID；创建新托盘或整托移动时必填")
+	private Long targetSlotId;
+
+	@Schema(title = "目标托盘ID；拆零合并到现有半托盘时填写")
+	private Long targetPalletId;
+
 	@Schema(title = "备注")
 	private String remark;
 

@@ -1,8 +1,6 @@
 package com.erp.admin.wms.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.erp.admin.order.mapper.ErpOrderMapper;
-import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.wms.mapper.WmsFulfillmentOrderMapper;
 import com.erp.admin.wms.mapper.WmsFulfillmentPickTaskLineMapper;
 import com.erp.admin.wms.model.dto.FulfillmentCancelReturnScanDTO;
@@ -20,7 +18,7 @@ public class FulfillmentStatusSyncService {
 	private final WmsFulfillmentOrderMapper orderMapper;
 	private final WmsFulfillmentPickTaskLineMapper lineMapper;
 	private final LocationInventoryService inventoryService;
-	private final ErpOrderMapper erpOrderMapper;
+	private final FulfillmentProgressService progressService;
 
 	@Transactional(rollbackFor = Exception.class)
 	public void platformCancelled(String sourceType, Long sourceOrderId, String reason) {
@@ -37,10 +35,8 @@ public class FulfillmentStatusSyncService {
 		}
 		if (status == FulfillmentStatus.PICKING || status == FulfillmentStatus.WAITING_PACK
 				|| status == FulfillmentStatus.PACKED) {
-			Assert.isTrue(orderMapper.transit(order.getId(), status,
-					FulfillmentStatus.CANCEL_RETURNING) == 1, "取消状态已变化");
-			order.setCancelReason(reason);
-			orderMapper.updateById(order);
+			Assert.isTrue(orderMapper.transitWithReason(order.getId(), status,
+					FulfillmentStatus.CANCEL_RETURNING, reason) == 1, "取消状态已变化");
 			updateErp(order, FulfillmentStatus.CANCEL_RETURNING);
 		}
 	}
@@ -72,11 +68,6 @@ public class FulfillmentStatusSyncService {
 	}
 
 	private void updateErp(WmsFulfillmentOrder fulfillment, FulfillmentStatus status) {
-		if ("MANUAL".equals(fulfillment.getSourceType()) || fulfillment.getSourceOrderId() == null) return;
-		ErpOrder order = erpOrderMapper.selectById(fulfillment.getSourceOrderId());
-		if (order != null) {
-			order.setWarehouseFulfillmentStatus(status.name());
-			erpOrderMapper.updateById(order);
-		}
+		progressService.sync(fulfillment, status);
 	}
 }

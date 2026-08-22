@@ -6,6 +6,7 @@ export interface PalletItemVO {
   erpTenantId: number
   ownerName?: string
   skuCode: string
+  warehouseSkuCode: string
   quantity: number
   reservedQty: number
   quality: string
@@ -38,7 +39,9 @@ export interface PalletSummaryVO {
 export function listPallets(params?: {
   warehouseId?: number
   erpTenantId?: number
-  skuCode?: string
+  wmsTenantId?: number
+  palletNo?: string
+  slotCode?: string
   status?: string
 }) {
   return httpClient.get<ApiResult<PalletSummaryVO[]>>('/wms/pallets', { params })

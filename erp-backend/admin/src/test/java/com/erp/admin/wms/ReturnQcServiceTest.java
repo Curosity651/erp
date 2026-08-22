@@ -3,6 +3,7 @@ package com.erp.admin.wms;
 import com.erp.admin.order.mapper.ErpOrderItemMapper;
 import com.erp.admin.order.mapper.ErpOrderMapper;
 import com.erp.admin.system.service.SysFileService;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
@@ -13,6 +14,9 @@ import com.erp.admin.wms.mapper.ReturnQcMapper;
 import com.erp.admin.wms.mapper.WmsReturnQcItemMapper;
 import com.erp.admin.wms.mapper.WmsSkuLookupMapper;
 import com.erp.admin.wms.model.dto.PutawayDTO;
+import com.erp.admin.wms.model.dto.LocationInventoryKey;
+import com.erp.admin.wms.model.vo.LocationCapacityVO;
+import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
 import com.erp.admin.wms.model.entity.ReturnInboundOrder;
@@ -21,6 +25,7 @@ import com.erp.admin.wms.model.entity.WmsReturnQcItem;
 import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.enums.ReturnQcStatus;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.service.ReturnQcService;
 import com.erp.admin.wms.service.WarehouseService;
 import com.erp.admin.wms.service.WmsLocationService;
@@ -56,6 +61,10 @@ class ReturnQcServiceTest {
     private ReturnInboundMapper returnInboundMapper;
     private WmsReturnQcItemMapper itemMapper;
     private WmsPhysicalInventoryService physicalInventoryService;
+    private com.erp.admin.wms.service.LocationInventoryService locationInventoryService;
+    private com.erp.admin.wms.service.LocationCapacityService locationCapacityService;
+    private com.erp.admin.wms.mapper.WmsLocationMapper wmsLocationMapper;
+    private com.erp.admin.product.mapper.SkuMapper skuMapper;
     private WmsLocationService locationService;
     private WmsZoneService zoneService;
     private TenantIdentityService tis;
@@ -67,6 +76,7 @@ class ReturnQcServiceTest {
     private WmsPalletService palletService;
     private WmsSkuLookupMapper skuLookupMapper;
     private SysFileService sysFileService;
+    private WarehouseSkuCodeService warehouseSkuCodeService;
     private ReturnQcService service;
 
     @BeforeEach
@@ -75,6 +85,10 @@ class ReturnQcServiceTest {
         returnInboundMapper = mock(ReturnInboundMapper.class);
         itemMapper = mock(WmsReturnQcItemMapper.class);
         physicalInventoryService = mock(WmsPhysicalInventoryService.class);
+        locationInventoryService = mock(com.erp.admin.wms.service.LocationInventoryService.class);
+        locationCapacityService = mock(com.erp.admin.wms.service.LocationCapacityService.class);
+        wmsLocationMapper = mock(com.erp.admin.wms.mapper.WmsLocationMapper.class);
+        skuMapper = mock(com.erp.admin.product.mapper.SkuMapper.class);
         locationService = mock(WmsLocationService.class);
         zoneService = mock(WmsZoneService.class);
         tis = mock(TenantIdentityService.class);
@@ -86,6 +100,7 @@ class ReturnQcServiceTest {
         palletService = mock(WmsPalletService.class);
         skuLookupMapper = mock(WmsSkuLookupMapper.class);
         sysFileService = mock(SysFileService.class);
+        warehouseSkuCodeService = mock(WarehouseSkuCodeService.class);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
@@ -100,10 +115,32 @@ class ReturnQcServiceTest {
         warehouse.setWarehouseType("OWN");
         warehouse.setStatus(1);
         when(warehouseService.getById(1L)).thenReturn(warehouse);
+        when(wmsLocationMapper.selectLogicalByIdForUpdate(any())).thenAnswer(invocation -> {
+            Long idValue = invocation.getArgument(0);
+            return location(idValue != null && idValue == 2L ? "D1-01" : "A1-01",
+                    idValue != null && idValue == 2L ? 9L : 7L);
+        });
+        when(zoneService.getById(any())).thenAnswer(invocation -> {
+            Long idValue = invocation.getArgument(0);
+            return zone(idValue == 9L ? 9L : 7L, idValue == 9L ? "DEFECTIVE" : "RETURN");
+        });
+        Sku sku = new Sku();
+        sku.setSkuCode("SKU1");
+        sku.setOuterLengthMm(100);
+        sku.setOuterWidthMm(100);
+        sku.setOuterHeightMm(100);
+        sku.setOuterGrossWeightG(1000);
+        when(skuMapper.selectBySkuCode("SKU1")).thenReturn(sku);
+        LocationCapacityVO capacity = new LocationCapacityVO();
+        capacity.setVolumeAllowed(true);
+        capacity.setWeightAllowed(true);
+        capacity.setSkuKindsAllowed(true);
+        when(locationCapacityService.evaluate(any(), any())).thenReturn(capacity);
         service = new ReturnQcService(returnQcMapper, returnInboundMapper, itemMapper, physicalInventoryService,
+                locationInventoryService, locationCapacityService, wmsLocationMapper, skuMapper,
                 locationService, zoneService, tis, erpOrderItemMapper, erpOrderMapper,
                 sysTenantMapper, wmsRackAssignmentService, warehouseService, palletService,
-                skuLookupMapper, sysFileService);
+                skuLookupMapper, sysFileService, warehouseSkuCodeService);
     }
 
     private ReturnInboundOrder order(String status) {
@@ -126,6 +163,7 @@ class ReturnQcServiceTest {
 
     private WmsLocation location(String code, long zoneId) {
         WmsLocation l = new WmsLocation();
+        l.setId(code.startsWith("D") ? 2L : 1L);
         l.setLocationCode(code);
         l.setZoneId(zoneId);
         // 排号取库位码 '-' 前段（A1-01 → A1），与货架归属校验对齐
@@ -217,12 +255,11 @@ class ReturnQcServiceTest {
 
         service.qc(dto);
 
-        ArgumentCaptor<PutawayDTO> pcap = ArgumentCaptor.forClass(PutawayDTO.class);
-        verify(physicalInventoryService).putaway(pcap.capture());
-        assertThat(pcap.getValue().getQuality()).isEqualTo("DAMAGED");
-        assertThat(pcap.getValue().getAllocatable()).isEqualTo(0);
-        assertThat(pcap.getValue().getZoneId()).isEqualTo(9L);
-        assertThat(pcap.getValue().getQuantity()).isEqualTo(5);
+        ArgumentCaptor<LocationInventoryKey> inventoryKey = ArgumentCaptor.forClass(LocationInventoryKey.class);
+        verify(locationInventoryService).increase(inventoryKey.capture(), org.mockito.ArgumentMatchers.eq(5));
+        assertThat(inventoryKey.getValue().getQuality()).isEqualTo("DEFECTIVE");
+        assertThat(inventoryKey.getValue().getLocationId()).isEqualTo(2L);
+        assertThat(inventoryKey.getValue().getErpTenantId()).isEqualTo(6L);
 
         ArgumentCaptor<ReturnInboundOrder> ocap = ArgumentCaptor.forClass(ReturnInboundOrder.class);
         verify(returnInboundMapper).updateById(ocap.capture());
@@ -254,10 +291,12 @@ class ReturnQcServiceTest {
 
         service.qc(dto);
 
-        ArgumentCaptor<PutawayDTO> batches = ArgumentCaptor.forClass(PutawayDTO.class);
-        verify(physicalInventoryService, times(2)).putaway(batches.capture());
-        assertThat(batches.getAllValues()).extracting(PutawayDTO::getQuantity).containsExactly(3, 2);
-        assertThat(batches.getAllValues()).extracting(PutawayDTO::getQuality).containsExactly("GOOD", "DAMAGED");
+        ArgumentCaptor<LocationInventoryKey> keys = ArgumentCaptor.forClass(LocationInventoryKey.class);
+        verify(locationInventoryService, times(2)).increase(keys.capture(), any(Integer.class));
+        assertThat(keys.getAllValues()).extracting(LocationInventoryKey::getQuality)
+                .containsExactly("GOOD", "DEFECTIVE");
+        assertThat(keys.getAllValues()).extracting(LocationInventoryKey::getLocationId)
+                .containsExactly(1L, 2L);
     }
 
     @Test
@@ -293,6 +332,26 @@ class ReturnQcServiceTest {
 
         verify(returnInboundMapper).casReturnStatus(1L, ReturnQcStatus.RETURN_PENDING.name(),
                 ReturnQcStatus.CLOSED.name());
+    }
+
+    @Test
+    void completed_qc_has_no_pallet_labels_in_logical_location_mode() {
+        when(returnInboundMapper.selectById(1L)).thenReturn(order(ReturnQcStatus.COMPLETED.name()));
+        WmsReturnQcItem item = item("SKU1", 5);
+        item.setQualifiedPalletId(21L);
+        item.setDamagedPalletId(22L);
+        when(itemMapper.selectByReturnOrderId(1L)).thenReturn(Collections.singletonList(item));
+        PalletSummaryVO good = new PalletSummaryVO();
+        good.setId(21L);
+        good.setPalletNo("PLT-B");
+        PalletSummaryVO damaged = new PalletSummaryVO();
+        damaged.setId(22L);
+        damaged.setPalletNo("PLT-A");
+        when(palletService.summaries(any())).thenReturn(Arrays.asList(good, damaged));
+
+        List<PalletSummaryVO> pallets = service.listQcPallets(1L);
+
+        assertThat(pallets).isEmpty();
     }
 
 }

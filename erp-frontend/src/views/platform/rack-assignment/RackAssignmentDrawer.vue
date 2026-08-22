@@ -8,7 +8,12 @@
     :body-style="{ scrollbarGutter: 'stable' }"
   >
     <template #extra>
-      <a-button type="primary" :disabled="racks.length === 0" @click="openAssign"
+      <a-button
+        type="primary"
+        :disabled="
+          racks.length === 0 || (currentRack != null && currentRack.status !== 'IDLE')
+        "
+        @click="openAssign"
         >分配货架</a-button
       >
     </template>
@@ -18,6 +23,7 @@
       <div class="legend-bar">
         <a-space wrap>
           <span><span class="legend" style="background: #f0f0f0" />空闲</span>
+          <span><span class="legend reserved-legend" />合同预留</span>
           <span><span class="legend" style="border: 2px solid #faad14" />临期(≤30天)</span>
           <span class="hint">有色块=已分配给对应服务商，点击排查看库位</span>
         </a-space>
@@ -36,14 +42,20 @@
           >
             <div class="rack-no">{{ r.rackNo }}</div>
             <div class="rack-owner">
-              {{ r.status === 'OCCUPIED' ? r.assignedWmsTenantName : '空闲' }}
+              {{
+                r.status === 'OCCUPIED'
+                  ? r.assignedWmsTenantName
+                  : r.status === 'RESERVED'
+                    ? `预留·${r.assignedWmsTenantName || '-'}`
+                    : '空闲'
+              }}
             </div>
             <div class="rack-count">{{ r.locationCount }} 库位</div>
           </div>
           <a-empty
             v-if="racks.length === 0"
             :style="{ gridColumn: '1 / -1' }"
-            description="该仓库暂无库位，请先在『库位管理』生成库位"
+            description="该仓库暂无可分配库位，请先在『库位管理』添加非公共库位"
           />
         </div>
       </a-spin>
@@ -52,22 +64,37 @@
       <template v-if="currentRack">
         <a-divider style="margin: 16px 0 12px" />
         <div class="section-title">排 {{ currentRack.rackNo }} 明细</div>
-        <div v-if="currentRack.status === 'OCCUPIED'" style="margin-bottom: 12px">
+        <div v-if="currentRack.status !== 'IDLE'" style="margin-bottom: 12px">
           <a-descriptions size="small" :column="2" bordered>
+            <a-descriptions-item label="状态">
+              <a-tag :color="currentRack.status === 'RESERVED' ? 'orange' : 'green'">
+                {{ currentRack.status === 'RESERVED' ? '合同预留' : '已分配' }}
+              </a-tag>
+            </a-descriptions-item>
             <a-descriptions-item label="归属服务商">
               {{ currentRack.assignedWmsTenantName }}
             </a-descriptions-item>
             <a-descriptions-item label="月租金">{{ currentRack.monthlyFee }}</a-descriptions-item>
-            <a-descriptions-item label="有效期" :span="2">
+            <a-descriptions-item label="有效期">
               {{ currentRack.effectiveFrom }} ~ {{ currentRack.effectiveTo || '长期' }}
               <a-tag v-if="currentRack.expiringSoon" color="orange" style="margin-left: 8px"
                 >临期</a-tag
               >
             </a-descriptions-item>
+            <a-descriptions-item v-if="currentRack.contractNo" label="关联合同" :span="2">
+              {{ currentRack.contractNo }}
+            </a-descriptions-item>
           </a-descriptions>
-          <a-popconfirm title="确定解除该排分配？" @confirm="doUnassign">
+          <a-popconfirm
+            v-if="!currentRack.contractControlled"
+            title="确定解除该排分配？"
+            @confirm="doUnassign"
+          >
             <a-button danger size="small" style="margin-top: 8px">解除分配</a-button>
           </a-popconfirm>
+          <div v-else class="contract-lock-tip">
+            该货架由服务合同管理，需通过合同结算或终止流程释放。
+          </div>
         </div>
         <a-table
           :columns="locationColumns"
@@ -84,6 +111,36 @@
         />
       </template>
     </template>
+
+    <a-modal
+      v-model:open="assignmentDetailOpen"
+      title="货架分配信息"
+      :footer="null"
+      width="560px"
+    >
+      <a-descriptions v-if="currentRack" :column="1" bordered size="small">
+        <a-descriptions-item label="货架排号">{{ currentRack.rackNo }}</a-descriptions-item>
+        <a-descriptions-item label="WMS服务商">
+          {{ currentRack.assignedWmsTenantName || '-' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="月租金">
+          {{ currentRack.monthlyFee ?? '-' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="生效日期">
+          {{ currentRack.effectiveFrom || '-' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="结束日期">
+          {{ currentRack.effectiveTo || '长期有效' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="备注">
+          {{ currentRack.remark || '-' }}
+        </a-descriptions-item>
+        <a-descriptions-item v-if="currentRack.contractNo" label="关联合同">
+          {{ currentRack.contractNo }}
+        </a-descriptions-item>
+      </a-descriptions>
+      <div class="readonly-tip">该货架已分配，以上信息仅供查看，不能修改。</div>
+    </a-modal>
 
     <!-- 分配弹窗 -->
     <a-modal
@@ -147,7 +204,7 @@ import {
   listRackOperators
 } from '@/api/wms/rack'
 import type { RackVO, WmsOperatorOption, RackLocation } from '@/api/wms/rack/types'
-import { listZones } from '@/api/wms/location-mgmt'
+import { initDefaultZones, listZones } from '@/api/wms/location-mgmt'
 import type { WmsZone } from '@/api/wms/location-mgmt/types'
 
 const emits = defineEmits<{ (e: 'success'): void }>()
@@ -199,6 +256,7 @@ function zoneNameOf(loc: RackLocation): string {
 const loadingPreview = ref(false)
 const loadingLocations = ref(false)
 const assignOpen = ref(false)
+const assignmentDetailOpen = ref(false)
 const submitting = ref(false)
 
 const form = reactive<{
@@ -216,8 +274,14 @@ const drawerTitle = computed(() =>
     : '货架分配'
 )
 const operatorOptions = computed(() => operators.value.map(o => ({ label: o.name, value: o.id })))
+const compareRackNo = (left: string, right: string) =>
+  left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
 const idleRackOptions = computed(() =>
-  racks.value.filter(r => r.status === 'IDLE').map(r => ({ label: r.rackNo, value: r.rackNo }))
+  racks.value
+    .filter(r => r.status === 'IDLE')
+    .slice()
+    .sort((a, b) => compareRackNo(a.rackNo, b.rackNo))
+    .map(r => ({ label: r.rackNo, value: r.rackNo }))
 )
 
 // 服务商 → 固定颜色
@@ -235,11 +299,20 @@ const colorMap = computed(() => {
 
 function blockStyle(r: RackVO) {
   const occupied = r.status === 'OCCUPIED' && r.assignedWmsTenantId != null
-  const bg = occupied ? colorMap.value[r.assignedWmsTenantId as number] : '#f0f0f0'
+  const reserved = r.status === 'RESERVED'
+  const bg = occupied
+    ? colorMap.value[r.assignedWmsTenantId as number]
+    : reserved
+      ? '#fff7e6'
+      : '#f0f0f0'
   return {
     background: bg,
-    color: occupied ? '#fff' : 'rgba(0,0,0,0.55)',
-    border: r.expiringSoon ? '2px solid #faad14' : '1px solid #d9d9d9'
+    color: occupied ? '#fff' : reserved ? '#ad6800' : 'rgba(0,0,0,0.55)',
+    border: r.expiringSoon
+      ? '2px solid #faad14'
+      : reserved
+        ? '1px dashed #faad14'
+        : '1px solid #d9d9d9'
   }
 }
 
@@ -248,7 +321,9 @@ async function loadPreview() {
   loadingPreview.value = true
   try {
     const res = await previewRacks(current.value.id)
-    if (isSuccess(res)) racks.value = res.data || []
+    if (isSuccess(res)) {
+      racks.value = [...(res.data || [])].sort((a, b) => compareRackNo(a.rackNo, b.rackNo))
+    }
   } finally {
     loadingPreview.value = false
   }
@@ -261,9 +336,17 @@ async function loadOperators() {
 
 async function loadZones() {
   if (!current.value) return
-  await initDefaultZones(current.value.id)
-  const res = await listZones(current.value.id)
-  if (isSuccess(res)) zones.value = res.data || []
+  let res = await listZones(current.value.id)
+  let loaded = isSuccess(res) ? res.data || [] : []
+  const existingTypes = new Set(loaded.map(zone => zone.zoneType))
+  if (['STANDARD', 'DEFECTIVE', 'RETURN', 'TEMP'].some(type => !existingTypes.has(type))) {
+    const initRes = await initDefaultZones(current.value.id)
+    if (isSuccess(initRes)) {
+      res = await listZones(current.value.id)
+      loaded = isSuccess(res) ? res.data || [] : loaded
+    }
+  }
+  zones.value = loaded
 }
 
 function openAssign() {
@@ -312,6 +395,9 @@ async function submitAssign() {
 
 async function selectRack(r: RackVO) {
   currentRack.value = r
+  if (r.status !== 'IDLE') {
+    assignmentDetailOpen.value = true
+  }
   loadingLocations.value = true
   try {
     const res = await rackLocations(current.value!.id, r.rackNo)
@@ -327,6 +413,7 @@ async function doUnassign() {
   if (isSuccess(res)) {
     message.success('已解除分配')
     currentRack.value = undefined
+    assignmentDetailOpen.value = false
     drawerLocations.value = []
     await loadPreview()
     emits('success')
@@ -341,6 +428,7 @@ function openDrawer(warehouse: WarehouseBrief) {
   operators.value = []
   zones.value = []
   currentRack.value = undefined
+  assignmentDetailOpen.value = false
   drawerLocations.value = []
   open.value = true
   loadPreview()
@@ -375,6 +463,10 @@ export default {
   margin-right: 4px;
   vertical-align: -2px;
 }
+.reserved-legend {
+  border: 1px dashed #faad14;
+  background: #fff7e6;
+}
 
 .section-title {
   font-weight: 600;
@@ -382,6 +474,17 @@ export default {
   margin-bottom: 12px;
   border-left: 3px solid #1677ff;
   padding-left: 8px;
+}
+
+.readonly-tip {
+  margin-top: 12px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+.contract-lock-tip {
+  margin-top: 8px;
+  color: #8c8c8c;
+  font-size: 12px;
 }
 
 .rack-grid {

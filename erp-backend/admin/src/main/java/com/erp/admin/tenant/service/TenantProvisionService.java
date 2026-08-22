@@ -17,6 +17,7 @@ import com.erp.admin.tenant.model.entity.SysUserRole;
 import com.erp.admin.tenant.model.qo.TenantQO;
 import com.erp.admin.tenant.model.vo.TenantBriefVO;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
@@ -252,6 +253,9 @@ public class TenantProvisionService {
 		SysTenant tenant = new SysTenant();
 		tenant.setTenantCode(dto.getTenantCode());
 		tenant.setTenantName(dto.getTenantName());
+		if (TenantType.ERP_USER.name().equals(tenantType)) {
+			tenant.setWarehouseSkuPrefix(WarehouseSkuCodeService.normalizePrefix(dto.getTenantName()));
+		}
 		tenant.setTenantType(tenantType);
 		tenant.setParentWmsTenantId(parentWmsTenantId);
 		tenant.setContactName(dto.getContactName());

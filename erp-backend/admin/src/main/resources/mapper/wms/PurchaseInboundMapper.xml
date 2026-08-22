@@ -17,10 +17,18 @@
             w.warehouse_name,
             pio.inbound_date,
             pio.order_status,
+            pio.receive_by,
+            COALESCE(NULLIF(receive_user.nickname, ''), receive_user.username) AS receive_by_name,
+            pio.receive_time,
+            pio.putaway_by,
+            COALESCE(NULLIF(putaway_user.nickname, ''), putaway_user.username) AS putaway_by_name,
+            pio.putaway_time,
             pio.create_time
         FROM wms_purchase_inbound_order pio
         LEFT JOIN wms_shipping_order so ON pio.shipping_order_id = so.id
         LEFT JOIN wms_warehouse w ON pio.warehouse_id = w.id
+        LEFT JOIN sys_user receive_user ON pio.receive_by = receive_user.user_id AND receive_user.deleted = 0
+        LEFT JOIN sys_user putaway_user ON pio.putaway_by = putaway_user.user_id AND putaway_user.deleted = 0
         <where>
             pio.deleted = 0
             <if test="qo.inboundNo != null and qo.inboundNo != ''">
@@ -65,6 +73,12 @@
                     AND ot.parent_wms_tenant_id = #{qo.wmsTenantId}
                 )
             </if>
+            <if test="qo.receiveBy != null">
+                AND pio.receive_by = #{qo.receiveBy}
+            </if>
+            <if test="qo.putawayBy != null">
+                AND pio.putaway_by = #{qo.putawayBy}
+            </if>
             <if test="qo.inboundDateStart != null">
                 AND pio.inbound_date &gt;= #{qo.inboundDateStart}
             </if>
@@ -89,6 +103,7 @@
             pio.inbound_no,
             pio.return_type,
             pio.ref_no,
+            pio.erp_tenant_id,
             pio.shipping_order_id,
             so.shipping_no AS shipping_order_no,
             pio.warehouse_id,
@@ -109,13 +124,28 @@
     <!-- 根据入库单号查询（用于唯一性校验） -->
     <select id="selectByInboundNo" resultType="com.erp.admin.wms.model.entity.PurchaseInboundOrder">
         SELECT * FROM wms_purchase_inbound_order
-        WHERE inbound_no = #{inboundNo} AND deleted = 0
+        WHERE inbound_no = #{inboundNo}
         <if test="excludeId != null">
             AND id != #{excludeId}
         </if>
         LIMIT 1
     </select>
 
+    <select id="selectByIdForUpdate" resultType="com.erp.admin.wms.model.entity.PurchaseInboundOrder">
+        SELECT *
+        FROM wms_purchase_inbound_order
+        WHERE id = #{id} AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <select id="selectSubmittedByInboundNo" resultType="com.erp.admin.wms.model.entity.PurchaseInboundOrder">
+        SELECT *
+        FROM wms_purchase_inbound_order
+        WHERE UPPER(inbound_no) = UPPER(#{inboundNo})
+          AND order_status = 'SUBMITTED'
+          AND deleted = 0
+        LIMIT 1
+    </select>
 
     <!-- 查询物流单待入库明细 -->
     <select id="selectShippingItemsForInbound" resultType="com.erp.admin.wms.model.vo.ShippingItemForInboundVO">

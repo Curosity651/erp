@@ -55,6 +55,8 @@ export interface BaseOrderVO {
   convertedCurrencyCode?: string
   hasLabel: boolean
   locked: number
+  fulfillmentOrderId?: number
+  warehouseFulfillmentStatus?: string
   items: OrderItemVO[]
   /** SKU 总数（来自 erp_order 表，三平台共享） */
   skuCount?: number

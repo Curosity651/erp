@@ -45,6 +45,8 @@ export interface PurchaseInboundQO {
   erpTenantId?: number
   /** WMS服务商筛选（仅平台身份有效） */
   wmsTenantId?: number
+  receiveBy?: number
+  putawayBy?: number
 }
 
 /**
@@ -62,6 +64,7 @@ export interface PurchaseInboundPageVO {
   erpTenantId?: number
   /** 货主名称 */
   ownerName?: string
+  ownerCode?: string
   /** 所属WMS服务商ID */
   operatorId?: number
   /** 所属WMS服务商名称 */
@@ -73,6 +76,12 @@ export interface PurchaseInboundPageVO {
   warehouseName: string
   inboundDate: string
   orderStatus: string
+  receiveBy?: number
+  receiveByName?: string
+  receiveTime?: string
+  putawayBy?: number
+  putawayByName?: string
+  putawayTime?: string
   itemSummary: string
   totalExpectedQty?: number
   totalActualQty?: number
@@ -103,6 +112,7 @@ export interface PurchaseInboundItemVO {
   purchaseOrderNo: string
   purchaseOrderItemId: number
   skuCode: string
+  warehouseSkuCode?: string
   /** SKU简要信息 */
   skuBrief?: SkuBriefVO
   expectedQuantity: number

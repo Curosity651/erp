@@ -37,11 +37,14 @@
       <a-table :columns="columns" :data-source="visibleItems" :pagination="false" row-key="id" :scroll="{ x: 900 }">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'sku'">
-            <div class="stack"><strong>{{ record.skuCode }}</strong><small>{{ record.skuBrief?.skuName || '-' }}</small></div>
+            <div class="stack"><strong>{{ record.warehouseSkuCode || record.skuCode }}</strong><small>{{ record.skuBrief?.skuName || '-' }}</small></div>
           </template>
           <template v-else-if="column.key === 'owner'">{{ record.ownerName || record.erpTenantId }}</template>
           <template v-else-if="column.key === 'batch'">
-            <div class="stack"><span>{{ record.inboundDate || '-' }}</span><small>{{ record.quality === 'DAMAGED' ? '不良品' : '良品' }}</small></div>
+            <div class="stack">
+              <span>{{ record.inboundDate || '-' }}</span>
+              <small>{{ record.slotCode || record.locationCode || '-' }} · {{ record.quality === 'DAMAGED' ? '不良品' : '良品' }}</small>
+            </div>
           </template>
           <template v-else-if="column.key === 'diff'">
             <strong :class="diffClass(record.diffQuantity || 0)">{{ signed(record.diffQuantity || 0) }}</strong>
@@ -84,7 +87,8 @@ const visibleItems = computed(() => {
   const base = filter.value === 'DIFF' ? diffItems.value : items.value
   const value = keyword.value.trim().toLowerCase()
   if (!value) return base
-  return base.filter(item => [item.skuCode, item.ownerName, item.locationCode].some(text => (text || '').toLowerCase().includes(value)))
+  return base.filter(item => [item.skuCode, item.warehouseSkuCode, item.ownerName, item.locationCode]
+    .some(text => (text || '').toLowerCase().includes(value)))
 })
 const columns = [
   { title: '库位', dataIndex: 'locationCode', width: 110 },

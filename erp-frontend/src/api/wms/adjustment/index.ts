@@ -5,8 +5,10 @@ import type {
   AdjustmentPageParam,
   AdjustmentPageVO,
   AdjustmentDetailVO,
-  PhysicalBatchVO
+  PhysicalBatchVO,
+  ScrapBatchVO
 } from './types'
+import type { PalletSummaryVO } from '@/api/wms/pallet'
 
 /** 报废单分页 */
 export function pageAdjustment(params: AdjustmentPageParam) {
@@ -31,6 +33,23 @@ export function cancelScrap(id: number) {
 /** 货主确认销毁 */
 export function ownerConfirmScrap(id: number) {
   return httpClient.patch<ApiResult<void>>('/wms/adjustment/owner-confirm', null, { params: { id } })
+}
+
+/** 海外仓确认已经完成物理销毁。 */
+export function destroyScrap(id: number) {
+  return httpClient.patch<ApiResult<void>>('/wms/adjustment/destroy', null, { params: { id } })
+}
+
+/** 报废完成后需要更新标签的剩余托盘。 */
+export function getScrapPallets(id: number) {
+  return httpClient.get<ApiResult<PalletSummaryVO[]>>('/wms/adjustment/pallets', { params: { id } })
+}
+
+/** 所选货主在本仓不良品区的可报废批次。 */
+export function listScrapBatches(erpTenantId: number, warehouseId: number) {
+  return httpClient.get<ApiResult<ScrapBatchVO[]>>('/wms/adjustment/scrap-batches', {
+    params: { erpTenantId, warehouseId }
+  })
 }
 
 /** 货主驳回报废 */

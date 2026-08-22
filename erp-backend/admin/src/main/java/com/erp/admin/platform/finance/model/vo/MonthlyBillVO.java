@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 月度应收账单 VO（对齐前端 platform-finance/receivable/types.ts）。
@@ -44,6 +45,10 @@ public class MonthlyBillVO {
 
     private String paidTime;
 
+    private Long paymentVoucherFileId;
+
     private String remark;
+
+    private List<BillingRecordVO> billingRecords;
 
 }

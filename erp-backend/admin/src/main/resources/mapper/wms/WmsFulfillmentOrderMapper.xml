@@ -14,4 +14,9 @@
     SET fulfillment_status = #{to}, version = version + 1, update_time = NOW()
     WHERE id = #{id} AND fulfillment_status = #{from} AND deleted = 0
   </update>
+  <update id="transitWithReason">
+    UPDATE wms_fulfillment_order
+    SET fulfillment_status = #{to}, cancel_reason = #{reason}, version = version + 1, update_time = NOW()
+    WHERE id = #{id} AND fulfillment_status = #{from} AND deleted = 0
+  </update>
 </mapper>

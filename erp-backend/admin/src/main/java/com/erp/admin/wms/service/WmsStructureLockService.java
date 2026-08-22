@@ -1,7 +1,7 @@
 package com.erp.admin.wms.service;
 
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,6 +37,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class WmsStructureLockService {
+
+	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
 
 	private final WmsPhysicalInventoryMapper physicalInventoryMapper;
 
@@ -105,7 +107,7 @@ public class WmsStructureLockService {
 		int occupiedCount = physicalInventoryMapper.listBlockingPhysicalLocationCodes(warehouseId).size();
 
 		// B：当前有效分配
-		LocalDate today = LocalDate.now(ZoneOffset.UTC);
+		LocalDate today = LocalDate.now(BUSINESS_ZONE);
 		List<WmsRackAssignment> actives = rackAssignmentMapper.listByWarehouse(warehouseId).stream()
 				.filter(a -> WmsRackAssignmentService.isActive(a.getEffectiveFrom(), a.getEffectiveTo(), today))
 				.collect(Collectors.toList());

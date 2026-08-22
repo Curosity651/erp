@@ -36,4 +36,19 @@ public class AvailableLocationVO {
     @Schema(title = "是否虚拟库位(1=收纳积压货用，服务商不可见)")
     private Integer isVirtual;
 
+    @Schema(title = "目标类型：EMPTY_SLOT/EXISTING_PALLET/VIRTUAL")
+    private String targetType;
+
+    @Schema(title = "目标托位ID")
+    private Long slotId;
+
+    @Schema(title = "目标托位编码")
+    private String slotCode;
+
+    @Schema(title = "目标托盘ID")
+    private Long palletId;
+
+    @Schema(title = "目标托盘号")
+    private String palletNo;
+
 }

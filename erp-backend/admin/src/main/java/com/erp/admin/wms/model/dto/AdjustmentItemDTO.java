@@ -18,9 +18,12 @@ import javax.validation.constraints.Size;
 @Schema(title = "调整单明细数据传输对象")
 public class AdjustmentItemDTO {
 
-	@NotNull(message = "目标批次不能为空")
-	@Schema(title = "目标批次ID（wms_physical_inventory.id）——报废锁定到具体批次/库位")
+	@Schema(title = "历史物理批次ID，仅兼容旧单据")
 	private Long physicalInventoryId;
+
+	@NotNull(message = "目标库存不能为空")
+	@Schema(title = "逻辑库位库存ID")
+	private Long sourceInventoryId;
 
 	@NotBlank(message = "SKU编码不能为空")
 	@Size(max = 100, message = "SKU编码长度不能超过100")

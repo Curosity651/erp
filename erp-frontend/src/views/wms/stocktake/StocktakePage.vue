@@ -92,6 +92,10 @@
         <span style="font-family: monospace">{{ formatDateTime(record.createTime) }}</span>
       </template>
 
+      <template v-else-if="column.dataIndex === 'operatorNames'">
+        <span>{{ record.operatorNames || '-' }}</span>
+      </template>
+
       <!-- 操作列 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
@@ -104,6 +108,7 @@
             录入
           </a>
           <a @click="handleViewDetail(record)">查看</a>
+          <a v-if="isConfirmed(record)" @click="handlePrintPallets(record)">打印托盘</a>
 
           <a
             v-if="record.orderStatus === 'REVIEWING' && hasPermission('wms:stocktake:confirm')"
@@ -143,6 +148,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import StocktakePageSearch from './StocktakePageSearch.vue'
@@ -155,8 +161,15 @@ import { emitter } from '@/hooks/mitt'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 import { mergePageParam } from '@/utils/page-utils'
 import { doRequest } from '@/utils/axios/request'
-import { pageStocktake, cancelStocktake, deleteStocktake } from '@/api/wms/stocktake'
+import {
+  pageStocktake,
+  cancelStocktake,
+  deleteStocktake,
+  getStocktakePallets
+} from '@/api/wms/stocktake'
 import type { StocktakePageVO, StocktakeQO, StocktakeStatus } from '@/api/wms/stocktake/types'
+import { isSuccess } from '@/api'
+import { printPalletLabels } from '@/views/platform/pallet/pallet-label-print'
 
 defineOptions({ name: 'StocktakePage' })
 
@@ -293,6 +306,11 @@ const columns: ProColumns[] = [
     width: 140
   },
   {
+    title: '操作人',
+    dataIndex: 'operatorNames',
+    width: 130
+  },
+  {
     title: '创建时间',
     dataIndex: 'createTime',
     width: 140
@@ -301,7 +319,7 @@ const columns: ProColumns[] = [
     key: 'operate',
     title: '操作',
     align: 'center',
-    width: 100,
+    width: 150,
     fixed: 'right'
   }
 ]
@@ -346,6 +364,31 @@ const handleDelete = (record: StocktakePageVO) => {
     successMessage: '删除成功',
     onSuccess: () => reloadTable(true)
   })
+}
+
+const handlePrintPallets = async (record: StocktakePageVO) => {
+  const printPage = window.open('', '_blank')
+  if (!printPage) {
+    message.warning('浏览器阻止了打印窗口，请允许本站弹出窗口后重试')
+    return
+  }
+  try {
+    const result = await getStocktakePallets(record.id)
+    if (!isSuccess(result)) {
+      printPage.close()
+      return
+    }
+    const pallets = result.data || []
+    if (!pallets.length) {
+      printPage.close()
+      message.info('该盘点单没有需要更新的托盘标签')
+      return
+    }
+    await printPalletLabels(pallets, printPage)
+  } catch (error: any) {
+    printPage.close()
+    message.error(error?.message || '托盘标签加载失败')
+  }
 }
 
 // ==================== Tabs 逻辑 ====================

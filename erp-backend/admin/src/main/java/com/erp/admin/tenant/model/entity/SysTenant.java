@@ -31,6 +31,9 @@ public class SysTenant {
 	@Schema(title = "租户名称（公司名）")
 	private String tenantName;
 
+	@Schema(title = "海外仓内部SKU前缀，创建后保持稳定")
+	private String warehouseSkuPrefix;
+
 	@Schema(title = "租户类型：WMS_OPERATOR=3PL服务商 / ERP_USER=货主")
 	private String tenantType;
 

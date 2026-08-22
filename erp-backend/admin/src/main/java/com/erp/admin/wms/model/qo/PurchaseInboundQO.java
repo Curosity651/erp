@@ -49,6 +49,12 @@ public class PurchaseInboundQO {
     @Schema(title = "WMS服务商筛选(仅平台身份有效; 按入库单归属货主的上级服务商过滤)")
     private Long wmsTenantId;
 
+    @Schema(title = "收货操作员ID")
+    private Long receiveBy;
+
+    @Schema(title = "上架操作员ID")
+    private Long putawayBy;
+
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     @Schema(title = "入库日期起始")
     private LocalDate inboundDateStart;

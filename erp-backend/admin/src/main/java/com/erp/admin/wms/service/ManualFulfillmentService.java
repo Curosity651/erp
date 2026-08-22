@@ -83,7 +83,7 @@ public class ManualFulfillmentService {
 		Assert.notEmpty(items, "人工出库没有商品");
 		FulfillmentCreateCommand command = toCommand(order, items);
 		FulfillmentOrderService.validate(command);
-		reservationService.reserve(id, command);
+		reservationService.reserve(id, command, items);
 		Assert.isTrue(orderMapper.transit(id, FulfillmentStatus.DRAFT, FulfillmentStatus.WAITING_SHELF) == 1,
 				"草稿状态已变化，请刷新后重试");
 	}

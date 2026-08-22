@@ -1,9 +1,12 @@
 package com.erp.admin.wms.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.product.model.vo.SkuBriefVO;
 import com.erp.admin.product.service.SkuBriefService;
+import com.erp.admin.product.service.SkuBarcodeService;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
@@ -11,6 +14,8 @@ import org.ballcat.common.core.exception.BusinessException;
 import com.erp.admin.wms.converter.StocktakeConverter;
 import com.erp.admin.wms.mapper.StocktakeMapper;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
+import com.erp.admin.wms.model.dto.LocationInventoryKey;
 import com.erp.admin.wms.model.dto.StocktakeExtraItemDTO;
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.StocktakeAddSkuDTO;
@@ -24,8 +29,10 @@ import com.erp.admin.wms.model.entity.StocktakeOrder;
 import com.erp.admin.wms.model.entity.StocktakeOrderItem;
 import com.erp.admin.wms.model.entity.StocktakeLocationTask;
 import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsLocationInventory;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.entity.WmsZone;
+import com.erp.admin.wms.model.entity.WmsPallet;
 import com.erp.admin.wms.model.enums.SourceType;
 import com.erp.admin.wms.model.enums.PostingType;
 import com.erp.admin.wms.model.enums.StockBucket;
@@ -70,6 +77,7 @@ import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Comparator;
 
 /**
  * 盘点单服务
@@ -94,6 +102,10 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 
 	private final WmsPhysicalInventoryMapper physicalInventoryMapper;
 
+	private final WmsLocationInventoryMapper locationInventoryMapper;
+
+	private final LocationInventoryService locationInventoryService;
+
 	private final WmsInventoryAggregator inventoryAggregator;
 
 	private final WmsZoneService wmsZoneService;
@@ -113,6 +125,10 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	private final SkuService skuService;
 
 	private final SkuBriefService skuBriefService;
+
+	private final SkuBarcodeService skuBarcodeService;
+
+	private final WarehouseSkuCodeService warehouseSkuCodeService;
 
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
 
@@ -142,6 +158,9 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		Map<Long, StocktakeStatsVO> statsMap = baseMapper.selectStatsByIds(ids)
 				.stream()
 				.collect(Collectors.toMap(StocktakeStatsVO::getStocktakeOrderId, Function.identity()));
+		Map<Long, List<StocktakeLocationTask>> tasksByOrder = stocktakeLocationTaskService
+				.listByStocktakeIds(ids).stream()
+				.collect(Collectors.groupingBy(StocktakeLocationTask::getStocktakeOrderId));
 
 		// 填充统计信息
 		for (StocktakePageVO vo : records) {
@@ -155,11 +174,12 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 				vo.setDiffCount(0);
 				vo.setCountedCount(0);
 			}
-			List<StocktakeLocationTask> tasks = stocktakeLocationTaskService.listByStocktakeId(vo.getId());
+			List<StocktakeLocationTask> tasks = tasksByOrder.getOrDefault(vo.getId(), Collections.emptyList());
 			vo.setLocationCount(tasks.size());
 			vo.setCompletedLocationCount((int) tasks.stream().filter(task ->
 					StocktakeTaskStatus.COMPLETED.name().equals(task.getTaskStatus())
 							|| StocktakeTaskStatus.REVIEWED.name().equals(task.getTaskStatus())).count());
+			vo.setOperatorNames(operatorNames(tasks));
 		}
 
 		return new PageResult<>(records, page.getTotal());
@@ -200,8 +220,19 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		detail.setCompletedLocationCount((int) tasks.stream().filter(task ->
 				StocktakeTaskStatus.COMPLETED.name().equals(task.getTaskStatus())
 						|| StocktakeTaskStatus.REVIEWED.name().equals(task.getTaskStatus())).count());
+		detail.setOperatorNames(operatorNames(tasks));
 
 		return detail;
+	}
+
+	private String operatorNames(List<StocktakeLocationTask> tasks) {
+		String names = tasks.stream()
+				.map(StocktakeLocationTask::getAssigneeName)
+				.filter(name -> name != null && !name.trim().isEmpty())
+				.map(String::trim)
+				.distinct()
+				.collect(Collectors.joining("、"));
+		return names.isEmpty() ? null : names;
 	}
 
 	/**
@@ -242,6 +273,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		}
 		// 校验仓库
 		Assert.notNull(warehouseService.getById(dto.getWarehouseId()), "仓库不存在");
+		Assert.notNull(baseMapper.lockWarehouse(dto.getWarehouseId()), "仓库不存在");
 
 		// 检查仓库是否有进行中的盘点单
 		checkWarehouseStocktakeInProgress(dto.getWarehouseId());
@@ -289,14 +321,18 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	private void generateLocationTasks(StocktakeOrder order, StocktakeDTO dto, StocktakeMode mode) {
 		boolean virtualOnly = Boolean.TRUE.equals(dto.getVirtualLocationOnly());
 		List<WmsLocation> allLocations = wmsLocationService.listByWarehouse(order.getWarehouseId()).stream()
-				.filter(location -> virtualOnly == Integer.valueOf(1).equals(location.getIsVirtual()))
+				.filter(location -> !virtualOnly || Integer.valueOf(1).equals(location.getPublicShared()))
 				.collect(Collectors.toList());
-		Assert.notEmpty(allLocations, virtualOnly ? "仓库没有可盘点的虚拟库位" : "仓库没有可盘点的物理库位");
+		Assert.notEmpty(allLocations, virtualOnly ? "仓库没有可盘点的公共暂存库位" : "仓库没有可盘点的逻辑库位");
 
-		List<WmsPhysicalInventory> allBatches = physicalInventoryMapper.listByWarehouse(order.getWarehouseId());
-		Set<Long> selectedLocationIds = selectLocationIds(dto, mode, allLocations, allBatches);
+		List<WmsLocationInventory> allInventories = locationInventoryMapper.selectList(
+				Wrappers.<WmsLocationInventory>lambdaQuery()
+						.eq(WmsLocationInventory::getWarehouseId, order.getWarehouseId()));
+		Set<Long> selectedLocationIds = selectLocationIds(dto, mode, allLocations, allInventories);
 		List<WmsLocation> selectedLocations = allLocations.stream()
 				.filter(location -> selectedLocationIds.contains(location.getId()))
+				.sorted(Comparator.comparing(WmsLocation::getLocationCode,
+						WmsPalletService::compareNatural))
 				.collect(Collectors.toList());
 		Assert.notEmpty(selectedLocations, "盘点范围没有匹配的库位");
 
@@ -315,13 +351,13 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		}
 		stocktakeLocationTaskService.saveBatch(tasks);
 
-		Map<String, StocktakeLocationTask> taskByLocation = tasks.stream().collect(Collectors.toMap(
-				StocktakeLocationTask::getLocationCode, Function.identity(), (a, b) -> a, LinkedHashMap::new));
-		List<StocktakeOrderItem> items = allBatches.stream()
-				.filter(batch -> taskByLocation.containsKey(batch.getLocationCode()))
-				.filter(batch -> includeBatchForMode(batch, dto, mode))
-				.filter(batch -> nz(batch.getQuantity()) > 0 || nz(batch.getReservedQty()) > 0)
-				.map(batch -> toStocktakeItem(order.getId(), taskByLocation.get(batch.getLocationCode()), batch))
+		Map<Long, StocktakeLocationTask> taskByLocation = tasks.stream().collect(Collectors.toMap(
+				StocktakeLocationTask::getLocationId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
+		List<StocktakeOrderItem> items = allInventories.stream()
+				.filter(inventory -> taskByLocation.containsKey(inventory.getLocationId()))
+				.filter(inventory -> includeInventoryForMode(inventory, dto, mode))
+				.filter(inventory -> nz(inventory.getQuantity()) > 0 || nz(inventory.getReservedQuantity()) > 0)
+				.map(inventory -> toStocktakeItem(order.getId(), taskByLocation.get(inventory.getLocationId()), inventory))
 				.collect(Collectors.toList());
 		if (!items.isEmpty()) {
 			stocktakeItemService.saveBatch(items);
@@ -331,7 +367,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	}
 
 	private Set<Long> selectLocationIds(StocktakeDTO dto, StocktakeMode mode, List<WmsLocation> locations,
-			List<WmsPhysicalInventory> batches) {
+			List<WmsLocationInventory> inventories) {
 		if (Boolean.TRUE.equals(dto.getVirtualLocationOnly())) {
 			Set<Long> validIds = locations.stream().map(WmsLocation::getId).collect(Collectors.toSet());
 			Assert.isTrue(validIds.containsAll(dto.getLocationIds()), "选择的虚拟库位不属于当前仓库");
@@ -346,13 +382,42 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 			Assert.isTrue(validIds.containsAll(dto.getLocationIds()), "选择的库位不属于当前仓库");
 			return new LinkedHashSet<>(dto.getLocationIds());
 		}
-		Set<String> locationCodes = batches.stream()
-				.filter(batch -> includeBatchForMode(batch, dto, mode))
-				.map(WmsPhysicalInventory::getLocationCode)
-				.filter(code -> code != null && !code.isEmpty())
+		Set<Long> occupiedLocationIds = inventories.stream()
+				.filter(inventory -> includeInventoryForMode(inventory, dto, mode))
+				.map(WmsLocationInventory::getLocationId)
 				.collect(Collectors.toSet());
-		return locations.stream().filter(location -> locationCodes.contains(location.getLocationCode()))
+		return locations.stream().filter(location -> occupiedLocationIds.contains(location.getId()))
 				.map(WmsLocation::getId).collect(Collectors.toCollection(LinkedHashSet::new));
+	}
+
+	private boolean includeInventoryForMode(WmsLocationInventory inventory, StocktakeDTO dto, StocktakeMode mode) {
+		if (mode != StocktakeMode.SPECIAL) {
+			return true;
+		}
+		boolean skuMatches = dto.getSpecialSkuCodes() == null || dto.getSpecialSkuCodes().isEmpty()
+				|| dto.getSpecialSkuCodes().contains(inventory.getSkuCode());
+		boolean ownerMatches = dto.getSpecialOwnerId() == null
+				|| dto.getSpecialOwnerId().equals(inventory.getErpTenantId());
+		return skuMatches && ownerMatches;
+	}
+
+	private StocktakeOrderItem toStocktakeItem(Long stocktakeId, StocktakeLocationTask task,
+			WmsLocationInventory inventory) {
+		StocktakeOrderItem item = new StocktakeOrderItem();
+		item.setStocktakeOrderId(stocktakeId);
+		item.setLocationTaskId(task.getId());
+		item.setSourceInventoryId(inventory.getId());
+		item.setErpTenantId(inventory.getErpTenantId());
+		item.setWmsTenantId(inventory.getWmsTenantId());
+		item.setSkuCode(inventory.getSkuCode());
+		item.setZoneId(task.getZoneId());
+		item.setLocationCode(task.getLocationCode());
+		item.setQuality(inventory.getQuality());
+		item.setSystemQuantity(nz(inventory.getQuantity()));
+		item.setReservedQuantity(nz(inventory.getReservedQuantity()));
+		item.setSourceType(StocktakeItemSource.EXISTING.name());
+		item.setStocktakeStatus(StocktakeItemStatus.PENDING.name());
+		return item;
 	}
 
 	private boolean includeBatchForMode(WmsPhysicalInventory batch, StocktakeDTO dto, StocktakeMode mode) {
@@ -366,7 +431,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	}
 
 	private StocktakeOrderItem toStocktakeItem(Long stocktakeId, StocktakeLocationTask task,
-			WmsPhysicalInventory batch) {
+			WmsPhysicalInventory batch, Map<Long, PalletSlotVO> slotById) {
 		StocktakeOrderItem item = new StocktakeOrderItem();
 		item.setStocktakeOrderId(stocktakeId);
 		item.setLocationTaskId(task.getId());
@@ -379,9 +444,8 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		item.setZoneId(batch.getZoneId());
 		item.setLocationCode(batch.getLocationCode());
 		if (batch.getSlotId() != null) {
-			item.setSlotCode(palletService.listSlots(batch.getWarehouseId()).stream()
-					.filter(slot -> batch.getSlotId().equals(slot.getSlotId()))
-					.map(com.erp.admin.wms.model.vo.PalletSlotVO::getSlotCode).findFirst().orElse(null));
+			PalletSlotVO slot = slotById.get(batch.getSlotId());
+			item.setSlotCode(slot == null ? null : slot.getSlotCode());
 		}
 		item.setQuality(batch.getQuality());
 		item.setAllocatable(batch.getAllocatable());
@@ -396,6 +460,17 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 
 	private int nz(Integer value) {
 		return value == null ? 0 : value;
+	}
+
+	private void validateQualityForZone(WmsZone zone, String quality) {
+		boolean damaged = "DAMAGED".equalsIgnoreCase(quality) || "DEFECTIVE".equalsIgnoreCase(quality);
+		if (zone == null) {
+			Assert.isTrue(!damaged, "不良品只能登记到不良品区");
+			return;
+		}
+		boolean defectiveZone = "DEFECTIVE".equalsIgnoreCase(zone.getZoneType());
+		Assert.isTrue(damaged == defectiveZone,
+				defectiveZone ? "不良品区只能登记不良品" : "不良品只能登记到不良品区");
 	}
 
 	/**
@@ -458,7 +533,11 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		Map<Long, List<StocktakeOrderItem>> itemsByTask = stocktakeItemService.getByStocktakeOrderId(id).stream()
 				.filter(item -> item.getLocationTaskId() != null)
 				.collect(Collectors.groupingBy(StocktakeOrderItem::getLocationTaskId));
-		return stocktakeLocationTaskService.listByStocktakeId(id).stream().map(task -> {
+		Map<Long, WmsLocation> locationMap = wmsLocationService.listByWarehouse(order.getWarehouseId()).stream()
+				.collect(Collectors.toMap(WmsLocation::getId, Function.identity(), (a, b) -> a));
+		Map<Long, WmsZone> zoneMap = wmsZoneService.listByWarehouse(order.getWarehouseId()).stream()
+				.collect(Collectors.toMap(WmsZone::getId, Function.identity(), (a, b) -> a));
+		List<StocktakeLocationTaskVO> result = stocktakeLocationTaskService.listByStocktakeId(id).stream().map(task -> {
 			StocktakeLocationTaskVO vo = new StocktakeLocationTaskVO();
 			vo.setId(task.getId());
 			vo.setStocktakeOrderId(task.getStocktakeOrderId());
@@ -466,8 +545,11 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 			vo.setZoneId(task.getZoneId());
 			vo.setLocationId(task.getLocationId());
 			vo.setLocationCode(task.getLocationCode());
-			WmsLocation taskLocation = wmsLocationService.getById(task.getLocationId());
+			WmsLocation taskLocation = locationMap.get(task.getLocationId());
+			WmsZone zone = zoneMap.get(task.getZoneId());
 			vo.setIsVirtual(taskLocation == null ? 0 : taskLocation.getIsVirtual());
+			vo.setZoneName(zone == null ? null : zone.getZoneName());
+			vo.setZoneType(zone == null ? null : zone.getZoneType());
 			vo.setTaskStatus(task.getTaskStatus());
 			vo.setAssigneeName(task.getAssigneeName());
 			vo.setCompletedTime(task.getCompletedTime());
@@ -478,6 +560,9 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 					&& item.getDiffQuantity() != 0).count());
 			return vo;
 		}).collect(Collectors.toList());
+		result.sort(Comparator.comparing(StocktakeLocationTaskVO::getLocationCode,
+				WmsPalletService::compareNatural));
+		return result;
 	}
 
 	public List<StocktakeItemVO> getTaskItems(Long taskId) {
@@ -493,7 +578,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		Assert.notNull(task, "盘点库位任务不存在");
 		WmsLocation location = wmsLocationService.getById(task.getLocationId());
 		Assert.notNull(location, "盘点库位不存在");
-		if (Integer.valueOf(1).equals(location.getIsVirtual())) {
+		if (Integer.valueOf(1).equals(location.getPublicShared())) {
 			return sysTenantMapper.listEnabledErpTenantIds();
 		}
 		Long operatorId = wmsRackAssignmentService.activeOperatorId(task.getWarehouseId(), location.getRackNo());
@@ -518,19 +603,23 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 				"该货主未绑定服务商，无法登记账外库存");
 		WmsLocation location = wmsLocationService.getById(task.getLocationId());
 		Assert.notNull(location, "盘点库位不存在");
-		boolean virtualLocation = Integer.valueOf(1).equals(location.getIsVirtual());
-		if (!virtualLocation) {
+		boolean publicLocation = Integer.valueOf(1).equals(location.getPublicShared());
+		if (!publicLocation) {
 			Assert.isTrue(wmsRackAssignmentService.activeRackNos(task.getWarehouseId(), owner.getParentWmsTenantId())
 					.contains(location.getRackNo()),
 					"所选货主无权使用当前库位，库位=" + task.getLocationCode());
 		}
-		Sku sku = TenantContext.runAs(dto.getErpTenantId(), () -> skuService.getBySkuCode(dto.getSkuCode()));
+		String skuCode = normalizeScannedSkuCode(dto.getErpTenantId(), dto.getSkuCode());
+		Sku sku = TenantContext.runAs(dto.getErpTenantId(), () -> skuService.getBySkuCode(skuCode));
 		Assert.notNull(sku, "SKU主数据不存在，请先创建SKU");
 
+		String normalizedQuality = ("DAMAGED".equalsIgnoreCase(dto.getQuality())
+				|| "DEFECTIVE".equalsIgnoreCase(dto.getQuality())) ? "DEFECTIVE" : "GOOD";
 		boolean duplicate = stocktakeItemService.getByTaskId(task.getId()).stream()
-				.anyMatch(item -> item.getErpTenantId().equals(dto.getErpTenantId())
-						&& item.getSkuCode().equals(dto.getSkuCode())
-						&& item.getPhysicalInventoryId() == null);
+				.anyMatch(item -> Objects.equals(item.getErpTenantId(), dto.getErpTenantId())
+						&& Objects.equals(item.getSkuCode(), skuCode)
+						&& Objects.equals(item.getQuality(), normalizedQuality)
+						&& item.getSourceInventoryId() == null);
 		Assert.isTrue(!duplicate, "该账外商品已添加到当前库位");
 
 		StocktakeOrderItem item = new StocktakeOrderItem();
@@ -538,27 +627,16 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		item.setLocationTaskId(task.getId());
 		item.setErpTenantId(dto.getErpTenantId());
 		item.setWmsTenantId(owner.getParentWmsTenantId());
-		item.setSkuCode(dto.getSkuCode());
+		item.setSkuCode(skuCode);
 		item.setZoneId(task.getZoneId());
 		item.setLocationCode(task.getLocationCode());
-		if (!virtualLocation) {
-			Assert.hasText(dto.getSlotCode(), "盘点账外货物必须选择托盘层位");
-			com.erp.admin.wms.model.vo.PalletSlotVO selectedSlot = palletService.listSlots(task.getWarehouseId()).stream()
-					.filter(slot -> dto.getSlotCode().equals(slot.getSlotCode()))
-					.findFirst().orElse(null);
-			Assert.notNull(selectedSlot, "所选层位不存在：" + dto.getSlotCode());
-			Assert.isTrue(task.getLocationId().equals(selectedSlot.getLocationId()), "所选层位不属于当前盘点库位");
-			Assert.isTrue("EMPTY".equals(selectedSlot.getSlotStatus())
-					|| (dto.getPalletId() != null && dto.getPalletId().equals(selectedSlot.getPalletId())),
-					"所选层位已有其他托盘，请刷新后重试");
-			item.setSlotCode(dto.getSlotCode());
-			item.setSlotId(selectedSlot.getSlotId());
-			item.setPalletId(dto.getPalletId());
-		}
-		item.setQuality(dto.getQuality() == null ? "GOOD" : dto.getQuality());
+		item.setQuality(normalizedQuality);
 		WmsZone zone = task.getZoneId() == null ? null : wmsZoneService.getById(task.getZoneId());
+		validateQualityForZone(zone, item.getQuality());
 		item.setAllocatable("GOOD".equalsIgnoreCase(item.getQuality()) && zone != null
 				&& Integer.valueOf(1).equals(zone.getAllocatable()) ? 1 : 0);
+		item.setCapacityPercent(dto.getCapacityPercent());
+		item.setManualFull(Boolean.TRUE.equals(dto.getManualFull()) ? 1 : 0);
 		item.setInboundDate(dto.getInboundDate() == null ? order.getStocktakeDate() : dto.getInboundDate());
 		item.setSystemQuantity(0);
 		item.setReservedQuantity(0);
@@ -570,6 +648,17 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		item.setRemark(dto.getRemark());
 		stocktakeItemService.save(item);
 		return stocktakeItemService.convertToVoList(Collections.singletonList(item)).get(0);
+	}
+
+	private String normalizeScannedSkuCode(Long erpTenantId, String scanCode) {
+		Assert.hasText(scanCode, "SKU不能为空");
+		String code = scanCode.trim();
+		Sku exactSku = TenantContext.runAs(erpTenantId, () -> skuService.getBySkuCode(code));
+		if (exactSku != null) {
+			return code;
+		}
+		String resolved = skuBarcodeService.resolveSkuCode(erpTenantId, code);
+		return resolved == null ? code : resolved;
 	}
 
 	@Transactional(rollbackFor = Exception.class)
@@ -584,6 +673,11 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		Assert.isTrue(items.stream().allMatch(item -> item.getActualQuantity() != null), "当前库位仍有未盘商品");
 		task.setTaskStatus(StocktakeTaskStatus.COMPLETED.name());
 		task.setLocationConfirmed(1);
+		task.setAssigneeId(principalAttributeAccessor.getUserId());
+		task.setAssigneeName(principalAttributeAccessor.getUsername());
+		if (task.getStartedTime() == null) {
+			task.setStartedTime(LocalDateTime.now());
+		}
 		task.setCompletedTime(LocalDateTime.now());
 		Assert.isTrue(stocktakeLocationTaskService.updateById(task), "库位任务并发更新失败，请刷新重试");
 	}
@@ -597,6 +691,8 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		Assert.isTrue(stocktakeLocationTaskService.allCompleted(id), "仍有库位任务未完成");
 		Assert.isTrue(stocktakeItemService.getByStocktakeOrderId(id).stream()
 				.allMatch(item -> item.getActualQuantity() != null), "仍有盘点明细未录入");
+		Assert.isTrue(baseMapper.casStatus(id, StocktakeStatus.COUNTING.name(),
+				StocktakeStatus.REVIEWING.name()) == 1, "盘点单状态已变化，请刷新后重试");
 		order.setOrderStatus(StocktakeStatus.REVIEWING.name());
 		this.updateById(order);
 	}
@@ -682,7 +778,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	@Transactional(rollbackFor = Exception.class)
 	public void confirm(Long id) {
 		assertPlatform();
-		StocktakeOrder order = this.getById(id);
+		StocktakeOrder order = baseMapper.selectByIdForUpdate(id);
 		Assert.notNull(order, "盘点单不存在");
 
 		boolean locationBased = order.getStocktakeMode() != null;
@@ -692,8 +788,10 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 
 		List<StocktakeOrderItem> items = stocktakeItemService.getByStocktakeOrderId(id);
 		Assert.isTrue(items.stream().allMatch(item -> item.getActualQuantity() != null), "仍有盘点明细未完成");
+		Assert.isTrue(baseMapper.casStatus(id, requiredStatus, StocktakeStatus.CONFIRMED.name()) == 1,
+				"盘点单状态已变化，请刷新后重试");
 		List<StockPostingItemDTO> postingItems = locationBased
-				? applyLocationStocktake(order, items)
+				? applyLogicalLocationStocktake(order, items)
 				: postLegacyStocktake(order, items);
 
 		// 更新状态为已确认
@@ -709,6 +807,112 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 				order.getId(), order.getStocktakeNo(), gainCount, lossCount);
 	}
 
+	public List<PalletSummaryVO> listPrintablePallets(Long id) {
+		assertPlatform();
+		StocktakeOrder order = this.getById(id);
+		Assert.notNull(order, "盘点单不存在");
+		Assert.isTrue(StocktakeStatus.CONFIRMED.name().equals(order.getOrderStatus()),
+				"只有已确认盘点单可以打印托盘标签");
+		return Collections.emptyList();
+	}
+
+	private List<StockPostingItemDTO> applyLogicalLocationStocktake(StocktakeOrder order,
+			List<StocktakeOrderItem> items) {
+		validateLogicalLocationSnapshot(order, items);
+		Map<Long, StocktakeLocationTask> tasks = stocktakeLocationTaskService.listByStocktakeId(order.getId()).stream()
+				.collect(Collectors.toMap(StocktakeLocationTask::getId, Function.identity()));
+		for (StocktakeOrderItem item : items) {
+			if (item.getDiffQuantity() == null || item.getDiffQuantity() == 0) {
+				continue;
+			}
+			if (item.getSourceInventoryId() != null) {
+				locationInventoryService.adjustCountedQuantity(item.getSourceInventoryId(), item.getActualQuantity());
+				continue;
+			}
+			Assert.isTrue(item.getActualQuantity() != null && item.getActualQuantity() > 0,
+					"账外商品实盘数量必须大于0");
+			StocktakeLocationTask task = tasks.get(item.getLocationTaskId());
+			Assert.notNull(task, "盘点库位任务不存在");
+			LocationInventoryKey key = new LocationInventoryKey();
+			key.setTenantId(TenantContext.BLOCK_TENANT_ID);
+			key.setWmsTenantId(item.getWmsTenantId());
+			key.setErpTenantId(item.getErpTenantId());
+			key.setWarehouseId(order.getWarehouseId());
+			key.setLocationId(task.getLocationId());
+			key.setSkuCode(item.getSkuCode());
+			key.setQuality(item.getQuality() == null ? "GOOD" : item.getQuality());
+			locationInventoryService.increase(key, item.getActualQuantity());
+			WmsLocationInventory created = locationInventoryMapper.selectByKeyForUpdate(key);
+			Assert.notNull(created, "账外库存登记失败");
+			item.setSourceInventoryId(created.getId());
+			stocktakeItemService.updateById(item);
+		}
+		return Collections.emptyList();
+	}
+
+	private void validateLogicalLocationSnapshot(StocktakeOrder order, List<StocktakeOrderItem> items) {
+		Map<Long, StocktakeOrderItem> captured = items.stream()
+				.filter(item -> item.getSourceInventoryId() != null)
+				.collect(Collectors.toMap(StocktakeOrderItem::getSourceInventoryId, Function.identity()));
+		for (StocktakeOrderItem item : captured.values()) {
+			WmsLocationInventory inventory = locationInventoryMapper.selectForUpdate(item.getSourceInventoryId());
+			Assert.notNull(inventory, "盘点期间逻辑库存已被删除，请取消后重新盘点");
+			Assert.isTrue(Objects.equals(inventory.getWarehouseId(), order.getWarehouseId())
+					&& Objects.equals(inventory.getErpTenantId(), item.getErpTenantId())
+					&& Objects.equals(inventory.getSkuCode(), item.getSkuCode()),
+					"盘点期间逻辑库存归属已变化，请取消后重新盘点");
+			Assert.isTrue(nz(inventory.getQuantity()) == nz(item.getSystemQuantity())
+					&& nz(inventory.getReservedQuantity()) == nz(item.getReservedQuantity()),
+					"盘点期间库存或预占数量已变化，请取消后重新盘点");
+			LocationInventoryService.validateCountedQuantity(nz(item.getActualQuantity()),
+					nz(inventory.getReservedQuantity()));
+		}
+
+		Set<Long> taskLocationIds = stocktakeLocationTaskService.listByStocktakeId(order.getId()).stream()
+				.map(StocktakeLocationTask::getLocationId).collect(Collectors.toSet());
+		List<WmsLocationInventory> current = locationInventoryMapper.selectList(
+				Wrappers.<WmsLocationInventory>lambdaQuery()
+						.eq(WmsLocationInventory::getWarehouseId, order.getWarehouseId()));
+		for (WmsLocationInventory inventory : current) {
+			if (!taskLocationIds.contains(inventory.getLocationId())
+					|| !isInventoryInOrderScope(order, inventory)) {
+				continue;
+			}
+			if ((nz(inventory.getQuantity()) > 0 || nz(inventory.getReservedQuantity()) > 0)
+					&& !captured.containsKey(inventory.getId())) {
+				throw new IllegalStateException("盘点期间范围内出现新库存，请取消后重新盘点，SKU="
+						+ inventory.getSkuCode());
+			}
+		}
+	}
+
+	private boolean isInventoryInOrderScope(StocktakeOrder order, WmsLocationInventory inventory) {
+		if (!StocktakeMode.SPECIAL.name().equals(order.getStocktakeMode())) {
+			return true;
+		}
+		try {
+			JsonNode scope = objectMapper.readTree(order.getScopeConfig());
+			JsonNode ownerNode = scope.get("specialOwnerId");
+			if (ownerNode != null && !ownerNode.isNull()
+					&& ownerNode.asLong() != inventory.getErpTenantId()) {
+				return false;
+			}
+			JsonNode skuNodes = scope.get("specialSkuCodes");
+			if (skuNodes != null && skuNodes.isArray() && skuNodes.size() > 0) {
+				for (JsonNode skuNode : skuNodes) {
+					if (inventory.getSkuCode().equals(skuNode.asText())) {
+						return true;
+					}
+				}
+				return false;
+			}
+			return true;
+		}
+		catch (JsonProcessingException ex) {
+			throw new IllegalStateException("盘点范围配置无法读取", ex);
+		}
+	}
+
 	private List<StockPostingItemDTO> postLegacyStocktake(StocktakeOrder order, List<StocktakeOrderItem> items) {
 		List<StockPostingItemDTO> postingItems = buildPostingItems(order, items);
 		Assert.isTrue(postingItems.isEmpty(),
@@ -721,6 +925,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		List<StocktakeOrderItem> diffItems = items.stream()
 				.filter(item -> item.getDiffQuantity() != null && item.getDiffQuantity() != 0)
 				.collect(Collectors.toList());
+		prepareAddedPallets(order, diffItems);
 		List<StockPostingItemDTO> postingItems = buildPostingItems(order, diffItems);
 		Set<String> affectedKeys = diffItems.stream().map(this::inventoryKey)
 				.collect(Collectors.toCollection(LinkedHashSet::new));
@@ -731,7 +936,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 
 		for (StocktakeOrderItem item : diffItems) {
 			if (item.getPhysicalInventoryId() != null) {
-				WmsPhysicalInventory batch = physicalInventoryMapper.selectById(item.getPhysicalInventoryId());
+				WmsPhysicalInventory batch = physicalInventoryMapper.selectByIdForUpdate(item.getPhysicalInventoryId());
 				Assert.notNull(batch, "物理库存批次不存在，盘点明细ID=" + item.getId());
 				Assert.isTrue(batch.getWarehouseId().equals(order.getWarehouseId())
 						&& batch.getErpTenantId().equals(item.getErpTenantId())
@@ -757,7 +962,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 				.filter(item -> item.getPhysicalInventoryId() != null)
 				.collect(Collectors.toMap(StocktakeOrderItem::getPhysicalInventoryId, Function.identity()));
 		for (StocktakeOrderItem item : captured.values()) {
-			WmsPhysicalInventory batch = physicalInventoryMapper.selectById(item.getPhysicalInventoryId());
+			WmsPhysicalInventory batch = physicalInventoryMapper.selectByIdForUpdate(item.getPhysicalInventoryId());
 			Assert.notNull(batch, "盘点期间物理库存批次已被删除，请取消后重新盘点");
 			Assert.isTrue(Objects.equals(batch.getWarehouseId(), order.getWarehouseId())
 					&& Objects.equals(batch.getErpTenantId(), item.getErpTenantId())
@@ -818,19 +1023,11 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 			insertVirtualStocktakeBatch(order, item, zone);
 			return;
 		}
-		InboundPutawayDTO.PutawayLine palletLine = new InboundPutawayDTO.PutawayLine();
-		palletLine.setSkuCode(item.getSkuCode());
-		palletLine.setQuantity(item.getActualQuantity());
-		palletLine.setQuality(item.getQuality());
-		palletLine.setSlotCode(item.getSlotCode());
-		palletLine.setPalletId(item.getPalletId());
-		palletLine.setPalletKey("STOCKTAKE-" + item.getId());
-		palletLine.setCapacitySource("MANUAL_REQUIRED");
-		com.erp.admin.wms.model.entity.WmsPallet pallet = item.getPalletId() == null
-				? palletService.createForPutaway(order.getWarehouseId(), item.getErpTenantId(), item.getSlotCode(),
-						Collections.singletonList(palletLine))
-				: palletService.lockExistingForPutaway(item.getPalletId(), item.getErpTenantId(),
-						Collections.singletonList(palletLine));
+		Assert.notNull(item.getPalletId(), "账外货物尚未分配目标托盘");
+		WmsPallet pallet = palletService.getById(item.getPalletId());
+		Assert.notNull(pallet, "账外货物目标托盘不存在");
+		Assert.isTrue(Objects.equals(pallet.getCurrentSlotId(), item.getSlotId()),
+				"账外货物目标托盘层位已变化，请取消后重新盘点");
 		WmsPhysicalInventory batch = new WmsPhysicalInventory();
 		SysTenant owner = sysTenantMapper.selectById(item.getErpTenantId());
 		batch.setWmsTenantId(owner == null || owner.getParentWmsTenantId() == null ? 0L : owner.getParentWmsTenantId());
@@ -860,6 +1057,51 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		item.setPickOrder(batch.getPickOrder());
 		stocktakeItemService.updateById(item);
 		palletService.refreshAfterInventoryChange(pallet.getId());
+	}
+
+	private void prepareAddedPallets(StocktakeOrder order, List<StocktakeOrderItem> diffItems) {
+		Map<String, List<StocktakeOrderItem>> bySlot = diffItems.stream()
+				.filter(item -> item.getPhysicalInventoryId() == null)
+				.filter(item -> item.getActualQuantity() != null && item.getActualQuantity() > 0)
+				.filter(item -> item.getSlotCode() != null && !item.getSlotCode().isEmpty())
+				.collect(Collectors.groupingBy(StocktakeOrderItem::getSlotCode, LinkedHashMap::new,
+						Collectors.toList()));
+		for (Map.Entry<String, List<StocktakeOrderItem>> entry : bySlot.entrySet()) {
+			List<StocktakeOrderItem> slotItems = entry.getValue();
+			Set<Long> owners = slotItems.stream().map(StocktakeOrderItem::getErpTenantId)
+					.collect(Collectors.toSet());
+			Set<String> qualities = slotItems.stream().map(StocktakeOrderItem::getQuality)
+					.collect(Collectors.toSet());
+			Assert.isTrue(owners.size() == 1, "同一托盘不能混放不同货主的货物，层位=" + entry.getKey());
+			Assert.isTrue(qualities.size() == 1, "同一托盘不能混放良品和不良品，层位=" + entry.getKey());
+			Assert.isTrue(slotItems.stream().allMatch(item -> item.getCapacityPercent() != null),
+					"账外货物必须填写托盘最终利用率，层位=" + entry.getKey());
+			Set<Long> existingPalletIds = slotItems.stream().map(StocktakeOrderItem::getPalletId)
+					.filter(Objects::nonNull).collect(Collectors.toSet());
+			Assert.isTrue(existingPalletIds.size() <= 1, "同一层位不能选择多个目标托盘");
+			List<InboundPutawayDTO.PutawayLine> lines = slotItems.stream().map(item -> {
+				InboundPutawayDTO.PutawayLine line = new InboundPutawayDTO.PutawayLine();
+				line.setSkuCode(item.getSkuCode());
+				line.setQuantity(item.getActualQuantity());
+				line.setQuality(item.getQuality());
+				line.setSlotCode(item.getSlotCode());
+				line.setPalletId(item.getPalletId());
+				line.setPalletKey("STOCKTAKE-" + item.getId());
+				line.setCapacityPercent(item.getCapacityPercent());
+				line.setCapacitySource("MANUAL");
+				line.setManualFull(Integer.valueOf(1).equals(item.getManualFull()));
+				return line;
+			}).collect(Collectors.toList());
+			Long ownerId = owners.iterator().next();
+			WmsPallet pallet = existingPalletIds.isEmpty()
+					? palletService.createForPutaway(order.getWarehouseId(), ownerId, entry.getKey(), lines)
+					: palletService.lockExistingForPutaway(existingPalletIds.iterator().next(), ownerId, lines);
+			for (StocktakeOrderItem item : slotItems) {
+				item.setPalletId(pallet.getId());
+				item.setSlotId(pallet.getCurrentSlotId());
+				stocktakeItemService.updateById(item);
+			}
+		}
 	}
 
 	private void insertVirtualStocktakeBatch(StocktakeOrder order, StocktakeOrderItem item, WmsZone zone) {
@@ -961,7 +1203,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	@Transactional(rollbackFor = Exception.class)
 	public void cancel(Long id) {
 		assertPlatform();
-		StocktakeOrder order = this.getById(id);
+		StocktakeOrder order = baseMapper.selectByIdForUpdate(id);
 		Assert.notNull(order, "盘点单不存在");
 
 		Assert.isTrue(StocktakeStatus.COUNTING.name().equals(order.getOrderStatus())
@@ -969,6 +1211,8 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 				"只有盘点中或待复核状态的盘点单可以取消");
 
 		// 更新状态为已取消
+		Assert.isTrue(baseMapper.casStatus(id, order.getOrderStatus(), StocktakeStatus.CANCELLED.name()) == 1,
+				"盘点单状态已变化，请刷新后重试");
 		order.setOrderStatus(StocktakeStatus.CANCELLED.name());
 		this.updateById(order);
 
@@ -1104,6 +1348,11 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		List<AvailableSkuVO> items = previewInventories.stream().map(inv -> {
 			AvailableSkuVO vo = new AvailableSkuVO();
 			vo.setSkuCode(inv.getSkuCode());
+			vo.setErpTenantId(inv.getErpTenantId());
+			if (inv.getErpTenantId() != null) {
+				vo.setWarehouseSkuCode(warehouseSkuCodeService.build(
+						inv.getErpTenantId(), inv.getSkuCode()));
+			}
 			vo.setStockQuantity(inv.getAvailableQuantity() + inv.getReservedQuantity());
 			return vo;
 		}).collect(Collectors.toList());
@@ -1198,7 +1447,11 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 				.collect(Collectors.toSet());
 
 		// 过滤已存在的
-		List<String> newSkuCodes = dto.getSkuCodes().stream()
+		List<String> normalizedSkuCodes = dto.getSkuCodes().stream()
+				.map(code -> normalizeScannedSkuCode(dto.getErpTenantId(), code))
+				.distinct()
+				.collect(Collectors.toList());
+		List<String> newSkuCodes = normalizedSkuCodes.stream()
 				.filter(code -> !existingSkuCodes.contains(code))
 				.collect(Collectors.toList());
 
@@ -1295,7 +1548,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	 * @param stocktakeId 盘点单ID（用于排除已添加的）
 	 * @return SKU列表
 	 */
-	public List<AvailableSkuVO> getSelectableSkus(Long warehouseId, Long stocktakeId) {
+	public List<AvailableSkuVO> getSelectableSkus(Long warehouseId, Long stocktakeId, Long erpTenantId) {
 		assertPlatform();
 		// 获取仓库所有有记录的库存
 		List<Inventory> inventories = inventoryService.getAllByWarehouseId(warehouseId);
@@ -1312,6 +1565,7 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		// 过滤已添加的
 		final Set<String> finalAddedCodes = addedSkuCodes;
 		List<Inventory> available = inventories.stream()
+				.filter(inv -> erpTenantId == null || Objects.equals(inv.getErpTenantId(), erpTenantId))
 				.filter(inv -> !finalAddedCodes.contains(inv.getSkuCode()))
 				.collect(Collectors.toList());
 
@@ -1319,10 +1573,19 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 			return new ArrayList<>();
 		}
 
+		Set<Long> ownerIds = available.stream().map(Inventory::getErpTenantId)
+				.filter(Objects::nonNull).collect(Collectors.toSet());
+		Map<Long, String> ownerNames = sysTenantMapper.selectBatchIds(ownerIds).stream()
+				.collect(Collectors.toMap(SysTenant::getId, SysTenant::getTenantName, (a, b) -> a));
+
 		// 组装 VO
 		List<AvailableSkuVO> result = available.stream().map(inv -> {
 			AvailableSkuVO vo = new AvailableSkuVO();
 			vo.setSkuCode(inv.getSkuCode());
+			vo.setErpTenantId(inv.getErpTenantId());
+			vo.setWarehouseSkuCode(warehouseSkuCodeService.build(
+					inv.getErpTenantId(), inv.getSkuCode()));
+			vo.setOwnerName(ownerNames.get(inv.getErpTenantId()));
 			vo.setStockQuantity(inv.getAvailableQuantity() + inv.getReservedQuantity());
 			return vo;
 		}).collect(Collectors.toList());

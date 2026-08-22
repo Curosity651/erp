@@ -45,7 +45,7 @@ public class AdjustmentPageVO {
 	@Schema(title = "调整日期")
 	private LocalDate adjustmentDate;
 
-	@Schema(title = "状态: PENDING_OWNER-待货主确认 / SCRAPPED-已销毁 / REJECTED-已驳回 / CANCELLED-已取消")
+	@Schema(title = "状态: PENDING_OWNER-待货主确认 / PENDING_DESTROY-待仓库销毁 / SCRAPPED-已销毁 / REJECTED-已驳回 / CANCELLED-已取消")
 	private String orderStatus;
 
 	@Schema(title = "调整原因")

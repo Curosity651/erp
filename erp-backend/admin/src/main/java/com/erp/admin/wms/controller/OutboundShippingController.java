@@ -3,10 +3,14 @@ package com.erp.admin.wms.controller;
 import com.erp.admin.wms.model.dto.PackDTO;
 import com.erp.admin.wms.model.dto.PackPackageDTO;
 import com.erp.admin.wms.model.dto.PackageScanDTO;
+import com.erp.admin.wms.model.dto.PackageLabelScanDTO;
+import com.erp.admin.wms.model.dto.ShipPackageDTO;
 import com.erp.admin.wms.model.dto.ShipDTO;
 import com.erp.admin.wms.model.qo.PackShipQO;
+import com.erp.admin.wms.model.qo.PackShipPackageQO;
 import com.erp.admin.wms.model.vo.LogisticsChannelVO;
 import com.erp.admin.wms.model.vo.PackShipOrderVO;
+import com.erp.admin.wms.model.vo.PackShipPackagePageVO;
 import com.erp.admin.wms.model.vo.ShipResultVO;
 import com.erp.admin.order.model.vo.LabelBatchVO;
 import com.erp.admin.order.model.vo.OzonActBatchVO;
@@ -54,6 +58,21 @@ public class OutboundShippingController {
         return ApiResult.ok(outboundShippingService.page(pageParam, qo));
     }
 
+	@Operation(summary = "按平台订单包裹分页查询打包签出任务")
+	@GetMapping("/package-page")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<PageResult<PackShipPackagePageVO>> packagePage(
+			PageParam pageParam, PackShipPackageQO qo) {
+		return ApiResult.ok(outboundShippingService.pagePackages(pageParam, qo));
+	}
+
+	@Operation(summary = "扫描格口码或平台订单号定位包裹")
+	@GetMapping("/package/locate")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<PackShipPackagePageVO> locatePackage(@RequestParam String scanCode) {
+		return ApiResult.ok(outboundShippingService.locatePackage(scanCode));
+	}
+
     @Operation(summary = "订单详情(含明细)")
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
@@ -73,15 +92,23 @@ public class OutboundShippingController {
 	@PostMapping("/pack-package")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> packPackage(@Validated @RequestBody PackPackageDTO dto) {
-		outboundShippingService.packPackage(dto);
+		outboundShippingService.packPackage(dto, principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
 
 	@Operation(summary = "销售出库包裹扫码复核")
 	@PostMapping("/pack-package/scan")
-	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
 	public ApiResult<Void> scanPackPackage(@Validated @RequestBody PackageScanDTO dto) {
 		outboundShippingService.scanPackPackage(dto, principalAttributeAccessor.getUserId());
+		return ApiResult.ok();
+	}
+
+	@Operation(summary = "扫描平台面单并确认贴附到正确包裹")
+	@PostMapping("/pack-package/label-scan")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> confirmPackageLabel(@Validated @RequestBody PackageLabelScanDTO dto) {
+		outboundShippingService.confirmPackageLabel(dto, principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
 
@@ -111,6 +138,13 @@ public class OutboundShippingController {
 				outboundOrderId, principalAttributeAccessor.getUserId()));
 	}
 
+	@GetMapping("/documents/labels/latest")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	@Operation(summary = "查询销售出库单最近一次平台面单生成结果")
+	public ApiResult<LabelBatchVO> latestLabels(@RequestParam Long outboundOrderId) {
+		return ApiResult.ok(outboundDocumentService.latestLabels(outboundOrderId));
+	}
+
 	@PostMapping("/documents/ozon-act")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	@Operation(summary = "生成销售出库单所需的 Ozon 交接单")
@@ -132,8 +166,15 @@ public class OutboundShippingController {
     @PostMapping("/ship")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<ShipResultVO> ship(@Validated @RequestBody ShipDTO dto) {
-        return ApiResult.ok(outboundShippingService.ship(dto));
+        return ApiResult.ok(outboundShippingService.ship(dto, principalAttributeAccessor.getUserId()));
     }
+
+	@Operation(summary = "按平台订单包裹独立签出")
+	@PostMapping("/ship-package")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<ShipResultVO> shipPackage(@Validated @RequestBody ShipPackageDTO dto) {
+		return ApiResult.ok(outboundShippingService.shipPackage(dto, principalAttributeAccessor.getUserId()));
+	}
 
     @Operation(summary = "物流渠道选项")
     @GetMapping("/channels")

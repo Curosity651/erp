@@ -75,6 +75,15 @@ public class WarehouseStructureVO {
 	@Schema(title = "实际物理库位数量")
 	private Integer actualPhysicalLocationCount;
 
+	@Schema(title = "实际逻辑库位排数")
+	private Integer actualRackCount;
+
+	@Schema(title = "可分配给服务商的排数")
+	private Integer assignableRackCount;
+
+	@Schema(title = "是否已经配置逻辑库位")
+	private Boolean locationConfigured;
+
 	@Schema(title = "实际托位数量")
 	private Integer actualPalletSlotCount;
 

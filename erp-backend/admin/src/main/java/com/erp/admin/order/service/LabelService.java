@@ -25,12 +25,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
+import org.ballcat.common.util.JsonUtils;
 import org.ballcat.mybatisplus.toolkit.PageUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
@@ -58,9 +61,27 @@ public class LabelService {
 	 */
 	@Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
 	public void updateOrderLabel(Long orderId, String labelBase64) {
+		updateOrderLabel(orderId, labelBase64, null);
+	}
+
+	@Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
+	public void updateOrderLabel(Long orderId, String labelBase64, Collection<String> verifyCodes) {
 		ErpOrder update = new ErpOrder();
 		update.setId(orderId);
-		update.setLabelBase64(labelBase64);
+		if (org.springframework.util.StringUtils.hasText(labelBase64)) {
+			update.setLabelBase64(labelBase64);
+		}
+		LinkedHashSet<String> normalizedCodes = new LinkedHashSet<>();
+		if (verifyCodes != null) {
+			for (String code : verifyCodes) {
+				if (org.springframework.util.StringUtils.hasText(code)) {
+					normalizedCodes.add(code.trim());
+				}
+			}
+		}
+		if (!normalizedCodes.isEmpty()) {
+			update.setLabelVerifyCodes(JsonUtils.toJson(normalizedCodes));
+		}
 		update.setUpdateTime(LocalDateTime.now());
 		erpOrderMapper.updateById(update);
 		log.info("[LABEL] 更新订单面单成功: orderId={}", orderId);
@@ -328,6 +349,11 @@ public class LabelService {
 		return vo;
 	}
 
+	public LabelBatchVO getLatestBatchVO(Collection<Long> orderIds) {
+		Long batchId = labelBatchItemMapper.selectLatestBatchIdByOrderIds(orderIds);
+		return batchId == null ? null : getBatchVO(batchId);
+	}
+
 	/**
 	 * 分页查询面单批次列表
 	 *
@@ -355,4 +381,3 @@ public class LabelService {
 		return new PageResult<>(records, resultPage.getTotal());
 	}
 }
-

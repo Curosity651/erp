@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import com.erp.admin.wms.model.vo.LocationTransferSourceBatchVO;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
@@ -19,6 +20,38 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 	@Select("SELECT * FROM wms_physical_inventory WHERE id = #{id} FOR UPDATE")
 	WmsPhysicalInventory selectByIdForUpdate(@Param("id") Long id);
 
+	@Select("SELECT * FROM wms_physical_inventory "
+			+ "WHERE pallet_id = #{palletId} AND quantity > 0 ORDER BY id FOR UPDATE")
+	List<WmsPhysicalInventory> selectByPalletIdForUpdate(@Param("palletId") Long palletId);
+
+	@Select("<script>"
+			+ "SELECT pi.id, pi.warehouse_id, pi.wms_tenant_id, pi.erp_tenant_id, "
+			+ "t.tenant_name AS owner_name, pi.sku_code, pi.quantity, pi.reserved_qty, "
+			+ "pi.quality, pi.inbound_date, pi.location_code, pi.zone_id, "
+			+ "pi.pallet_id, p.pallet_no, p.pallet_status, p.pallet_type, "
+			+ "pi.slot_id, s.slot_code "
+			+ "FROM wms_physical_inventory pi "
+			+ "LEFT JOIN wms_pallet p ON p.id = pi.pallet_id "
+			+ "LEFT JOIN wms_location_slot s ON s.id = pi.slot_id "
+			+ "LEFT JOIN sys_tenant t ON t.id = pi.erp_tenant_id "
+			+ "WHERE pi.warehouse_id = #{warehouseId} AND pi.quantity &gt; 0 "
+			+ "<if test='locationCode != null and locationCode != \"\"'>"
+			+ "AND pi.location_code = #{locationCode} "
+			+ "</if>"
+			+ "<if test='erpTenantId != null'>AND pi.erp_tenant_id = #{erpTenantId} </if>"
+			+ "<if test='skuKeyword != null and skuKeyword != \"\"'>"
+			+ "AND (pi.sku_code LIKE CONCAT('%', #{skuKeyword}, '%') "
+			+ "OR CONCAT(t.warehouse_sku_prefix, '-', pi.sku_code) LIKE CONCAT('%', #{skuKeyword}, '%')) "
+			+ "</if>"
+			+ "<if test='palletNo != null and palletNo != \"\"'>"
+			+ "AND p.pallet_no LIKE CONCAT('%', #{palletNo}, '%') "
+			+ "</if>"
+			+ "ORDER BY pi.location_code, s.level_no, s.position_no, p.pallet_no, pi.sku_code, pi.id"
+			+ "</script>")
+	List<LocationTransferSourceBatchVO> listTransferSources(@Param("warehouseId") Long warehouseId,
+			@Param("locationCode") String locationCode, @Param("erpTenantId") Long erpTenantId,
+			@Param("skuKeyword") String skuKeyword, @Param("palletNo") String palletNo);
+
 	@Select("SELECT DISTINCT pi.location_code "
 			+ "FROM wms_physical_inventory pi "
 			+ "JOIN wms_location l ON l.warehouse_id = pi.warehouse_id "
@@ -26,6 +59,15 @@ public interface WmsPhysicalInventoryMapper extends ExtendMapper<WmsPhysicalInve
 			+ "WHERE pi.warehouse_id = #{warehouseId} AND l.is_virtual = 0 "
 			+ "AND (COALESCE(pi.quantity, 0) > 0 OR COALESCE(pi.reserved_qty, 0) > 0)")
 	List<String> listBlockingPhysicalLocationCodes(@Param("warehouseId") Long warehouseId);
+
+	@Select("SELECT DISTINCT pi.wms_tenant_id "
+			+ "FROM wms_physical_inventory pi "
+			+ "JOIN wms_location l ON l.warehouse_id = pi.warehouse_id "
+			+ " AND l.location_code = pi.location_code AND l.deleted = 0 AND l.is_virtual = 0 "
+			+ "WHERE pi.warehouse_id = #{warehouseId} AND l.rack_no = #{rackNo} "
+			+ "AND (COALESCE(pi.quantity, 0) > 0 OR COALESCE(pi.reserved_qty, 0) > 0)")
+	List<Long> listBlockingWmsTenantIdsByRack(@Param("warehouseId") Long warehouseId,
+			@Param("rackNo") String rackNo);
 
 	default List<WmsPhysicalInventory> listByWarehouse(Long warehouseId) {
 		return this.selectList(WrappersX.lambdaQueryX(WmsPhysicalInventory.class)

@@ -10,6 +10,7 @@ import org.ballcat.common.core.exception.BusinessException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,6 +30,8 @@ public class PlatformDashboardService {
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    private static final ZoneId MOSCOW_ZONE = ZoneId.of("Europe/Moscow");
+
     /** 分区固定顺序（与前端图例一致），无数据补 0 */
     private static final List<String> ZONE_ORDER = Arrays.asList("STANDARD", "DEFECTIVE", "RETURN", "TEMP");
 
@@ -42,9 +45,12 @@ public class PlatformDashboardService {
         if (!TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM.equals(identityType)) {
             throw new BusinessException(403, "仅海外仓平台可访问平台数据分析");
         }
+        // 看板业务日统一使用莫斯科日期，避免北京时间凌晨产生 5 小时错位。
+        LocalDate today = LocalDate.now(MOSCOW_ZONE);
+        qo.setTodayDate(today);
         // 日期兜底：默认最近 7 天
         if (qo.getEndDate() == null) {
-            qo.setEndDate(LocalDate.now());
+            qo.setEndDate(today);
         }
         if (qo.getStartDate() == null) {
             qo.setStartDate(qo.getEndDate().minusDays(6));

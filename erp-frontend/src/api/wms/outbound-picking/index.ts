@@ -12,6 +12,7 @@ import type {
   BatchPickPreviewVO,
   BatchPickResultVO,
   PickLineScanDTO,
+  PickReturnScanDTO,
   PickExceptionDTO,
   ResolvePickExceptionDTO,
   PackageScanDTO
@@ -124,8 +125,16 @@ export function confirmPackageSort(taskId: number, packageId: number): Promise<A
   return httpClient.post(`${BASE}/tasks/${taskId}/packages/${packageId}/sort`)
 }
 
+export function skipPackageSorting(taskId: number): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/${taskId}/skip-sorting`)
+}
+
 export function scanPickLine(dto: PickLineScanDTO): Promise<ApiResult<void>> {
   return httpClient.post(`${BASE}/tasks/scan`, dto)
+}
+
+export function scanPickReturn(dto: PickReturnScanDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/tasks/return/scan`, dto)
 }
 
 export function reportPickException(dto: PickExceptionDTO): Promise<ApiResult<void>> {

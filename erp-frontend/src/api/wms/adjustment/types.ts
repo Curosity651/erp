@@ -8,6 +8,7 @@ import type { SkuBriefVO } from '@/api/common/sku-types'
  */
 export const ScrapStatusList = [
   { value: 'PENDING_OWNER', label: '待货主确认', badge: 'processing' },
+  { value: 'PENDING_DESTROY', label: '待仓库销毁', badge: 'warning' },
   { value: 'SCRAPPED', label: '已销毁', badge: 'success' },
   { value: 'REJECTED', label: '已驳回', badge: 'error' },
   { value: 'CANCELLED', label: '已取消', badge: 'default' }
@@ -22,6 +23,7 @@ export type ScrapStatus = (typeof ScrapStatusList)[number]['value']
 export interface PhysicalBatchVO {
   id: number
   skuCode: string
+  warehouseSkuCode?: string
   locationCode: string
   quality: string // GOOD / DAMAGED
   quantity: number
@@ -29,13 +31,21 @@ export interface PhysicalBatchVO {
   zoneId?: number
   inboundDate?: string
   inboundItemId?: number
+  palletId?: number
+  slotId?: number
+}
+
+export interface ScrapBatchVO extends PhysicalBatchVO {
+  sourceInventoryId?: number
+  palletNo?: string
+  slotCode?: string
 }
 
 // ==================== DTO ====================
 
 /** 报废明细（锁定一个批次） */
 export interface ScrapItemDTO {
-  physicalInventoryId: number
+  sourceInventoryId: number
   skuCode: string
   quantity: number
   remark?: string
@@ -90,9 +100,14 @@ export interface AdjustmentPageVO {
 export interface AdjustmentItemVO {
   id: number
   skuCode: string
+  warehouseSkuCode?: string
   skuBrief?: SkuBriefVO
   physicalInventoryId?: number
+  sourceInventoryId?: number
   locationCode?: string
+  palletId?: number
+  palletNo?: string
+  slotCode?: string
   quality?: string
   quantity: number
   remark?: string

@@ -47,6 +47,9 @@ public class WmsOutboundPickAllocation {
     @Schema(title = "从该批次取货数(锁定量)")
     private Integer takeQty;
 
+    @Schema(title = "已按平台订单包裹签出的数量")
+    private Integer shippedQty;
+
     @TableField(fill = FieldFill.INSERT)
     @Schema(title = "创建时间")
     private LocalDateTime createTime;

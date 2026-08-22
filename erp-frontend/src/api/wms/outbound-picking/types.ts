@@ -27,6 +27,7 @@ export type PickMode =
 /** 出库单明细 */
 export interface OutboundOrderItemVO {
   skuCode: string
+  warehouseSkuCode?: string
   skuName?: string
   // 需求数
   requiredQty: number
@@ -77,6 +78,7 @@ export interface PickAllocationVO {
   lineId?: number
   physicalInventoryId?: number
   skuCode: string
+  warehouseSkuCode?: string
   skuName?: string
   // 库位编码
   locationCode: string
@@ -89,7 +91,16 @@ export interface PickAllocationVO {
   pickedQty?: number
   remainingQty?: number
   shortageQty?: number
-  lineStatus?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'EXCEPTION' | 'CANCELLED'
+  returnRequiredQty?: number
+  returnedQty?: number
+  lineStatus?:
+    | 'PENDING'
+    | 'IN_PROGRESS'
+    | 'COMPLETED'
+    | 'EXCEPTION'
+    | 'RETURNING'
+    | 'RETURNED'
+    | 'CANCELLED'
   exceptionReason?: string
   palletId?: number
   palletNo?: string
@@ -128,8 +139,8 @@ export interface PickListVO {
   pickerName: string
   taskId?: number
   taskNo?: string
-  taskType?: 'SINGLE' | 'WAVE'
-  taskStatus?: 'PICKING' | 'EXCEPTION' | 'SORTING' | 'COMPLETED' | 'CANCELLED'
+  taskType?: 'SINGLE' | 'WAVE' | 'PALLET_DIRECT'
+  taskStatus?: 'PICKING' | 'EXCEPTION' | 'RETURNING' | 'SORTING' | 'COMPLETED' | 'CANCELLED'
   outboundOrderCount?: number
   salesOrderCount?: number
   secondaryOrderCount?: number
@@ -159,14 +170,24 @@ export interface OutboundPackageVO {
   erpOrderId: number
   platformOrderId: string
   shopId: number
+  sortSlotId?: number
+  sortSlotScanCode?: string
   sortCode?: string
   sortStatus: 'PENDING' | 'SORTED' | 'NOT_REQUIRED'
-  labelStatus: 'NOT_READY' | 'READY' | 'EXTERNAL_CONFIRMED'
+  labelStatus: 'NOT_READY' | 'READY' | 'EXTERNAL_CONFIRMED' | 'ATTACHED_CONFIRMED'
   handoverRequired?: boolean
   handoverStatus?: 'NOT_REQUIRED' | 'PENDING' | 'READY' | 'EXTERNAL_CONFIRMED'
   packStatus: 'PENDING' | 'PACKED'
+  shipStatus?: 'PENDING' | 'SHIPPED'
+  channelCode?: string
+  channelName?: string
+  trackingNo?: string
+  weight?: number
+  shippedByName?: string
+  shippedTime?: string
   items: Array<{
     skuCode: string
+    warehouseSkuCode?: string
     skuName?: string
     qty: number
     sortedQty?: number
@@ -183,8 +204,11 @@ export interface PickerVO {
 
 export interface BatchPickPreviewDTO {
   outboundOrderIds: number[]
+  /** 单任务可使用的最终平台订单包裹/分货格口容量。 */
   maxOrdersPerTask?: number
   wholePalletPriority?: boolean
+  /** 大型波次需要暂存分货时主动开启；默认直接逐单复核打包。 */
+  useSortSlots?: boolean
 }
 
 export interface BatchPickDTO extends BatchPickPreviewDTO {
@@ -197,7 +221,7 @@ export interface PickTaskPreviewVO {
   erpTenantId: number
   ownerName: string
   sourceType: 'SALES' | 'CUSTOM'
-  taskType: 'SINGLE' | 'WAVE'
+  taskType: 'SINGLE' | 'WAVE' | 'PALLET_DIRECT'
   outboundOrderIds: number[]
   /** 出库单数，不是销售订单数。 */
   orderCount: number
@@ -205,6 +229,7 @@ export interface PickTaskPreviewVO {
   skuCount: number
   totalQuantity: number
   wholePalletCount: number
+  /** 需要按格口分货的最终平台订单包裹数量。 */
   secondaryOrderCount: number
 }
 
@@ -235,7 +260,10 @@ export interface PickLineScanDTO {
   locationScanCode?: string
   quantity: number
   manual?: boolean
+  manualReason?: string
 }
+
+export interface PickReturnScanDTO extends PickLineScanDTO {}
 
 export interface PickExceptionDTO {
   taskId: number
@@ -257,4 +285,5 @@ export interface PackageScanDTO {
   scanCode: string
   quantity: number
   manual?: boolean
+  manualReason?: string
 }

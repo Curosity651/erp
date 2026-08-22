@@ -62,6 +62,9 @@ public class StocktakePageVO {
 	@Schema(title = "确认人名称")
 	private String confirmByName;
 
+	@Schema(title = "盘点操作人，多个姓名以顿号分隔")
+	private String operatorNames;
+
 	@Schema(title = "创建人名称")
 	private String createByName;
 

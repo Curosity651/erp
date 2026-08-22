@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.service.LogicalInboundPutawayService;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,32 @@ class LogicalInboundPutawayServiceTest {
 				() -> LogicalInboundPutawayService.validateTargetType("DAMAGED", location, "STANDARD"));
 		assertThatIllegalArgumentException().isThrownBy(
 				() -> LogicalInboundPutawayService.validateTargetType("GOOD", location, "DEFECTIVE"));
+	}
+
+	@Test
+	void public_temp_location_is_identified_by_zone_type() {
+		WmsLocation location = new WmsLocation();
+		location.setLocationType("STANDARD");
+		location.setPublicShared(1);
+		WmsZone zone = new WmsZone();
+		zone.setWarehouseId(9L);
+		zone.setZoneType("TEMP");
+
+		assertThat(LogicalInboundPutawayService.isPublicTemp(location, zone)).isTrue();
+	}
+
+	@Test
+	void target_location_and_zone_must_belong_to_inbound_warehouse() {
+		WmsLocation location = new WmsLocation();
+		location.setWarehouseId(10L);
+		location.setLocationCode("B1-01");
+		WmsZone zone = new WmsZone();
+		zone.setWarehouseId(10L);
+		zone.setZoneType("STANDARD");
+
+		assertThatIllegalArgumentException().isThrownBy(() ->
+				LogicalInboundPutawayService.validateTargetLocation(9L, location, zone))
+				.withMessageContaining("不属于入库单仓库");
 	}
 
 	private InboundPutawayDTO.PutawayLine line(Long locationId, String sku, int quantity, String quality) {

@@ -34,6 +34,7 @@ public class PalletSummaryVO {
         private Long erpTenantId;
         private String ownerName;
         private String skuCode;
+        private String warehouseSkuCode;
         private Integer quantity;
         private Integer reservedQty;
         private String quality;

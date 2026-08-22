@@ -80,7 +80,9 @@ public class LocationInventoryService {
 					value(candidate.getVersion())) == 1, "库存预占冲突，请刷新后重试");
 			WmsInventoryReservation reservation = new WmsInventoryReservation();
 			reservation.setFulfillmentOrderId(request.getFulfillmentOrderId());
+			reservation.setFulfillmentItemId(request.getFulfillmentItemId());
 			reservation.setInventoryId(candidate.getId());
+			reservation.setLocationId(candidate.getLocationId());
 			reservation.setQuantity(allocated);
 			reservation.setReservationStatus(RESERVED);
 			reservation.setVersion(0);
@@ -124,6 +126,61 @@ public class LocationInventoryService {
 			Assert.isTrue(inventoryMapper.increaseQuantity(target.getId(), quantity,
 					value(target.getVersion())) == 1, "目标库存已变化，请重试");
 		}
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public WmsLocationInventory adjustCountedQuantity(Long inventoryId, int countedQuantity) {
+		Assert.notNull(inventoryId, "盘点库存不能为空");
+		Assert.isTrue(countedQuantity >= 0, "实盘数量不能为负数");
+		WmsLocationInventory inventory = inventoryMapper.selectForUpdate(inventoryId);
+		Assert.notNull(inventory, "盘点库存不存在");
+		validateCountedQuantity(countedQuantity, value(inventory.getReservedQuantity()));
+		int delta = countedQuantity - value(inventory.getQuantity());
+		if (delta > 0) {
+			Assert.isTrue(inventoryMapper.increaseQuantity(inventoryId, delta, value(inventory.getVersion())) == 1,
+					"盘点期间库存已变化，请取消后重新盘点");
+		}
+		else if (delta < 0) {
+			Assert.isTrue(inventoryMapper.decreaseAvailableQuantity(inventoryId, -delta,
+					value(inventory.getVersion())) == 1, "盘点期间库存已变化，请取消后重新盘点");
+		}
+		inventory.setQuantity(countedQuantity);
+		return inventory;
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public WmsLocationInventory reserveInventory(Long inventoryId, int quantity) {
+		Assert.notNull(inventoryId, "库存不能为空");
+		positive(quantity);
+		WmsLocationInventory inventory = inventoryMapper.selectForUpdate(inventoryId);
+		Assert.notNull(inventory, "库存不存在");
+		Assert.isTrue(inventoryMapper.reserveQuantity(inventoryId, quantity, value(inventory.getVersion())) == 1,
+				"可报废数量不足或库存已变化");
+		return inventory;
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void releaseInventory(Long inventoryId, int quantity) {
+		Assert.notNull(inventoryId, "库存不能为空");
+		positive(quantity);
+		WmsLocationInventory inventory = inventoryMapper.selectForUpdate(inventoryId);
+		Assert.notNull(inventory, "库存不存在");
+		Assert.isTrue(inventoryMapper.releaseQuantity(inventoryId, quantity, value(inventory.getVersion())) == 1,
+				"报废预留已变化，请刷新后重试");
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void scrapReservedInventory(Long inventoryId, int quantity) {
+		Assert.notNull(inventoryId, "库存不能为空");
+		positive(quantity);
+		WmsLocationInventory inventory = inventoryMapper.selectForUpdate(inventoryId);
+		Assert.notNull(inventory, "库存不存在");
+		Assert.isTrue(inventoryMapper.shipQuantity(inventoryId, quantity, value(inventory.getVersion())) == 1,
+				"待报废库存不足或库存已变化");
+	}
+
+	public static void validateCountedQuantity(int countedQuantity, int reservedQuantity) {
+		Assert.isTrue(countedQuantity >= reservedQuantity, "实盘数量不能小于已预占数量");
 	}
 
 	private void changeReservations(Long fulfillmentOrderId, boolean shipping) {
@@ -174,6 +231,7 @@ public class LocationInventoryService {
 	private void validateRequest(InventoryReservationRequest request) {
 		Assert.notNull(request, "预占请求不能为空");
 		Assert.notNull(request.getFulfillmentOrderId(), "履约单不能为空");
+		Assert.notNull(request.getFulfillmentItemId(), "履约商品不能为空");
 		Assert.notNull(request.getTenantId(), "平台租户不能为空");
 		Assert.notNull(request.getWmsTenantId(), "服务商不能为空");
 		Assert.notNull(request.getErpTenantId(), "货主不能为空");

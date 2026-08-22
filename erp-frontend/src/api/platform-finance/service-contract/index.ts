@@ -17,7 +17,11 @@ export interface ServiceContract {
   serviceAmount: number
   monthlyServiceRecognition: number
   contractFileUrl?: string
+  contractFileId?: number
   contractStatus: 'DRAFT' | 'ACTIVE' | 'SETTLED' | 'TERMINATED'
+  paymentStatus: 'PENDING' | 'PAID' | 'REFUNDED' | 'CANCELLED'
+  receivedTime?: string
+  settledTime?: string
   remark?: string
   createTime: string
 }
@@ -48,8 +52,22 @@ export interface ServiceContractCreate {
   subscriptionTotal: number
   refundableRate: number
   contractFileUrl?: string
+  contractFileId: number
   remark?: string
   rackNos?: string[]
+}
+
+export interface ContractRefundCheck {
+  contractId: number
+  eligibleDate: string
+  termSatisfied: boolean
+  unpaidAmount: number
+  noDebt: boolean
+  remainingQuantity: number
+  reservedQuantity: number
+  noRemainingGoods: boolean
+  refundable: boolean
+  message: string
 }
 
 export function listServiceContracts() {
@@ -71,6 +89,27 @@ export function recognizeContractService(contractId: number, month: string) {
   return httpClient.post<ApiResult<void>>('/platform-finance/service-contracts/recognize', null, {
     params: { contractId, month }
   })
+}
+
+export function receiveServiceContract(contractId: number, remark?: string) {
+  return httpClient.post<ApiResult<ServiceContract>>(
+    '/platform-finance/service-contracts/receive',
+    null,
+    { params: { contractId, remark } }
+  )
+}
+
+export function cancelServiceContract(contractId: number) {
+  return httpClient.post<ApiResult<void>>('/platform-finance/service-contracts/cancel', null, {
+    params: { contractId }
+  })
+}
+
+export function getContractRefundCheck(contractId: number) {
+  return httpClient.get<ApiResult<ContractRefundCheck>>(
+    '/platform-finance/service-contracts/refund-check',
+    { params: { contractId } }
+  )
 }
 
 export function refundServiceContract(data: {

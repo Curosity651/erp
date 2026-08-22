@@ -71,6 +71,130 @@
         WHERE o.id = #{id}
     </select>
 
+    <sql id="packageColumns">
+        p.id,
+        p.outbound_order_id AS outboundOrderId,
+        o.outbound_no AS outboundNo,
+        p.erp_order_id AS erpOrderId,
+        p.platform_order_id AS platformOrderId,
+        p.platform,
+        p.shop_id AS shopId,
+        s.name AS shopName,
+        p.erp_tenant_id AS erpTenantId,
+        t.tenant_name AS ownerName,
+        t.parent_wms_tenant_id AS operatorId,
+        op.tenant_name AS operatorName,
+        w.warehouse_name AS warehouseName,
+        p.sort_slot_id AS sortSlotId,
+        p.sort_slot_scan_code AS sortSlotScanCode,
+        p.sort_code AS sortCode,
+        COALESCE(item_summary.skuKinds, 0) AS skuKinds,
+        COALESCE(item_summary.totalQty, 0) AS totalQty,
+        p.label_status AS labelStatus,
+        p.pack_status AS packStatus,
+        COALESCE(p.ship_status, 'PENDING') AS shipStatus,
+        CASE
+            WHEN COALESCE(p.ship_status, 'PENDING') = 'SHIPPED' THEN 'SHIPPED'
+            WHEN p.pack_status = 'PACKED' THEN 'PACKED'
+            ELSE 'PENDING_PACK'
+        END AS workStatus,
+        o.document_mode AS documentMode,
+        COALESCE(NULLIF(p.channel_code, ''), NULLIF(lp.product_code, ''), 'AUTO') AS defaultChannelCode,
+        p.channel_code AS channelCode,
+        p.channel_name AS channelName,
+        p.tracking_no AS trackingNo,
+        p.weight,
+        p.packer_name AS packerName,
+        p.shipped_by_name AS shippedByName,
+        DATE_FORMAT(p.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+    </sql>
+
+    <sql id="packageJoins">
+        FROM wms_sales_outbound_package p
+        INNER JOIN wms_sales_outbound_order o ON o.id = p.outbound_order_id
+        LEFT JOIN sys_tenant t ON t.id = p.erp_tenant_id
+        LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
+        LEFT JOIN wms_warehouse w ON w.id = o.warehouse_id
+        LEFT JOIN shop s ON s.id = p.shop_id
+        LEFT JOIN wms_logistics_product lp ON lp.id = o.logistics_product_id
+        LEFT JOIN (
+            SELECT outbound_order_id, erp_order_id,
+                   COUNT(DISTINCT sku_code) AS skuKinds,
+                   COALESCE(SUM(quantity), 0) AS totalQty
+            FROM wms_sales_outbound_order_item
+            GROUP BY outbound_order_id, erp_order_id
+        ) item_summary
+          ON item_summary.outbound_order_id = p.outbound_order_id
+         AND item_summary.erp_order_id = p.erp_order_id
+    </sql>
+
+    <select id="pagePackages" resultType="com.erp.admin.wms.model.vo.PackShipPackagePageVO">
+        SELECT <include refid="packageColumns"/>
+        <include refid="packageJoins"/>
+        <where>
+            o.source_type = 'SALES'
+            AND o.order_status IN ('PICKED', 'PACKED', 'SHIPPED', 'COMPLETED')
+            <if test="qo.keyword != null and qo.keyword != ''">
+                AND (p.platform_order_id LIKE CONCAT('%', #{qo.keyword}, '%')
+                     OR p.sort_code LIKE CONCAT('%', #{qo.keyword}, '%')
+                     OR p.sort_slot_scan_code LIKE CONCAT('%', #{qo.keyword}, '%'))
+            </if>
+            <if test="qo.platform != null and qo.platform != ''">
+                AND LOWER(p.platform) = LOWER(#{qo.platform})
+            </if>
+            <if test="qo.workStatus == 'PENDING_PACK'">
+                AND p.pack_status = 'PENDING'
+            </if>
+            <if test="qo.workStatus == 'PACKED'">
+                AND p.pack_status = 'PACKED'
+                AND COALESCE(p.ship_status, 'PENDING') != 'SHIPPED'
+            </if>
+            <if test="qo.workStatus == 'SHIPPED'">
+                AND COALESCE(p.ship_status, 'PENDING') = 'SHIPPED'
+            </if>
+            <if test="qo.erpTenantId != null">
+                AND p.erp_tenant_id = #{qo.erpTenantId}
+            </if>
+            <if test="qo.wmsTenantId != null">
+                AND t.parent_wms_tenant_id = #{qo.wmsTenantId}
+            </if>
+            <if test="qo.createTimeStart != null">
+                AND DATE(p.create_time) &gt;= #{qo.createTimeStart}
+            </if>
+            <if test="qo.createTimeEnd != null">
+                AND DATE(p.create_time) &lt;= #{qo.createTimeEnd}
+            </if>
+        </where>
+        ORDER BY FIELD(CASE
+            WHEN COALESCE(p.ship_status, 'PENDING') = 'SHIPPED' THEN 'SHIPPED'
+            WHEN p.pack_status = 'PACKED' THEN 'PACKED'
+            ELSE 'PENDING_PACK'
+        END, 'PENDING_PACK', 'PACKED', 'SHIPPED'), p.update_time DESC, p.id DESC
+    </select>
+
+    <select id="locatePackageByPlatformOrderId"
+            resultType="com.erp.admin.wms.model.vo.PackShipPackagePageVO">
+        SELECT <include refid="packageColumns"/>
+        <include refid="packageJoins"/>
+        WHERE o.source_type = 'SALES'
+          AND o.order_status IN ('PICKED', 'PACKED')
+          AND COALESCE(p.ship_status, 'PENDING') != 'SHIPPED'
+          AND p.platform_order_id = #{scanCode}
+        ORDER BY p.id DESC
+        LIMIT 1
+    </select>
+
+    <select id="locatePackageById"
+            resultType="com.erp.admin.wms.model.vo.PackShipPackagePageVO">
+        SELECT <include refid="packageColumns"/>
+        <include refid="packageJoins"/>
+        WHERE p.id = #{packageId}
+          AND o.source_type = 'SALES'
+          AND o.order_status IN ('PICKED', 'PACKED')
+          AND COALESCE(p.ship_status, 'PENDING') != 'SHIPPED'
+        LIMIT 1
+    </select>
+
     <select id="selectChannels" resultType="com.erp.admin.wms.model.vo.LogisticsChannelVO">
         SELECT provider_code AS code, provider_name AS name
         FROM wms_logistics_provider

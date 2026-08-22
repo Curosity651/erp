@@ -4,6 +4,7 @@ import com.erp.admin.platform.finance.model.dto.ContractRefundDTO;
 import com.erp.admin.platform.finance.model.dto.ServiceContractCreateDTO;
 import com.erp.admin.platform.finance.model.entity.WmsContractFundLedger;
 import com.erp.admin.platform.finance.model.entity.WmsServiceContract;
+import com.erp.admin.platform.finance.model.vo.ContractRefundCheckVO;
 import com.erp.admin.platform.finance.service.ServiceContractService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -50,10 +51,29 @@ public class ServiceContractController {
         return ApiResult.ok();
     }
 
+    @PostMapping("/receive")
+    @Operation(summary = "确认合同资金到账并激活货架")
+    public ApiResult<WmsServiceContract> receive(@RequestParam Long contractId,
+            @RequestParam(required = false) String remark) {
+        return ApiResult.ok(service.receive(contractId, remark));
+    }
+
+    @PostMapping("/cancel")
+    @Operation(summary = "取消待收款合同并释放货架预留")
+    public ApiResult<Void> cancel(@RequestParam Long contractId) {
+        service.cancel(contractId);
+        return ApiResult.ok();
+    }
+
+    @GetMapping("/refund-check")
+    @Operation(summary = "核验合同退款条件")
+    public ApiResult<ContractRefundCheckVO> refundCheck(@RequestParam Long contractId) {
+        return ApiResult.ok(service.refundCheck(contractId));
+    }
+
     @PostMapping("/refund")
     public ApiResult<Void> refund(@Validated @RequestBody ContractRefundDTO dto) {
         service.refund(dto);
         return ApiResult.ok();
     }
 }
-

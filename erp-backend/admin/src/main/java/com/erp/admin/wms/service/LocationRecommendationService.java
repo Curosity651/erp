@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.erp.admin.product.mapper.SkuMapper;
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
 import com.erp.admin.wms.model.entity.WmsLocation;
@@ -32,7 +33,7 @@ public class LocationRecommendationService {
 		Assert.hasText(skuCode, "SKU不能为空");
 		Assert.hasText(quality, "品质不能为空");
 		Assert.isTrue(quantity > 0, "待上架数量必须大于0");
-		Sku sku = skuMapper.selectBySkuCode(skuCode);
+		Sku sku = TenantContext.runAs(erpTenantId, () -> skuMapper.selectBySkuCode(skuCode));
 		Assert.notNull(sku, "SKU不存在或无权访问：" + skuCode);
 		LocationCapacityService.PlacementLine unit = LocationCapacityService.fromSku(sku, 1);
 		List<LocationRecommendationVO> result = new ArrayList<>();

@@ -5,8 +5,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -19,6 +21,8 @@ import com.erp.admin.wms.mapper.LocationTransferOrderMapper;
 import com.erp.admin.wms.mapper.SalesOutboundItemMapper;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
 import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsPalletMapper;
+import com.erp.admin.wms.model.dto.LocationTransferBatchCreateDTO;
 import com.erp.admin.wms.model.dto.LocationTransferCreateDTO;
 import com.erp.admin.wms.model.dto.LocationTransferItemDTO;
 import com.erp.admin.wms.model.dto.LocationTransferPlanDTO;
@@ -27,7 +31,11 @@ import com.erp.admin.wms.model.entity.LocationTransferItem;
 import com.erp.admin.wms.model.entity.LocationTransferOrder;
 import com.erp.admin.wms.model.entity.SalesOutboundOrder;
 import com.erp.admin.wms.model.entity.SalesOutboundOrderItem;
+import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
+import com.erp.admin.wms.model.entity.WmsPallet;
+import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.enums.LocationTransferStatus;
 import com.erp.admin.wms.model.enums.LocationTransferReason;
 import com.erp.admin.wms.model.enums.OutboundOrderStatus;
@@ -36,6 +44,8 @@ import com.erp.admin.wms.model.vo.LocationTransferDetailVO;
 import com.erp.admin.wms.model.vo.LocationTransferItemVO;
 import com.erp.admin.wms.model.vo.LocationTransferPageVO;
 import com.erp.admin.wms.model.vo.LocationTransferStatsVO;
+import com.erp.admin.wms.model.vo.PalletSlotVO;
+import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.model.vo.StockShortageVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +93,14 @@ public class LocationTransferOrderService
 	private final SysTenantMapper sysTenantMapper;
 
 	private final WmsPhysicalInventoryMapper physicalInventoryMapper;
+
+	private final WmsPalletMapper palletMapper;
+
+	private final WmsPalletService palletService;
+
+	private final WmsLocationService wmsLocationService;
+
+	private final WmsZoneService wmsZoneService;
 
 	private final SalesOutboundMapper salesOutboundMapper;
 
@@ -133,7 +151,21 @@ public class LocationTransferOrderService
 		}
 
 		List<LocationTransferItemVO> items = itemService.getVoListByOrderId(id);
+		Map<String, WmsLocation> locationByCode = wmsLocationService
+				.listByWarehouse(detail.getWarehouseId()).stream()
+				.filter(location -> location.getLocationCode() != null)
+				.collect(Collectors.toMap(WmsLocation::getLocationCode, Function.identity(), (a, b) -> a));
+		Map<Long, String> zoneNames = wmsZoneService.listByWarehouse(detail.getWarehouseId()).stream()
+				.collect(Collectors.toMap(WmsZone::getId, WmsZone::getZoneName, (a, b) -> a));
+		for (LocationTransferItemVO item : items) {
+			WmsLocation source = locationByCode.get(item.getSourceLocationCode());
+			WmsLocation target = locationByCode.get(item.getTargetLocationCode());
+			item.setSourceZoneName(source == null ? null : zoneNames.get(source.getZoneId()));
+			item.setTargetZoneName(target == null ? null : zoneNames.get(target.getZoneId()));
+		}
 		detail.setItems(items);
+		detail.setPrintablePallets(LocationTransferStatus.COMPLETED.name().equals(detail.getOrderStatus())
+				? printablePallets(itemService.getByOrderId(id)) : Collections.emptyList());
 		int total = items.stream().mapToInt(i -> i.getQuantity() == null ? 0 : i.getQuantity()).sum();
 		detail.setItemCount(items.size());
 		detail.setTotalQuantity(total);
@@ -170,17 +202,38 @@ public class LocationTransferOrderService
 		SysTenant owner = sysTenantMapper.selectById(dto.getErpTenantId());
 		Assert.notNull(owner, "货主不存在");
 
+		List<PalletSlotVO> warehouseSlots = palletService.listSlots(dto.getWarehouseId());
 		List<LocationTransferItem> items = new ArrayList<>();
+		Set<Long> submittedBatchIds = new HashSet<>();
 		for (LocationTransferItemDTO d : dto.getItems()) {
 			Assert.notNull(d.getPhysicalInventoryId(), "源批次不能为空");
+			Assert.isTrue(submittedBatchIds.add(d.getPhysicalInventoryId()), "同一源批次不能重复提交");
 			WmsPhysicalInventory batch = physicalInventoryService.getById(d.getPhysicalInventoryId());
 			Assert.notNull(batch, "批次不存在：" + d.getPhysicalInventoryId());
 			Assert.isTrue(dto.getWarehouseId().equals(batch.getWarehouseId()), "批次不属于所选仓库");
 			Assert.isTrue(dto.getErpTenantId().equals(batch.getErpTenantId()), "批次不属于所选货主");
 
 			// 建单时校验四约束与可用量（不执行、不动库存）
-			LocationTransferService.Resolution r = locationTransferService.resolveLine(batch, dto.getWarehouseId(),
-					d.getTargetLocationCode(), d.getQuantity());
+			String moveMode = normalizeMoveMode(d.getMoveMode());
+			boolean exactTarget = d.getTargetSlotId() != null || d.getTargetPalletId() != null;
+			LocationTransferService.Resolution r;
+			if (LocationTransferService.MOVE_WHOLE_PALLET.equals(moveMode)) {
+				r = exactTarget
+						? locationTransferService.resolveWholePalletLine(batch, dto.getWarehouseId(),
+								d.getTargetLocationCode(), d.getTargetSlotId(), d.getQuantity())
+						: locationTransferService.resolveWholePalletLine(batch, dto.getWarehouseId(),
+								d.getTargetLocationCode(), d.getQuantity());
+			}
+			else {
+				r = exactTarget
+						? locationTransferService.resolveLine(batch, dto.getWarehouseId(),
+								d.getTargetLocationCode(), d.getTargetSlotId(), d.getTargetPalletId(), d.getQuantity())
+						: locationTransferService.resolveLine(batch, dto.getWarehouseId(),
+								d.getTargetLocationCode(), d.getQuantity());
+			}
+			Assert.isTrue(!LocationTransferService.VirtualMove.INTO.equals(r.getVirtualMove())
+							|| LocationTransferService.MOVE_WHOLE_PALLET.equals(moveMode),
+					"移入虚拟库位必须整托移动");
 
 			LocationTransferItem item = new LocationTransferItem();
 			item.setErpTenantId(dto.getErpTenantId());
@@ -188,13 +241,35 @@ public class LocationTransferOrderService
 			item.setPhysicalInventoryId(batch.getId());
 			item.setSourceLocationCode(batch.getLocationCode());
 			item.setSourceQuality(batch.getQuality());
+			item.setMoveMode(moveMode);
+			item.setSourcePalletId(batch.getPalletId());
+			WmsPallet sourcePallet = batch.getPalletId() == null ? null : palletMapper.selectById(batch.getPalletId());
+			item.setSourcePalletNo(sourcePallet == null ? null : sourcePallet.getPalletNo());
+			item.setSourceSlotId(batch.getSlotId());
+			item.setSourceSlotCode(sourcePallet == null ? null : sourcePallet.getSlotCode());
 			item.setTargetLocationCode(d.getTargetLocationCode());
+			PalletSlotVO target = warehouseSlots.stream()
+					.filter(slot -> d.getTargetSlotId() != null
+							? d.getTargetSlotId().equals(slot.getSlotId())
+							: d.getTargetPalletId() != null && d.getTargetPalletId().equals(slot.getPalletId()))
+					.findFirst().orElse(null);
+			item.setTargetSlotId(d.getTargetPalletId() == null && target != null
+					? target.getSlotId() : null);
+			item.setTargetSlotCode(target == null ? null : target.getSlotCode());
+			item.setTargetPalletId(LocationTransferService.MOVE_WHOLE_PALLET.equals(moveMode)
+					? batch.getPalletId() : d.getTargetPalletId());
+			item.setTargetPalletNo(LocationTransferService.MOVE_WHOLE_PALLET.equals(moveMode)
+					? item.getSourcePalletNo() : target == null ? null : target.getPalletNo());
 			item.setTargetZoneId(r.getTargetZoneId());
-			item.setToGood(r.isToGood() ? 1 : 0);
+			item.setToGood(0);
 			item.setQuantity(d.getQuantity());
 			item.setRemark(d.getRemark());
 			items.add(item);
 		}
+		validateWholePalletGroups(items);
+		validatePartialLeavesSourcePallet(items);
+		validateExactTargetUsage(items);
+		validateCombinedPartialTargets(dto.getWarehouseId(), items);
 
 		LocationTransferOrder order = new LocationTransferOrder();
 		order.setWarehouseId(dto.getWarehouseId());
@@ -217,6 +292,41 @@ public class LocationTransferOrderService
 		log.info("平台新建库位调整单, id={}, no={}, erpTenantId={}, items={}", order.getId(), order.getTransferNo(),
 				order.getErpTenantId(), items.size());
 		return order.getId();
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public List<Long> createBatch(LocationTransferBatchCreateDTO dto) {
+		assertPlatform();
+		Assert.notNull(dto.getWarehouseId(), "仓库不能为空");
+		Assert.notEmpty(dto.getItems(), "调整明细不能为空");
+		Map<Long, List<LocationTransferItemDTO>> byOwner = new java.util.LinkedHashMap<>();
+		Set<Long> submitted = new HashSet<>();
+		Map<Long, Long> slotOwner = new java.util.HashMap<>();
+		for (LocationTransferItemDTO item : dto.getItems()) {
+			Assert.notNull(item.getPhysicalInventoryId(), "源批次不能为空");
+			Assert.isTrue(submitted.add(item.getPhysicalInventoryId()), "同一源批次不能重复提交");
+			WmsPhysicalInventory batch = physicalInventoryService.getById(item.getPhysicalInventoryId());
+			Assert.notNull(batch, "源批次不存在：" + item.getPhysicalInventoryId());
+			Assert.isTrue(dto.getWarehouseId().equals(batch.getWarehouseId()), "源批次不属于所选仓库");
+			byOwner.computeIfAbsent(batch.getErpTenantId(), key -> new ArrayList<>()).add(item);
+			if (item.getTargetSlotId() != null) {
+				Long previousOwner = slotOwner.putIfAbsent(item.getTargetSlotId(), batch.getErpTenantId());
+				Assert.isTrue(previousOwner == null || previousOwner.equals(batch.getErpTenantId()),
+						"不同货主不能在同一次调整中使用同一个目标托位");
+			}
+		}
+		List<Long> ids = new ArrayList<>();
+		for (Map.Entry<Long, List<LocationTransferItemDTO>> entry : byOwner.entrySet()) {
+			LocationTransferCreateDTO ownerOrder = new LocationTransferCreateDTO();
+			ownerOrder.setWarehouseId(dto.getWarehouseId());
+			ownerOrder.setErpTenantId(entry.getKey());
+			ownerOrder.setReasonCode(dto.getReasonCode());
+			ownerOrder.setReason(dto.getReason());
+			ownerOrder.setRemark(dto.getRemark());
+			ownerOrder.setItems(entry.getValue());
+			ids.add(create(ownerOrder));
+		}
+		return ids;
 	}
 
 	/**
@@ -300,7 +410,7 @@ public class LocationTransferOrderService
 	@Transactional(rollbackFor = Exception.class)
 	public void completePlan(Long id, LocationTransferPlanDTO dto) {
 		assertPlatform();
-		LocationTransferOrder order = requireOrder(id);
+		LocationTransferOrder order = requireOrderForUpdate(id);
 		Assert.isTrue(LocationTransferStatus.PLANNED.name().equals(order.getOrderStatus()),
 				"只有待完善的库位调整计划可以完善");
 		Map<Long, String> targetByItemId = dto.getItems().stream()
@@ -332,38 +442,101 @@ public class LocationTransferOrderService
 	 * 平台执行「调整完成」（仅待调整）：逐条再次校验并执行移库 → COMPLETED。
 	 */
 	@Transactional(rollbackFor = Exception.class)
-	public void complete(Long id) {
+	public List<PalletSummaryVO> complete(Long id) {
 		assertPlatform();
-		LocationTransferOrder order = requireOrder(id);
+		LocationTransferOrder order = requireOrderForUpdate(id);
 		boolean outboundPlan = "SALES_OUTBOUND".equals(order.getSourceType());
 		Assert.isTrue(LocationTransferStatus.PENDING.name().equals(order.getOrderStatus()),
 				"只有待调整的库位调整单可以执行");
 
 		List<LocationTransferItem> items = itemService.getByOrderId(id);
 		Assert.notEmpty(items, "调整明细为空");
+		validateWholePalletGroups(items);
+		validatePartialLeavesSourcePallet(items);
+		validateExactTargetUsage(items);
+		validateCombinedPartialTargets(order.getWarehouseId(), items);
+		Map<Long, LocationTransferService.Resolution> wholePalletResolutions = new java.util.HashMap<>();
+		for (LocationTransferItem item : items) {
+			if (!isWholePallet(item)) {
+				continue;
+			}
+			WmsPhysicalInventory source = physicalInventoryService.getById(item.getPhysicalInventoryId());
+			Assert.notNull(source, "源批次不存在：" + item.getPhysicalInventoryId());
+			Assert.isTrue(item.getSourcePalletId().equals(source.getPalletId()),
+					"源批次所属托盘已变化，请取消调整单后重新创建");
+			LocationTransferService.Resolution resolution = item.getTargetSlotId() == null
+					? locationTransferService.resolveWholePalletLine(
+							source, order.getWarehouseId(), item.getTargetLocationCode(), item.getQuantity())
+					: locationTransferService.resolveWholePalletLine(
+							source, order.getWarehouseId(), item.getTargetLocationCode(),
+							item.getTargetSlotId(), item.getQuantity());
+			wholePalletResolutions.putIfAbsent(item.getSourcePalletId(), resolution);
+		}
+		Set<Long> movedWholePallets = new HashSet<>();
+		Map<Long, WmsPallet> createdTargetPallets = new java.util.HashMap<>();
 		for (LocationTransferItem item : items) {
 			if (outboundPlan) {
 				physicalInventoryService.changeReservedQuantity(item.getPhysicalInventoryId(), -item.getQuantity());
 			}
 			WmsPhysicalInventory source = physicalInventoryService.getById(item.getPhysicalInventoryId());
 			Assert.notNull(source, "源批次不存在：" + item.getPhysicalInventoryId());
+			if (isWholePallet(item)) {
+				if (movedWholePallets.add(item.getSourcePalletId())) {
+					LocationTransferService.Resolution r = wholePalletResolutions.get(item.getSourcePalletId());
+					if (LocationTransferService.VirtualMove.INTO.equals(r.getVirtualMove())) {
+						physicalInventoryService.wholePalletToContainer(item.getSourcePalletId(),
+								item.getTargetLocationCode(), r.getTargetZoneId(), order.getTransferNo());
+					}
+					else {
+						physicalInventoryService.wholePalletTransfer(item.getSourcePalletId(),
+								item.getTargetLocationCode(), r.getTargetZoneId(),
+								item.getTargetSlotId(), r.getTargetAllocatable(), order.getTransferNo());
+					}
+				}
+				continue;
+			}
 			// 执行时再次校验（不冻结，防止建单后库存变化）
-			LocationTransferService.Resolution r = locationTransferService.resolveLine(source, order.getWarehouseId(),
-					item.getTargetLocationCode(), item.getQuantity());
+			WmsPallet createdTarget = item.getTargetSlotId() == null
+					? null : createdTargetPallets.get(item.getTargetSlotId());
+			Long effectiveTargetSlotId = createdTarget == null && item.getTargetPalletId() == null
+					? item.getTargetSlotId() : null;
+			Long effectiveTargetPalletId = createdTarget == null
+					? item.getTargetPalletId() : createdTarget.getId();
+			boolean exactTarget = effectiveTargetSlotId != null || effectiveTargetPalletId != null;
+			LocationTransferService.Resolution r = exactTarget
+					? locationTransferService.resolveLine(source, order.getWarehouseId(),
+							item.getTargetLocationCode(), effectiveTargetSlotId,
+							effectiveTargetPalletId, item.getQuantity())
+					: locationTransferService.resolveLine(source, order.getWarehouseId(),
+							item.getTargetLocationCode(), item.getQuantity());
+			Assert.isTrue(!LocationTransferService.VirtualMove.INTO.equals(r.getVirtualMove()),
+					"移入虚拟库位必须整托移动");
 			switch (r.getVirtualMove()) {
 				case INTO:
-					// 收纳积压货进虚拟库位：货主数量不变、服务商看不见、排除自动发货挑拣
-					physicalInventoryService.moveToContainer(source.getId(), item.getQuantity(),
-							item.getTargetLocationCode(), r.getTargetZoneId(), order.getTransferNo());
-					break;
+					throw new IllegalStateException("移入虚拟库位必须整托移动");
 				case OUTOF:
-					// 从虚拟库位取回到标准库位
-					physicalInventoryService.retrieveFromContainer(source.getId(), item.getQuantity(),
-							item.getTargetLocationCode(), r.getTargetZoneId(), order.getTransferNo());
+					// 从虚拟库位取回到标准区或暂存区，并按目标区域恢复库存口径。
+					WmsPallet retrievedTarget = physicalInventoryService.retrieveFromContainer(
+							source.getId(), item.getQuantity(),
+							item.getTargetLocationCode(), r.getTargetZoneId(), effectiveTargetSlotId,
+							effectiveTargetPalletId, r.getTargetAllocatable(), order.getTransferNo());
+					if (item.getTargetSlotId() != null) {
+						createdTargetPallets.putIfAbsent(item.getTargetSlotId(), retrievedTarget);
+					}
+					updateTargetPallet(item, retrievedTarget);
 					break;
 				default:
-					physicalInventoryService.locationTransfer(source.getId(), item.getQuantity(),
-							item.getTargetLocationCode(), r.getTargetZoneId(), r.isToGood(), order.getTransferNo());
+					WmsPallet targetPallet = exactTarget
+							? physicalInventoryService.locationTransfer(source.getId(), item.getQuantity(),
+									item.getTargetLocationCode(), r.getTargetZoneId(), effectiveTargetSlotId,
+									effectiveTargetPalletId, r.getTargetAllocatable(), order.getTransferNo())
+							: physicalInventoryService.locationTransfer(source.getId(), item.getQuantity(),
+									item.getTargetLocationCode(), r.getTargetZoneId(),
+									r.getTargetAllocatable(), order.getTransferNo());
+					if (item.getTargetSlotId() != null) {
+						createdTargetPallets.putIfAbsent(item.getTargetSlotId(), targetPallet);
+					}
+					updateTargetPallet(item, targetPallet);
 			}
 		}
 
@@ -388,6 +561,7 @@ public class LocationTransferOrderService
 		order.setCompleteBy(currentUserId());
 		this.updateById(order);
 		log.info("平台完成库位调整, id={}, no={}, items={}", order.getId(), order.getTransferNo(), items.size());
+		return printablePallets(items);
 	}
 
 	/**
@@ -396,7 +570,7 @@ public class LocationTransferOrderService
 	@Transactional(rollbackFor = Exception.class)
 	public void cancel(Long id) {
 		assertPlatform();
-		LocationTransferOrder order = requireOrder(id);
+		LocationTransferOrder order = requireOrderForUpdate(id);
 		Assert.isTrue(LocationTransferStatus.PENDING.name().equals(order.getOrderStatus())
 						|| LocationTransferStatus.PLANNED.name().equals(order.getOrderStatus()),
 				"只有待调整的库位调整单可以撤销");
@@ -455,6 +629,12 @@ public class LocationTransferOrderService
 		return order;
 	}
 
+	private LocationTransferOrder requireOrderForUpdate(Long id) {
+		LocationTransferOrder order = baseMapper.selectByIdForUpdate(id);
+		Assert.notNull(order, "库位调整单不存在");
+		return order;
+	}
+
 	private void assertPlatform() {
 		String type = tenantIdentityService.currentIdentity(null).getIdentityType();
 		if (!TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM.equals(type)) {
@@ -476,6 +656,155 @@ public class LocationTransferOrderService
 		catch (Exception ignore) {
 			return null;
 		}
+	}
+
+	private String normalizeMoveMode(String moveMode) {
+		if (moveMode == null || moveMode.trim().isEmpty()
+				|| LocationTransferService.MOVE_PARTIAL.equalsIgnoreCase(moveMode)) {
+			return LocationTransferService.MOVE_PARTIAL;
+		}
+		Assert.isTrue(LocationTransferService.MOVE_WHOLE_PALLET.equalsIgnoreCase(moveMode),
+				"不支持的库位调整方式：" + moveMode);
+		return LocationTransferService.MOVE_WHOLE_PALLET;
+	}
+
+	private boolean isWholePallet(LocationTransferItem item) {
+		return LocationTransferService.MOVE_WHOLE_PALLET.equals(item.getMoveMode());
+	}
+
+	private void validateWholePalletGroups(List<LocationTransferItem> items) {
+		items.stream().filter(this::isWholePallet)
+				.forEach(item -> Assert.notNull(item.getSourcePalletId(), "整托调整明细未绑定源托盘"));
+		Map<Long, List<LocationTransferItem>> wholeGroups = items.stream()
+				.filter(this::isWholePallet)
+				.collect(Collectors.groupingBy(LocationTransferItem::getSourcePalletId));
+		for (Map.Entry<Long, List<LocationTransferItem>> entry : wholeGroups.entrySet()) {
+			Long palletId = entry.getKey();
+			List<WmsPhysicalInventory> current = physicalInventoryMapper.listByPalletId(palletId);
+			Assert.notEmpty(current, "整托没有可移动库存：" + palletId);
+			Map<Long, LocationTransferItem> submitted = entry.getValue().stream()
+					.collect(Collectors.toMap(LocationTransferItem::getPhysicalInventoryId,
+							Function.identity(), (a, b) -> a));
+			Assert.isTrue(submitted.size() == current.size()
+							&& current.stream().allMatch(batch -> submitted.containsKey(batch.getId())),
+					"整托调整必须包含托盘上的全部货物");
+			Set<String> targets = entry.getValue().stream()
+					.map(LocationTransferItem::getTargetLocationCode).collect(Collectors.toSet());
+			Assert.isTrue(targets.size() == 1, "同一整托的全部货物必须移动到同一目标库位");
+			Set<Long> targetSlots = entry.getValue().stream()
+					.map(LocationTransferItem::getTargetSlotId)
+					.filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+			Assert.isTrue(targetSlots.size() <= 1, "同一整托的全部货物必须移动到同一目标托位");
+			for (WmsPhysicalInventory batch : current) {
+				LocationTransferItem submittedItem = submitted.get(batch.getId());
+				int reserved = batch.getReservedQty() == null ? 0 : batch.getReservedQty();
+				Assert.isTrue(reserved == 0, "托盘存在已预留货物，不能整托调整：" + palletId);
+				Assert.isTrue(batch.getQuantity().equals(submittedItem.getQuantity()),
+						"整托调整必须移动托盘上的全部数量");
+			}
+		}
+	}
+
+	private void validatePartialLeavesSourcePallet(List<LocationTransferItem> items) {
+		Map<Long, Integer> movingByPallet = items.stream()
+				.filter(item -> !isWholePallet(item) && item.getSourcePalletId() != null)
+				.collect(Collectors.groupingBy(LocationTransferItem::getSourcePalletId,
+						Collectors.summingInt(item -> item.getQuantity() == null ? 0 : item.getQuantity())));
+		for (Map.Entry<Long, Integer> entry : movingByPallet.entrySet()) {
+			int currentQuantity = physicalInventoryMapper.listByPalletId(entry.getKey()).stream()
+					.mapToInt(batch -> batch.getQuantity() == null ? 0 : batch.getQuantity())
+					.sum();
+			Assert.isTrue(entry.getValue() < currentQuantity,
+					"拆零移动后源托盘必须保留货物；如需移动全部货物，请选择整托移动");
+		}
+	}
+
+	private void validateExactTargetUsage(List<LocationTransferItem> items) {
+		Map<Long, Long> wholePalletByTargetSlot = new java.util.HashMap<>();
+		Set<Long> partialTargetSlots = new HashSet<>();
+		for (LocationTransferItem item : items) {
+			Long targetSlotId = item.getTargetSlotId();
+			if (targetSlotId == null) {
+				continue;
+			}
+			if (isWholePallet(item)) {
+				Assert.isTrue(!partialTargetSlots.contains(targetSlotId),
+						"同一目标托位不能同时用于整托和拆零调整");
+				Long previousPalletId = wholePalletByTargetSlot.putIfAbsent(
+						targetSlotId, item.getSourcePalletId());
+				Assert.isTrue(previousPalletId == null || previousPalletId.equals(item.getSourcePalletId()),
+						"两个不同整托不能使用同一个目标托位");
+			}
+			else {
+				Assert.isTrue(!wholePalletByTargetSlot.containsKey(targetSlotId),
+						"同一目标托位不能同时用于整托和拆零调整");
+				partialTargetSlots.add(targetSlotId);
+			}
+		}
+	}
+
+	private void validateCombinedPartialTargets(Long warehouseId, List<LocationTransferItem> items) {
+		Warehouse warehouse = warehouseService.getById(warehouseId);
+		Assert.notNull(warehouse, "仓库不存在");
+		int maxKinds = warehouse.getMaxSkuKindsPerPallet() == null
+				? 4 : warehouse.getMaxSkuKindsPerPallet();
+		Map<String, List<LocationTransferItem>> groups = items.stream()
+				.filter(item -> !isWholePallet(item))
+				.filter(item -> item.getTargetSlotId() != null || item.getTargetPalletId() != null)
+				.collect(Collectors.groupingBy(item -> item.getTargetPalletId() != null
+						? "P:" + item.getTargetPalletId() : "S:" + item.getTargetSlotId()));
+		for (Map.Entry<String, List<LocationTransferItem>> entry : groups.entrySet()) {
+			List<LocationTransferItem> incoming = entry.getValue();
+			Set<Long> owners = incoming.stream().map(LocationTransferItem::getErpTenantId)
+					.collect(Collectors.toSet());
+			Set<String> qualities = incoming.stream().map(LocationTransferItem::getSourceQuality)
+					.collect(Collectors.toSet());
+			Set<String> kinds = incoming.stream()
+					.map(item -> item.getErpTenantId() + "|" + item.getSkuCode())
+					.collect(Collectors.toSet());
+			Long targetPalletId = incoming.get(0).getTargetPalletId();
+			if (targetPalletId != null) {
+				WmsPallet pallet = palletMapper.selectById(targetPalletId);
+				Assert.notNull(pallet, "目标托盘不存在：" + targetPalletId);
+				Assert.isTrue(WmsPalletService.PARTIAL.equals(pallet.getPalletStatus()),
+						"目标托盘不是可接收货物的半托状态：" + pallet.getPalletNo());
+				List<WmsPhysicalInventory> current = physicalInventoryMapper.listByPalletId(targetPalletId);
+				owners.addAll(current.stream().map(WmsPhysicalInventory::getErpTenantId)
+						.collect(Collectors.toSet()));
+				qualities.addAll(current.stream().map(WmsPhysicalInventory::getQuality)
+						.collect(Collectors.toSet()));
+				kinds.addAll(current.stream()
+						.map(batch -> batch.getErpTenantId() + "|" + batch.getSkuCode())
+						.collect(Collectors.toSet()));
+			}
+			Assert.isTrue(owners.size() <= 1, "同一目标托盘禁止跨货主混托");
+			Assert.isTrue(qualities.size() <= 1, "同一目标托盘禁止混放不同品质货物");
+			Assert.isTrue(kinds.size() <= maxKinds, "单托最多允许 " + maxKinds + " 种不同货物");
+		}
+	}
+
+	private void updateTargetPallet(LocationTransferItem item, WmsPallet targetPallet) {
+		item.setTargetPalletId(targetPallet.getId());
+		item.setTargetPalletNo(targetPallet.getPalletNo());
+		item.setTargetSlotId(targetPallet.getCurrentSlotId());
+		item.setTargetSlotCode(targetPallet.getSlotCode());
+		itemService.updateById(item);
+	}
+
+	private List<PalletSummaryVO> printablePallets(List<LocationTransferItem> items) {
+		Set<Long> palletIds = new java.util.LinkedHashSet<>();
+		for (LocationTransferItem item : items) {
+			if (item.getSourcePalletId() != null) {
+				palletIds.add(item.getSourcePalletId());
+			}
+			if (item.getTargetPalletId() != null) {
+				palletIds.add(item.getTargetPalletId());
+			}
+		}
+		return palletService.summaries(palletIds).stream()
+				.filter(pallet -> !WmsPalletService.CLOSED.equals(pallet.getPalletStatus()))
+				.filter(pallet -> pallet.getItems() != null && !pallet.getItems().isEmpty())
+				.collect(Collectors.toList());
 	}
 
 	private void saveOrderWithRetry(LocationTransferOrder order) {

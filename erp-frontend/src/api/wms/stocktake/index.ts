@@ -1,5 +1,6 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult, PageResult } from '@/api/types'
+import type { PalletSummaryVO } from '@/api/wms/pallet'
 import type {
   StocktakeDTO,
   StocktakeItemsDTO,
@@ -63,6 +64,12 @@ export function pageStocktake(params: StocktakePageParam) {
  */
 export function getStocktakeDetail(id: number) {
   return httpClient.get<ApiResult<StocktakeDetailVO>>('/wms/stocktake/detail', {
+    params: { id }
+  })
+}
+
+export function getStocktakePallets(id: number) {
+  return httpClient.get<ApiResult<PalletSummaryVO[]>>('/wms/stocktake/pallets', {
     params: { id }
   })
 }
@@ -164,9 +171,13 @@ export function getAvailableSkuPreview(warehouseId: number) {
  * @param warehouseId 仓库ID
  * @param stocktakeId 盘点单ID（可选，用于排除已添加的）
  */
-export function getSelectableSkus(warehouseId: number, stocktakeId?: number) {
+export function getSelectableSkus(
+  warehouseId: number,
+  stocktakeId?: number,
+  erpTenantId?: number
+) {
   return httpClient.get<ApiResult<AvailableSkuVO[]>>('/wms/stocktake/selectable-skus', {
-    params: { warehouseId, stocktakeId }
+    params: { warehouseId, stocktakeId, erpTenantId }
   })
 }
 

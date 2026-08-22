@@ -8,19 +8,22 @@ import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
 import com.erp.admin.wms.service.FulfillmentPickingService;
 import com.erp.admin.wms.service.FulfillmentPlatformActionService;
+import com.erp.admin.wms.service.FulfillmentProgressService;
 import com.erp.admin.wms.service.platform.PlatformActionResult;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 class FulfillmentPickingServiceTest {
 	@Test
 	void batch_accept_keeps_successful_order_when_another_order_fails() {
 		WmsFulfillmentOrderMapper orderMapper = mock(WmsFulfillmentOrderMapper.class);
 		FulfillmentPlatformActionService actions = mock(FulfillmentPlatformActionService.class);
-		FulfillmentPickingService service = new FulfillmentPickingService(orderMapper, actions);
+		FulfillmentProgressService progress = mock(FulfillmentProgressService.class);
+		FulfillmentPickingService service = new FulfillmentPickingService(orderMapper, actions, progress);
 		when(orderMapper.selectById(1L)).thenReturn(order(1L));
 		when(orderMapper.selectById(2L)).thenReturn(order(2L));
 		when(actions.accept(1L)).thenReturn(PlatformActionResult.success("OK", null));
@@ -32,6 +35,8 @@ class FulfillmentPickingServiceTest {
 
 		assertThat(result.getSuccessIds()).containsExactly(1L);
 		assertThat(result.getFailures()).containsEntry(2L, "platform failed");
+		verify(progress).sync(org.mockito.ArgumentMatchers.any(WmsFulfillmentOrder.class),
+				org.mockito.ArgumentMatchers.eq(FulfillmentStatus.WAITING_PICK));
 	}
 
 	private WmsFulfillmentOrder order(Long id) {

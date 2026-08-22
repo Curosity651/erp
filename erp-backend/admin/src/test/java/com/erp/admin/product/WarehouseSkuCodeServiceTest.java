@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -20,7 +21,7 @@ class WarehouseSkuCodeServiceTest {
 
 	@Test
 	void buildsNormalizedOwnerScopedSkuCode() {
-		SysTenant owner = owner(10L, "OWNER_TECH_CODE", " jhin ");
+		SysTenant owner = owner(10L, "OWNER_TECH_CODE", "Renamed owner", "JHIN");
 		when(tenantMapper.selectById(10L)).thenReturn(owner);
 
 		assertEquals("JHIN-ADNZ-015-TXW", service.build(10L, " ADNZ-015-TXW "));
@@ -28,31 +29,46 @@ class WarehouseSkuCodeServiceTest {
 
 	@Test
 	void matchesWarehouseSkuCodeIgnoringCase() {
-		when(tenantMapper.selectById(10L)).thenReturn(owner(10L, "OWNER_TECH_CODE", "JHIN"));
+		when(tenantMapper.selectById(10L)).thenReturn(owner(10L, "OWNER_TECH_CODE", "Renamed owner", "JHIN"));
 
 		assertTrue(service.matches(10L, "ADNZ-015-TXW", "jhin-adnz-015-txw"));
 		assertFalse(service.matches(10L, "ADNZ-015-TXW", "OTHER-ADNZ-015-TXW"));
 	}
 
 	@Test
-	void rejectsOwnerWithoutName() {
-		when(tenantMapper.selectById(10L)).thenReturn(owner(10L, "OWNER_TECH_CODE", " "));
+	void extractsOriginalSkuCodeFromWarehouseLabel() {
+		when(tenantMapper.selectById(10L)).thenReturn(owner(10L, "OWNER_TECH_CODE", "Renamed owner", "JHIN"));
+
+		assertEquals("ADNZ-015-TXW", service.extractSkuCode(10L, "jhin-ADNZ-015-TXW"));
+		assertNull(service.extractSkuCode(10L, "OTHER-ADNZ-015-TXW"));
+		assertNull(service.extractSkuCode(10L, "ADNZ-015-TXW"));
+	}
+
+	@Test
+	void rejectsOwnerWithoutWarehouseSkuPrefix() {
+		when(tenantMapper.selectById(10L)).thenReturn(owner(10L, "OWNER_TECH_CODE", "JHIN", " "));
 
 		assertThrows(IllegalArgumentException.class, () -> service.build(10L, "SKU-1"));
 	}
 
 	@Test
-	void missingOwnerNameDoesNotBreakOtherBarcodeMatchingPaths() {
-		when(tenantMapper.selectById(10L)).thenReturn(owner(10L, "OWNER_TECH_CODE", " "));
+	void missingOwnerPrefixDoesNotBreakOtherBarcodeMatchingPaths() {
+		when(tenantMapper.selectById(10L)).thenReturn(owner(10L, "OWNER_TECH_CODE", "JHIN", " "));
 
 		assertFalse(service.matches(10L, "SKU-1", "SOME-EAN-CODE"));
 	}
 
-	private static SysTenant owner(Long id, String code, String name) {
+	@Test
+	void normalizesPrefixForNewOwners() {
+		assertEquals("JHIN_OWNER", WarehouseSkuCodeService.normalizePrefix(" jhin owner "));
+	}
+
+	private static SysTenant owner(Long id, String code, String name, String warehouseSkuPrefix) {
 		SysTenant tenant = new SysTenant();
 		tenant.setId(id);
 		tenant.setTenantCode(code);
 		tenant.setTenantName(name);
+		tenant.setWarehouseSkuPrefix(warehouseSkuPrefix);
 		return tenant;
 	}
 

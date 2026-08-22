@@ -6,6 +6,7 @@ import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.order.model.vo.LabelBatchVO;
 import com.erp.admin.order.model.vo.OzonActBatchVO;
 import com.erp.admin.order.service.label.LabelPrintOrchestrator;
+import com.erp.admin.order.service.LabelService;
 import com.erp.admin.order.service.ozon.OzonActService;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.wms.mapper.SalesOutboundMapper;
@@ -33,6 +34,7 @@ public class WarehouseOutboundDocumentService {
 	private final LabelPrintOrchestrator labelPrintOrchestrator;
 	private final OzonActService ozonActService;
 	private final TenantIdentityService tenantIdentityService;
+	private final LabelService labelService;
 
 	public LabelBatchVO prepareLabels(Long outboundOrderId, Long userId) {
 		SalesOutboundOrder order = getOperableSalesOrder(outboundOrderId);
@@ -48,6 +50,13 @@ public class WarehouseOutboundDocumentService {
 				.map(ErpOrder::getId).collect(Collectors.toList()));
 		packageService.markLabelReady(outboundOrderId, readyIds);
 		return result;
+	}
+
+	public LabelBatchVO latestLabels(Long outboundOrderId) {
+		SalesOutboundOrder order = getOperableSalesOrder(outboundOrderId);
+		List<Long> orderIds = orderIds(outboundOrderId);
+		return TenantContext.runAs(order.getErpTenantId(),
+				() -> labelService.getLatestBatchVO(orderIds));
 	}
 
 	public OzonActBatchVO prepareOzonActs(Long outboundOrderId, LocalDate departureDate, Long userId) {
@@ -102,6 +111,28 @@ public class WarehouseOutboundDocumentService {
 			}
 			return null;
 		});
+	}
+
+	/**
+	 * Package-level sign-out gate. One unfinished package must not block another
+	 * package that has its own required handover document ready.
+	 */
+	public void assertPackageReadyForShip(SalesOutboundOrder order, WmsSalesOutboundPackage pack) {
+		if (!OutboundSourceType.SALES.name().equals(order.getSourceType())
+				|| !"ozon".equalsIgnoreCase(order.getPlatform())
+				|| !Integer.valueOf(1).equals(pack.getHandoverRequired())) {
+			return;
+		}
+		if ("OWNER_PROVIDED".equals(order.getDocumentMode())) {
+			Assert.isTrue(SalesOutboundPackageService.HANDOVER_EXTERNAL_CONFIRMED
+							.equals(pack.getHandoverStatus()),
+					"请先核对货主提供的Ozon交接单，订单: " + pack.getPlatformOrderId());
+			return;
+		}
+		boolean ready = SalesOutboundPackageService.HANDOVER_READY.equals(pack.getHandoverStatus())
+				|| TenantContext.runAs(order.getErpTenantId(),
+						() -> ozonActService.hasReadyAct(pack.getErpOrderId()));
+		Assert.isTrue(ready, "Ozon交接单尚未就绪，订单: " + pack.getPlatformOrderId());
 	}
 
 	private void refreshHandoverReady(SalesOutboundOrder order) {

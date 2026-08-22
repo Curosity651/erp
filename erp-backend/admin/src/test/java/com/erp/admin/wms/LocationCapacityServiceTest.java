@@ -5,10 +5,13 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.product.mapper.SkuMapper;
+import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
 import com.erp.admin.wms.model.entity.WmsLocation;
+import com.erp.admin.wms.model.entity.WmsLocationInventory;
 import com.erp.admin.wms.model.vo.LocationCapacityVO;
 import com.erp.admin.wms.service.LocationCapacityService;
 import org.junit.jupiter.api.Test;
@@ -56,6 +59,34 @@ class LocationCapacityServiceTest {
 		assertThat(result.isSkuKindsAllowed()).isFalse();
 	}
 
+	@Test
+	void evaluate_reads_existing_inventory_sku_in_the_owner_tenant_context() {
+		WmsLocationMapper locationMapper = mock(WmsLocationMapper.class);
+		WmsLocationInventoryMapper inventoryMapper = mock(WmsLocationInventoryMapper.class);
+		SkuMapper skuMapper = mock(SkuMapper.class);
+		WmsLocationInventory inventory = new WmsLocationInventory();
+		inventory.setErpTenantId(6L);
+		inventory.setSkuCode("SKU-A");
+		inventory.setQuantity(2);
+		when(locationMapper.selectById(1L)).thenReturn(location(2, "5000"));
+		when(inventoryMapper.selectList(any(Wrapper.class))).thenReturn(Collections.singletonList(inventory));
+		when(skuMapper.selectBySkuCodes(Collections.singleton("SKU-A"))).thenAnswer(invocation ->
+				Long.valueOf(6L).equals(TenantContext.getCurrentTenant())
+						? Collections.singletonList(sku("SKU-A")) : Collections.emptyList());
+		LocationCapacityService service = new LocationCapacityService(locationMapper, inventoryMapper, skuMapper);
+
+		TenantContext.setCurrentTenant(TenantContext.BLOCK_TENANT_ID);
+		try {
+			LocationCapacityVO result = service.evaluate(1L, Collections.emptyList());
+
+			assertThat(result.getOccupiedVolumeMm3()).isEqualTo(2_000_000L);
+			assertThat(TenantContext.getCurrentTenant()).isEqualTo(TenantContext.BLOCK_TENANT_ID);
+		}
+		finally {
+			TenantContext.clear();
+		}
+	}
+
 	private WmsLocation location(int maxKinds, String maxWeightKg) {
 		WmsLocation location = new WmsLocation();
 		location.setId(1L);
@@ -65,6 +96,16 @@ class LocationCapacityServiceTest {
 		location.setMaxWeightKg(new BigDecimal(maxWeightKg));
 		location.setMaxSkuKinds(maxKinds);
 		return location;
+	}
+
+	private Sku sku(String code) {
+		Sku sku = new Sku();
+		sku.setSkuCode(code);
+		sku.setOuterLengthMm(100);
+		sku.setOuterWidthMm(100);
+		sku.setOuterHeightMm(100);
+		sku.setOuterGrossWeightG(1000);
+		return sku;
 	}
 
 }

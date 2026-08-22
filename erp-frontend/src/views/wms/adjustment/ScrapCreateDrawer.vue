@@ -10,7 +10,7 @@
       type="warning"
       show-icon
       style="margin-bottom: 12px"
-      message="报废将通知货主确认；发起后待报废货物被冻结，货主确认后才真正销毁扣减库存。请选择货主与仓库后勾选要报废的批次并填写数量。"
+      message="这里只显示所选货主在本仓不良品区的库存。发起后冻结数量，货主同意后由仓库确认实际销毁。"
     />
 
     <a-form layout="vertical">
@@ -77,14 +77,14 @@
           </template>
         </template>
         <template #emptyText>
-          <span>{{ erpTenantId && warehouseId ? '该货主在本仓无可报废批次' : '请先选择货主与仓库' }}</span>
+          <span>{{ erpTenantId && warehouseId ? '该货主在本仓不良品区无可报废库存' : '请先选择货主与仓库' }}</span>
         </template>
       </a-table>
     </a-spin>
 
     <template #footer>
       <div style="display: flex; justify-content: space-between; align-items: center">
-        <span>已选 {{ selectedKeys.length }} 个批次</span>
+        <span>已选 {{ selectedKeys.length }} 条库位库存</span>
         <a-space>
           <a-button @click="handleClose">取消</a-button>
           <a-button type="primary" danger :loading="submitting" @click="submit">发起报废</a-button>
@@ -101,8 +101,8 @@ import WarehouseSelect from '@/components/Lov/WarehouseSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
 import { isSuccess } from '@/api'
 import { doRequest } from '@/utils/axios/request'
-import { listOwnerBatches, createScrap } from '@/api/wms/adjustment'
-import type { PhysicalBatchVO } from '@/api/wms/adjustment/types'
+import { listScrapBatches, createScrap } from '@/api/wms/adjustment'
+import type { ScrapBatchVO } from '@/api/wms/adjustment/types'
 
 defineOptions({ name: 'ScrapCreateDrawer' })
 const emit = defineEmits<{ (e: 'success'): void }>()
@@ -114,15 +114,15 @@ const erpTenantId = ref<number>()
 const warehouseId = ref<number>()
 const reason = ref<string>()
 
-interface BatchRow extends PhysicalBatchVO {
+interface BatchRow extends ScrapBatchVO {
   scrapQty?: number
 }
 const batches = ref<BatchRow[]>([])
 const selectedKeys = ref<number[]>([])
 
 const columns = [
-  { title: 'SKU', dataIndex: 'skuCode', width: 160, ellipsis: true },
-  { title: '库位', dataIndex: 'locationCode', width: 110 },
+  { title: '库位', dataIndex: 'locationCode', width: 150, ellipsis: true },
+  { title: '内部 SKU', dataIndex: 'warehouseSkuCode', width: 190, ellipsis: true },
   { title: '品质', key: 'quality', width: 80, align: 'center' as const },
   { title: '现存', dataIndex: 'quantity', width: 70, align: 'right' as const },
   { title: '可用', key: 'available', width: 70, align: 'right' as const },
@@ -145,9 +145,9 @@ async function reloadBatches() {
   if (!erpTenantId.value || !warehouseId.value) return
   loading.value = true
   try {
-    const res = await listOwnerBatches(erpTenantId.value, warehouseId.value)
+    const res = await listScrapBatches(erpTenantId.value, warehouseId.value)
     if (isSuccess(res) && res.data) {
-      batches.value = res.data.filter(b => (b.quantity || 0) > 0).map(b => ({ ...b }))
+      batches.value = res.data.map(b => ({ ...b }))
     }
   } finally {
     loading.value = false
@@ -161,12 +161,12 @@ function submit() {
   }
   const rows = batches.value.filter(b => selectedKeys.value.includes(b.id))
   if (rows.length === 0) {
-    message.warning('请勾选要报废的批次')
+    message.warning('请勾选要报废的库位库存')
     return
   }
   const bad = rows.find(b => !b.scrapQty || b.scrapQty <= 0 || b.scrapQty > available(b))
   if (bad) {
-    message.warning(`批次[${bad.locationCode}]报废数量不合法（需在 1~${available(bad)} 之间）`)
+    message.warning(`库位[${bad.locationCode}]报废数量不合法（需在 1~${available(bad)} 之间）`)
     return
   }
   submitting.value = true
@@ -176,7 +176,7 @@ function submit() {
       erpTenantId: erpTenantId.value,
       adjustmentReason: reason.value,
       items: rows.map(b => ({
-        physicalInventoryId: b.id,
+        sourceInventoryId: b.sourceInventoryId || b.id,
         skuCode: b.skuCode,
         quantity: b.scrapQty as number
       }))

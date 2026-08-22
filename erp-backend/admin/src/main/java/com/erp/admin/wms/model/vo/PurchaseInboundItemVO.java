@@ -31,6 +31,9 @@ public class PurchaseInboundItemVO {
     @Schema(title = "SKU编码")
     private String skuCode;
 
+	@Schema(title = "海外仓内部SKU编码")
+	private String warehouseSkuCode;
+
 	@Schema(title = "SKU简要信息")
 	private SkuBriefVO skuBrief;
 

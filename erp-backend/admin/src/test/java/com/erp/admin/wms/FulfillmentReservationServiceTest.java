@@ -4,6 +4,7 @@ import java.util.Collections;
 
 import com.erp.admin.wms.model.dto.FulfillmentCreateCommand;
 import com.erp.admin.wms.model.dto.InventoryReservationRequest;
+import com.erp.admin.wms.model.entity.WmsFulfillmentItem;
 import com.erp.admin.wms.service.FulfillmentReservationService;
 import com.erp.admin.wms.service.LocationInventoryService;
 import org.junit.jupiter.api.Test;
@@ -29,11 +30,18 @@ class FulfillmentReservationServiceTest {
 		item.setQuantity(5);
 		command.setItems(Collections.singletonList(item));
 
-		service.reserve(9L, command);
+		WmsFulfillmentItem persistedItem = new WmsFulfillmentItem();
+		persistedItem.setId(31L);
+		persistedItem.setSkuCode("SKU-A");
+		persistedItem.setQuality("GOOD");
+		persistedItem.setQuantity(5);
+
+		service.reserve(9L, command, Collections.singletonList(persistedItem));
 
 		ArgumentCaptor<InventoryReservationRequest> captor = ArgumentCaptor.forClass(InventoryReservationRequest.class);
 		verify(inventoryService).reserve(captor.capture());
 		assertThat(captor.getValue().getFulfillmentOrderId()).isEqualTo(9L);
+		assertThat(captor.getValue().getFulfillmentItemId()).isEqualTo(31L);
 		assertThat(captor.getValue().getErpTenantId()).isEqualTo(3L);
 		assertThat(captor.getValue().getQuantity()).isEqualTo(5);
 	}

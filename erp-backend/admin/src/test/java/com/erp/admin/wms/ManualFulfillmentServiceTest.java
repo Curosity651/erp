@@ -94,7 +94,7 @@ class ManualFulfillmentServiceTest {
 
 		service.submit(91L);
 
-		verify(reservationService).reserve(any(Long.class), any(FulfillmentCreateCommand.class));
+		verify(reservationService).reserve(any(Long.class), any(FulfillmentCreateCommand.class), any());
 		verify(orderMapper).transit(91L, FulfillmentStatus.DRAFT, FulfillmentStatus.WAITING_SHELF);
 	}
 

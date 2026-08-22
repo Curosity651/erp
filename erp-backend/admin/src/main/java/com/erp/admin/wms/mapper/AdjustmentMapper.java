@@ -6,6 +6,7 @@ import com.erp.admin.wms.model.vo.AdjustmentDetailVO;
 import com.erp.admin.wms.model.vo.AdjustmentPageVO;
 import com.erp.admin.wms.model.vo.AdjustmentStatsVO;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 
@@ -47,5 +48,10 @@ public interface AdjustmentMapper extends ExtendMapper<AdjustmentOrder> {
 	 * @return List<AdjustmentStatsVO> 统计信息列表
 	 */
 	List<AdjustmentStatsVO> selectStatsByIds(@Param("ids") Collection<Long> ids);
+
+	@Update("UPDATE wms_adjustment_order SET order_status = #{targetStatus} "
+			+ "WHERE id = #{id} AND order_status = #{expectedStatus} AND deleted = 0")
+	int casStatus(@Param("id") Long id, @Param("expectedStatus") String expectedStatus,
+			@Param("targetStatus") String targetStatus);
 
 }

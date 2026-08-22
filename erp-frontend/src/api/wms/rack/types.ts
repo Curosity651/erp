@@ -2,13 +2,17 @@
 export interface RackVO {
   warehouseId: number
   rackNo: string
-  status: 'IDLE' | 'OCCUPIED'
+  status: 'IDLE' | 'RESERVED' | 'OCCUPIED'
   assignmentId?: number
   assignedWmsTenantId?: number
   assignedWmsTenantName?: string
+  contractControlled?: boolean
+  contractId?: number
+  contractNo?: string
   monthlyFee?: number
   effectiveFrom?: string
   effectiveTo?: string
+  remark?: string
   expiringSoon?: boolean
   locationCount?: number
 }

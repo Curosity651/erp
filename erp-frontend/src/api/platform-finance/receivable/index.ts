@@ -5,7 +5,9 @@ import type {
   MonthlyBillQO,
   BillStatus,
   GenerateBillDTO,
-  GenerateBillResultVO
+  GenerateBillResultVO,
+  FeeRate,
+  ManualBillingDTO
 } from './types'
 import { mockPageBills, mockGetBill, mockChangeStatus, mockGenerate } from './mock'
 
@@ -70,7 +72,8 @@ export async function generateMonthlyBill(
 export async function changeBillStatus(
   id: number,
   target: BillStatus,
-  remark?: string
+  remark?: string,
+  paymentVoucherFileId?: number
 ): Promise<ApiResult<MonthlyBillVO>> {
   if (USE_MOCK) {
     await delay()
@@ -78,5 +81,13 @@ export async function changeBillStatus(
     return b ? ok(b) : { code: 404, data: null as any, message: '账单不存在' }
   }
   const path = target === 'PAID' ? 'pay' : target === 'DISPUTED' ? 'dispute' : 'confirm'
-  return httpClient.post(`${BASE}/${id}/${path}`, { remark })
+  return httpClient.post(`${BASE}/${id}/${path}`, { remark, paymentVoucherFileId })
+}
+
+export function listEffectiveRates(wmsTenantId: number) {
+  return httpClient.get<ApiResult<FeeRate[]>>(`${BASE}/rates`, { params: { wmsTenantId } })
+}
+
+export function addManualCharge(data: ManualBillingDTO) {
+  return httpClient.post<ApiResult<void>>(`${BASE}/manual-charge`, data)
 }

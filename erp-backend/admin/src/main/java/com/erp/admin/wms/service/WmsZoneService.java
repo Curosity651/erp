@@ -1,9 +1,7 @@
 package com.erp.admin.wms.service;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.erp.admin.wms.enums.WmsResultCode;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
@@ -12,6 +10,7 @@ import com.erp.admin.wms.mapper.WmsZoneMapper;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.entity.WmsZone;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.core.exception.BusinessException;
 import org.ballcat.mybatisplus.service.impl.ExtendServiceImpl;
@@ -39,8 +38,6 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 
 	private final WmsPhysicalInventoryMapper wmsPhysicalInventoryMapper;
 
-	private final WmsInventoryAggregator wmsInventoryAggregator;
-
 	public List<WmsZone> listByWarehouse(Long warehouseId) {
 		return baseMapper.listByWarehouse(warehouseId);
 	}
@@ -64,56 +61,45 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 			throw new BusinessException(400, "物理库位不能设置为虚拟库位");
 		}
 
-		// 0. 目标库位（限本仓）与其编码
-		List<WmsLocation> targets = new ArrayList<>();
-		List<String> codes = new ArrayList<>();
-		for (WmsLocation loc : wmsLocationMapper.selectBatchIds(locationIds)) {
-			if (warehouseId.equals(loc.getWarehouseId())) {
-				if (Integer.valueOf(1).equals(loc.getIsVirtual())) {
-					throw new BusinessException(400, "虚拟库位不能修改为物理品质分区");
-				}
-				targets.add(loc);
-				codes.add(loc.getLocationCode());
-			}
+		List<Long> distinctIds = locationIds.stream().distinct().collect(Collectors.toList());
+		List<WmsLocation> targets = wmsLocationMapper.selectPhysicalByIdsForUpdate(warehouseId, distinctIds);
+		if (targets.size() != distinctIds.size()) {
+			throw new BusinessException(400, "选中库位不存在、不属于该仓库或为虚拟库位");
 		}
-		if (codes.isEmpty()) {
-			return 0;
-		}
+		List<String> codes = targets.stream().map(WmsLocation::getLocationCode).collect(Collectors.toList());
 
-		// 守卫：有货物占用(quantity>0)的库位禁止改分区（防破坏品质↔分区不变式；仅锁有货格子，空位放行）
-		List<WmsPhysicalInventory> batches = wmsPhysicalInventoryMapper.listByWarehouseAndLocationCodes(warehouseId, codes);
+		List<WmsPhysicalInventory> batches = wmsPhysicalInventoryMapper
+			.listByWarehouseAndLocationCodes(warehouseId, codes);
 		List<String> occupiedCodes = batches.stream()
-				.filter(b -> b.getQuantity() != null && b.getQuantity() > 0)
+				.filter(b -> value(b.getQuantity()) > 0 || value(b.getReservedQty()) > 0)
 				.map(WmsPhysicalInventory::getLocationCode)
 				.distinct()
-				.collect(java.util.stream.Collectors.toList());
+				.collect(Collectors.toList());
 		if (!occupiedCodes.isEmpty()) {
 			throw new BusinessException(WmsResultCode.LOCATION_ZONE_MOVE_OCCUPIED.getCode(),
 					WmsResultCode.LOCATION_ZONE_MOVE_OCCUPIED.getMessage() + "：" + String.join("、", occupiedCodes));
 		}
 
-		// 1. 更新库位的分区
-		for (WmsLocation loc : targets) {
-			loc.setZoneId(zoneId);
-			wmsLocationMapper.updateById(loc);
+		int updated = wmsLocationMapper.updateZoneBatch(warehouseId, distinctIds, zoneId);
+		if (updated != distinctIds.size()) {
+			throw new BusinessException(409, "库位分区更新数量不一致，请刷新后重试");
 		}
 
-		// 2. 联动现有批次（此时均为 quantity=0 的残留批次）：zone_id + allocatable 同步为目标分区口径，收集受影响聚合键
-		Map<String, WmsPhysicalInventory> affectedKeys = new LinkedHashMap<>();
-		for (WmsPhysicalInventory b : batches) {
-			b.setZoneId(zoneId);
-			b.setAllocatable(zone.getAllocatable());
-			wmsPhysicalInventoryMapper.updateById(b);
-			String key = b.getWmsTenantId() + "|" + b.getErpTenantId() + "|" + b.getSkuCode();
-			affectedKeys.putIfAbsent(key, b);
+		if (!batches.isEmpty()) {
+			WmsPhysicalInventory update = new WmsPhysicalInventory();
+			update.setZoneId(zoneId);
+			update.setAllocatable(zone.getAllocatable());
+			wmsPhysicalInventoryMapper.update(update,
+					Wrappers.<WmsPhysicalInventory>lambdaUpdate()
+						.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
+						.in(WmsPhysicalInventory::getLocationCode, codes));
 		}
 
-		// 3. 重算受影响的 (服务商×货主×仓×SKU) 可用库存快照
-		for (WmsPhysicalInventory b : affectedKeys.values()) {
-			wmsInventoryAggregator.refreshSnapshot(b.getWmsTenantId(), b.getErpTenantId(), warehouseId, b.getSkuCode());
-		}
+		return updated;
+	}
 
-		return codes.size();
+	private int value(Integer value) {
+		return value == null ? 0 : value;
 	}
 
 	public Long findDefaultStandardZoneId(Long warehouseId) {
@@ -141,9 +127,8 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 			zone.setZoneName(def[1]);
 			zone.setAllocatable(Integer.parseInt(def[2]));
 			try {
-				if (this.save(zone)) {
-					created++;
-				}
+				Assert.state(this.save(zone), "默认分区创建失败：" + def[1]);
+				created++;
 			}
 			catch (DuplicateKeyException ignored) {
 				// Another request filled this missing type after our initial read.

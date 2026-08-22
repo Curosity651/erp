@@ -1,6 +1,8 @@
 package com.erp.admin.order.service.label.strategy;
 
 import java.util.Base64;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -18,6 +20,7 @@ import com.erp.admin.platform.PlatformEnum;
 import com.erp.admin.platform.credential.CredentialService;
 import com.erp.admin.platform.yandex.YandexClient;
 import com.erp.admin.platform.yandex.credential.YandexCredential;
+import com.erp.admin.platform.yandex.model.response.order.YandexGetOrderLabelsDataResponse;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.shop.model.entity.Shop;
 import com.erp.admin.shop.service.ShopService;
@@ -59,7 +62,8 @@ public class YdLabelPrintStrategy implements LabelPrintStrategy {
 
         // 过滤出缺失面单的订单，按 shopId 分组
         Map<Long, List<ErpOrder>> ordersByShop = orders.stream()
-                .filter(order -> !StringUtils.hasText(order.getLabelBase64()))
+                .filter(order -> !StringUtils.hasText(order.getLabelBase64())
+                        || !StringUtils.hasText(order.getLabelVerifyCodes()))
                 .collect(Collectors.groupingBy(ErpOrder::getShopId));
 
         for (Map.Entry<Long, List<ErpOrder>> entry : ordersByShop.entrySet()) {
@@ -154,14 +158,19 @@ public class YdLabelPrintStrategy implements LabelPrintStrategy {
             }
 
             long ydOrderId = Long.parseLong(platformOrderId);
-            byte[] pdfBytes = yandexClient.getOrderLabelsPdf(credential, ydOrderId);
-            if (pdfBytes == null || pdfBytes.length == 0) {
-                log.warn("[YANDEX][LABEL] 获取面单失败，返回数据为空: orderId={}", order.getId());
-                return;
+            String labelBase64 = order.getLabelBase64();
+            if (!StringUtils.hasText(labelBase64)) {
+                byte[] pdfBytes = yandexClient.getOrderLabelsPdf(credential, ydOrderId);
+                if (pdfBytes == null || pdfBytes.length == 0) {
+                    log.warn("[YANDEX][LABEL] 获取面单失败，返回数据为空: orderId={}", order.getId());
+                    return;
+                }
+                labelBase64 = Base64.getEncoder().encodeToString(pdfBytes);
             }
 
-            String labelBase64 = Base64.getEncoder().encodeToString(pdfBytes);
-            labelService.updateOrderLabel(order.getId(), labelBase64);
+            List<String> verifyCodes = collectVerifyCodes(
+                    yandexClient.getOrderLabelsData(credential, ydOrderId), platformOrderId);
+            labelService.updateOrderLabel(order.getId(), labelBase64, verifyCodes);
             order.setLabelBase64(labelBase64);
 
             log.info("[YANDEX][LABEL] 更新面单成功: shopId={}, orderId={}", shopId, order.getId());
@@ -169,6 +178,34 @@ public class YdLabelPrintStrategy implements LabelPrintStrategy {
             log.error("[YANDEX][LABEL] 同步面单失败: orderId={}, error={}",
                     order.getId(), e.getMessage(), e);
         }
+    }
+
+    private List<String> collectVerifyCodes(YandexGetOrderLabelsDataResponse response,
+                                             String platformOrderId) {
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        if (StringUtils.hasText(platformOrderId)) {
+            codes.add(platformOrderId.trim());
+        }
+        if (response != null && response.getResult() != null) {
+            if (response.getResult().getOrderId() != null) {
+                codes.add(String.valueOf(response.getResult().getOrderId()));
+            }
+            if (response.getResult().getParcelBoxLabels() != null) {
+                for (YandexGetOrderLabelsDataResponse.BoxLabel label
+                        : response.getResult().getParcelBoxLabels()) {
+                    if (label.getOrderId() != null) {
+                        codes.add(String.valueOf(label.getOrderId()));
+                    }
+                    if (StringUtils.hasText(label.getOrderNum())) {
+                        codes.add(label.getOrderNum().trim());
+                    }
+                    if (StringUtils.hasText(label.getFulfilmentId())) {
+                        codes.add(label.getFulfilmentId().trim());
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(codes);
     }
 
     private String extractWarehouseNameFromRawJson(ErpOrder order) {

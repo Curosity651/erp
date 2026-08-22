@@ -30,6 +30,7 @@ import com.erp.admin.platform.wildberries.WildberriesClient;
 import com.erp.admin.platform.wildberries.credential.WbCredential;
 import com.erp.admin.platform.wildberries.model.request.sticker.WbGetStickersRequest;
 import com.erp.admin.platform.wildberries.model.response.sticker.WbStickersResponse;
+import com.erp.admin.platform.wildberries.model.response.sticker.WbSticker;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.shop.model.entity.Shop;
 import com.erp.admin.shop.service.ShopService;
@@ -247,7 +248,7 @@ public class WbLabelPrintStrategy implements LabelPrintStrategy {
 			WbCredential credential = credentialService.parseCredential(shop);
 
             // 1. 批量获取缺失的订单面单
-            Map<Long, String> orderIdToLabel = fetchMissingOrderLabels(orders, credential, shopId);
+            Map<Long, WbSticker> orderIdToLabel = fetchMissingOrderLabels(orders, credential, shopId);
 
             // 2. 逐单处理
             for (ErpOrder order : orders) {
@@ -267,12 +268,13 @@ public class WbLabelPrintStrategy implements LabelPrintStrategy {
     /**
      * 批量获取缺失的订单面单
      */
-    private Map<Long, String> fetchMissingOrderLabels(List<ErpOrder> orders,
+    private Map<Long, WbSticker> fetchMissingOrderLabels(List<ErpOrder> orders,
                                                         WbCredential credential,
                                                         Long shopId) {
         List<Long> missingOrderIds = new ArrayList<>();
         for (ErpOrder order : orders) {
-            if (!StringUtils.hasText(order.getLabelBase64())) {
+            if (!StringUtils.hasText(order.getLabelBase64())
+                    || !StringUtils.hasText(order.getLabelVerifyCodes())) {
                 Long wbOrderId = LabelUtils.toLong(order.getPlatformOrderId());
                 if (wbOrderId != null) {
                     missingOrderIds.add(wbOrderId);
@@ -284,7 +286,7 @@ public class WbLabelPrintStrategy implements LabelPrintStrategy {
             return Collections.emptyMap();
         }
 
-        Map<Long, String> result = batchFetchOrderLabelsFromPlatform(credential, missingOrderIds);
+        Map<Long, WbSticker> result = batchFetchOrderLabelsFromPlatform(credential, missingOrderIds);
         log.info("[WB][LABEL] 批量获取订单面单: shopId={}, count={}", shopId, result.size());
         return result;
     }
@@ -292,15 +294,16 @@ public class WbLabelPrintStrategy implements LabelPrintStrategy {
     /**
      * 同步单个订单的面单
      */
-    private void syncOrderLabel(ErpOrder order, Map<Long, String> orderIdToLabel,
+    private void syncOrderLabel(ErpOrder order, Map<Long, WbSticker> orderIdToLabel,
                                  WbCredential credential) {
-        if (StringUtils.hasText(order.getLabelBase64())) {
+        if (StringUtils.hasText(order.getLabelBase64())
+                && StringUtils.hasText(order.getLabelVerifyCodes())) {
             return;
         }
 
         try {
-            String labelFromBatch = orderIdToLabel.get(LabelUtils.toLong(order.getPlatformOrderId()));
-            wbLabelSyncService.syncOrderLabel(order, labelFromBatch, credential);
+            WbSticker sticker = orderIdToLabel.get(LabelUtils.toLong(order.getPlatformOrderId()));
+            wbLabelSyncService.syncOrderLabel(order, sticker, credential);
         } catch (Exception e) {
             log.error("[WB][LABEL] 订单面单同步失败: orderId={}, error={}",
                     order.getId(), e.getMessage(), e);
@@ -349,20 +352,14 @@ public class WbLabelPrintStrategy implements LabelPrintStrategy {
     /**
      * 从 WB 平台批量获取订单面单
      */
-    private Map<Long, String> batchFetchOrderLabelsFromPlatform(WbCredential credential,
+    private Map<Long, WbSticker> batchFetchOrderLabelsFromPlatform(WbCredential credential,
                                                                   List<Long> platformOrderIds) {
         if (platformOrderIds == null || platformOrderIds.isEmpty()) {
             return Collections.emptyMap();
         }
 
         try {
-            WbGetStickersRequest request = WbGetStickersRequest.builder()
-                    .orders(platformOrderIds)
-                    .build();
-
-            WbStickersResponse response = wbClient.getOrderStickersTyped(credential, request);
-
-            return LabelUtils.parseOrderStickersTyped(response);
+            return new WbStickerBatchFetcher(wbClient).fetch(credential, platformOrderIds);
         } catch (Exception ex) {
             log.warn("[WB][LABEL] 批量获取订单面单失败: size={}, error={}",
                     platformOrderIds.size(), ex.getMessage());

@@ -87,7 +87,7 @@
 	-->
 	<!-- 本地和开发环境:打印控制台-->
 	<springProfile name="dev | local">
-		<root level="DEBUG">
+		<root level="INFO">
 			<appender-ref ref="CONSOLE"/>
 		</root>
 	</springProfile>

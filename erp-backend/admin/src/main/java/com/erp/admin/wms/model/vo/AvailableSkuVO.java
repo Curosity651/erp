@@ -16,6 +16,14 @@ public class AvailableSkuVO {
     @Schema(description = "SKU编码")
     private String skuCode;
 
+    private String warehouseSkuCode;
+
+    @Schema(description = "货主ID")
+    private Long erpTenantId;
+
+    @Schema(description = "货主名称")
+    private String ownerName;
+
     @Schema(description = "SKU简要信息")
     private SkuBriefVO skuBrief;
 

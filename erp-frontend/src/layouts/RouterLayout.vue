@@ -13,7 +13,7 @@
 
 <script setup lang="ts">
 import { useMultiTabStore } from '@/stores/multitab-store'
-import type { VNode, Component } from 'vue'
+import type { VNode } from 'vue'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import { emptyNodeName } from '@/config'
 
@@ -22,12 +22,10 @@ const emptyNode = h('div') as VNode
 const multiTabStore = useMultiTabStore()
 const includeComponentNames = computed(() => multiTabStore.includeComponentNames)
 
-// 如果是路由布局，则使用 ComponentName 作为 key，避免被识别为不同的组件导致 keepAlive 异常
+// 每个标签页使用独立缓存键，避免不同菜单共用 RouterLayout 时复用错误的页面树。
 const getComponentKey = (Component: VNode, route: RouteLocationNormalizedLoaded) => {
   if (multiTabStore.contentLoading) return emptyNodeName
   if (Component) {
-    const componentName = (Component.type as Component).name
-
     // 如果路由有自定义缓存策略，使用自定义缓存键
     const matched = route.matched.find(r => r.meta?.cacheStrategy && r.meta?.cacheKey)
     if (matched && matched.meta?.cacheKey) {
@@ -35,7 +33,7 @@ const getComponentKey = (Component: VNode, route: RouteLocationNormalizedLoaded)
       return customCacheKey
     }
 
-    return componentName === routerLayoutName ? routerLayoutName : route.fullPath
+    return route.fullPath
   }
 }
 </script>

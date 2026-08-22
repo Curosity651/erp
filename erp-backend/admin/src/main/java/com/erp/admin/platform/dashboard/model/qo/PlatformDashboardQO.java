@@ -1,5 +1,6 @@
 package com.erp.admin.platform.dashboard.model.qo;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -29,5 +30,10 @@ public class PlatformDashboardQO {
 
     @Schema(title = "WMS 服务商过滤，空=全部（按服务商收窄：其名下货主的业务数据）")
     private List<Long> wmsTenantIds;
+
+    /** 服务端按莫斯科时区生成，客户端不可覆盖。 */
+    @JsonIgnore
+    @Schema(hidden = true)
+    private LocalDate todayDate;
 
 }

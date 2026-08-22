@@ -2,7 +2,7 @@
  * 海外仓平台 - 数据分析（平台数据分析 900300）类型契约。
  *
  * 说明：本模块为「仓储运营视角」的平台看板，跨全部货主聚合。
- * 目前前端以 mock 数据驱动（见 ./mock），后端需按本契约实现：
+ * 当前前端使用真实后端接口，mock.ts 仅保留为本地演示数据：
  *   POST /api/platform-dashboard/data
  *   入参 PlatformDashboardQueryParams → 返回 PlatformDashboardDataVO
  */

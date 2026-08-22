@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 下架 FIFO 纯逻辑测试：分配次序、缺口、跳过占满批次、可用量、状态映射。
@@ -93,6 +94,42 @@ class OutboundPickingServiceTest {
     }
 
     @Test
+    void pick_tasks_are_split_by_final_package_capacity() {
+        SalesOutboundOrder first = new SalesOutboundOrder();
+        first.setOrderCount(4);
+        SalesOutboundOrder second = new SalesOutboundOrder();
+        second.setOrderCount(5);
+
+        List<List<SalesOutboundOrder>> groups = OutboundPickingService
+                .splitByPackageCapacity(Arrays.asList(first, second), 6);
+
+        assertThat(groups).hasSize(2);
+        assertThat(OutboundPickingService.salesOrderCount(groups.get(0))).isEqualTo(4);
+        assertThat(OutboundPickingService.salesOrderCount(groups.get(1))).isEqualTo(5);
+    }
+
+    @Test
+    void one_outbound_document_is_never_split_between_pick_tasks() {
+        SalesOutboundOrder order = new SalesOutboundOrder();
+        order.setOrderCount(9);
+
+        List<List<SalesOutboundOrder>> groups = OutboundPickingService
+                .splitByPackageCapacity(Collections.singletonList(order), 6);
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0)).containsExactly(order);
+    }
+
+    @Test
+    void direct_order_packing_is_default_and_sort_slots_are_explicit() {
+        assertThat(OutboundPickingService.requiresSlotSorting(null, "SALES", 3)).isFalse();
+        assertThat(OutboundPickingService.requiresSlotSorting(false, "SALES", 3)).isFalse();
+        assertThat(OutboundPickingService.requiresSlotSorting(true, "SALES", 3)).isTrue();
+        assertThat(OutboundPickingService.requiresSlotSorting(true, "SALES", 1)).isFalse();
+        assertThat(OutboundPickingService.requiresSlotSorting(true, "CUSTOM", 3)).isFalse();
+    }
+
+    @Test
     void task_cannot_complete_until_every_line_is_actually_picked() {
         WmsOutboundPickTaskLine complete = new WmsOutboundPickTaskLine();
         complete.setPlannedQty(5);
@@ -111,6 +148,57 @@ class OutboundPickingServiceTest {
 
         incomplete.setLineStatus("EXCEPTION");
         assertThat(OutboundPickingService.isTaskCompletable(Arrays.asList(complete, incomplete))).isFalse();
+    }
+
+    @Test
+    void piece_pick_rejects_pallet_only_scan() {
+        assertThatThrownBy(() -> OutboundPickingService.validatePickScan(
+                "PIECE", "A10-01", "A10-01-L1-P01", "PLT001",
+                "A10-01-L1-P01", true, false, false, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("拆零");
+    }
+
+    @Test
+    void piece_pick_requires_exact_slot_instead_of_parent_location() {
+        assertThatThrownBy(() -> OutboundPickingService.validatePickScan(
+                "PIECE", "A10-01", "A10-01-L1-P01", "PLT001",
+                "A10-01", false, true, false, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("托位");
+    }
+
+    @Test
+    void whole_pallet_scan_uses_all_remaining_quantity() {
+        OutboundPickingService.validatePickScan(
+                "WHOLE_PALLET", "A10-01", "A10-01-L1-P01", "PLT001",
+                "A10-01-L1-P01", true, false, false, null);
+
+        assertThat(OutboundPickingService.resolveScanQuantity("WHOLE_PALLET", 1, 18)).isEqualTo(18);
+        assertThat(OutboundPickingService.resolveScanQuantity("PIECE", 2, 18)).isEqualTo(2);
+    }
+
+    @Test
+    void manual_pick_requires_reason() {
+        assertThatThrownBy(() -> OutboundPickingService.validatePickScan(
+                "PIECE", "A10-01", "A10-01-L1-P01", "PLT001",
+                null, false, false, true, " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("原因");
+    }
+
+    @Test
+    void partially_picked_task_requires_return_before_short_close() {
+        WmsOutboundPickTaskLine untouched = new WmsOutboundPickTaskLine();
+        untouched.setPickedQty(0);
+        WmsOutboundPickTaskLine picked = new WmsOutboundPickTaskLine();
+        picked.setPickedQty(2);
+
+        assertThat(OutboundPickingService.requiresReturnBeforeShortClose(
+                Arrays.asList(untouched, picked))).isTrue();
+        picked.setPickedQty(0);
+        assertThat(OutboundPickingService.requiresReturnBeforeShortClose(
+                Arrays.asList(untouched, picked))).isFalse();
     }
 
 }

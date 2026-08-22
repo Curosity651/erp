@@ -35,6 +35,7 @@ import org.springframework.util.Assert;
 public class FulfillmentPickingService {
 	private final WmsFulfillmentOrderMapper orderMapper;
 	private final FulfillmentPlatformActionService platformActionService;
+	private final FulfillmentProgressService progressService;
 	private WmsFulfillmentPickTaskMapper taskMapper;
 	private WmsFulfillmentPickTaskOrderMapper taskOrderMapper;
 	private WmsFulfillmentPickTaskLineMapper taskLineMapper;
@@ -44,8 +45,15 @@ public class FulfillmentPickingService {
 
 	public FulfillmentPickingService(WmsFulfillmentOrderMapper orderMapper,
 			FulfillmentPlatformActionService platformActionService) {
+		this(orderMapper, platformActionService, null);
+	}
+
+	public FulfillmentPickingService(WmsFulfillmentOrderMapper orderMapper,
+			FulfillmentPlatformActionService platformActionService,
+			FulfillmentProgressService progressService) {
 		this.orderMapper = orderMapper;
 		this.platformActionService = platformActionService;
+		this.progressService = progressService;
 	}
 
 	@Autowired
@@ -55,8 +63,9 @@ public class FulfillmentPickingService {
 			WmsFulfillmentPickTaskOrderMapper taskOrderMapper,
 			WmsFulfillmentPickTaskLineMapper taskLineMapper,
 			WmsInventoryReservationMapper reservationMapper,
-			WmsFulfillmentItemMapper itemMapper, WmsLocationMapper locationMapper) {
-		this(orderMapper, platformActionService);
+			WmsFulfillmentItemMapper itemMapper, WmsLocationMapper locationMapper,
+			FulfillmentProgressService progressService) {
+		this(orderMapper, platformActionService, progressService);
 		this.taskMapper = taskMapper;
 		this.taskOrderMapper = taskOrderMapper;
 		this.taskLineMapper = taskLineMapper;
@@ -159,6 +168,7 @@ public class FulfillmentPickingService {
 			}
 			Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.WAITING_PICK,
 					FulfillmentStatus.PICKING) == 1, "订单状态已变化，请重新创建任务");
+			syncProgress(order, FulfillmentStatus.PICKING);
 		}
 		task.setTotalQuantity(total);
 		taskMapper.updateById(task);
@@ -228,6 +238,7 @@ public class FulfillmentPickingService {
 		taskOrderMapper.updateById(current);
 		Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.PICKING,
 				FulfillmentStatus.WAITING_PACK) == 1, "订单拣货状态更新失败");
+		syncProgress(order, FulfillmentStatus.WAITING_PACK);
 		long pending = taskOrderMapper.selectCount(Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
 				.eq(WmsFulfillmentPickTaskOrder::getTaskId, task.getId())
 				.ne(WmsFulfillmentPickTaskOrder::getOrderStatus, "COMPLETED"));
@@ -253,6 +264,13 @@ public class FulfillmentPickingService {
 				platformResult == null ? "平台确认结果为空" : platformResult.getMessage());
 		Assert.isTrue(orderMapper.transit(orderId, FulfillmentStatus.WAITING_SHELF,
 				FulfillmentStatus.WAITING_PICK) == 1, "订单状态已发生变化，请刷新后重试");
+		syncProgress(order, FulfillmentStatus.WAITING_PICK);
+	}
+
+	private void syncProgress(WmsFulfillmentOrder order, FulfillmentStatus status) {
+		if (progressService != null) {
+			progressService.sync(order, status);
+		}
 	}
 
 	private String message(RuntimeException ex) {

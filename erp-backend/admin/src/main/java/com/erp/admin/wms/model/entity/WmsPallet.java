@@ -31,6 +31,7 @@ public class WmsPallet {
     private BigDecimal actualWeightKg;
     private Integer skuKindCount;
     private Integer wholePalletEligible;
+    private Integer manualFull;
     private String lockedReason;
     private Integer labelVersion;
     @Version

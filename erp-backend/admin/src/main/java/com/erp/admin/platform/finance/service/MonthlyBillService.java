@@ -1,13 +1,19 @@
 package com.erp.admin.platform.finance.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.erp.admin.platform.finance.mapper.WmsBillingRecordMapper;
 import com.erp.admin.platform.finance.mapper.WmsMonthlyBillMapper;
 import com.erp.admin.platform.finance.model.dto.GenerateBillDTO;
+import com.erp.admin.platform.finance.model.dto.ManualBillingDTO;
+import com.erp.admin.platform.finance.model.entity.WmsBillingRecord;
+import com.erp.admin.platform.finance.model.entity.WmsFeeRateCard;
 import com.erp.admin.platform.finance.model.entity.WmsMonthlyBill;
 import com.erp.admin.platform.finance.model.qo.MonthlyBillQO;
 import com.erp.admin.platform.finance.model.vo.FeeAmountRow;
 import com.erp.admin.platform.finance.model.vo.GenerateBillResultVO;
 import com.erp.admin.platform.finance.model.vo.MonthlyBillVO;
+import com.erp.admin.system.model.vo.SysFileVO;
+import com.erp.admin.system.service.SysFileService;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +53,12 @@ public class MonthlyBillService {
 
     private final WmsMonthlyBillMapper monthlyBillMapper;
 
+    private final WmsBillingRecordMapper billingRecordMapper;
+
+    private final WarehouseBillingService warehouseBillingService;
+
+    private final SysFileService sysFileService;
+
     private final TenantIdentityService tenantIdentityService;
 
     // ==================== 查询 ====================
@@ -61,8 +73,29 @@ public class MonthlyBillService {
     public MonthlyBillVO getDetail(Long id) {
         assertPlatform();
         MonthlyBillVO vo = monthlyBillMapper.selectVoById(id);
+        if (vo != null) {
+            vo.setBillingRecords(billingRecordMapper.listPostedByBill(vo.getWmsTenantId(), vo.getBillMonth()));
+        }
         Assert.notNull(vo, "账单不存在");
         return vo;
+    }
+
+    public List<WmsFeeRateCard> listRates(Long wmsTenantId) {
+        assertPlatform();
+        return warehouseBillingService.listEffectiveRates(wmsTenantId);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public WmsBillingRecord addManualCharge(ManualBillingDTO dto) {
+        assertPlatform();
+        WmsMonthlyBill existing = monthlyBillMapper.selectByMonthAndTenant(
+                dto.getBillMonth(), dto.getWmsTenantId());
+        if (existing != null && !DRAFT.equals(existing.getStatus())) {
+            throw new BusinessException(400, "该账期账单已确认，不能再补录费用");
+        }
+        WmsBillingRecord record = warehouseBillingService.recordManual(dto);
+        generateForMonth(dto.getBillMonth(), dto.getWmsTenantId());
+        return record;
     }
 
     // ==================== 生成 / 重算 ====================
@@ -164,14 +197,25 @@ public class MonthlyBillService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public MonthlyBillVO pay(Long id) {
+    public MonthlyBillVO pay(Long id, Long paymentVoucherFileId) {
         assertPlatform();
+        Assert.notNull(paymentVoucherFileId, "请上传付款凭证");
+        SysFileVO voucher = sysFileService.getFileInfo(paymentVoucherFileId);
+        Assert.notNull(voucher, "付款凭证文件不存在，请重新上传");
+        String contentType = voucher.getContentType() == null ? "" : voucher.getContentType().toLowerCase();
+        if (!"application/pdf".equals(contentType)
+                && !"image/jpeg".equals(contentType)
+                && !"image/jpg".equals(contentType)
+                && !"image/png".equals(contentType)) {
+            throw new BusinessException(400, "付款凭证仅支持 PDF、JPG、PNG 格式");
+        }
         WmsMonthlyBill bill = load(id);
         if (!CONFIRMED.equals(bill.getStatus())) {
             throw new BusinessException(400, "仅已确认账单可标记付款");
         }
         bill.setStatus(PAID);
         bill.setPaidTime(LocalDateTime.now());
+        bill.setPaymentVoucherFileId(paymentVoucherFileId);
         monthlyBillMapper.updateById(bill);
         return monthlyBillMapper.selectVoById(id);
     }

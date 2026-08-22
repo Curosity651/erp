@@ -27,6 +27,9 @@ public class LocationTransferQO {
 	@Schema(title = "所属WMS服务商ID（平台端可按服务商维度筛选）")
 	private Long wmsTenantId;
 
+	@Schema(title = "操作人ID；已完成取完成操作人，未完成取创建人")
+	private Long operatorUserId;
+
 	@Schema(title = "状态: PENDING / COMPLETED / CANCELLED")
 	private String orderStatus;
 

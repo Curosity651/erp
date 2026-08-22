@@ -87,6 +87,15 @@ class LocationInventoryServiceTest {
 		assertThat(service.reserve(request(100L, 5))).containsExactly(10L, 20L);
 		verify(inventoryMapper).reserveQuantity(10L, 3, 1);
 		verify(inventoryMapper).reserveQuantity(20L, 2, 4);
+		ArgumentCaptor<com.erp.admin.wms.model.entity.WmsInventoryReservation> reservations =
+				ArgumentCaptor.forClass(com.erp.admin.wms.model.entity.WmsInventoryReservation.class);
+		verify(reservationMapper, org.mockito.Mockito.times(2)).insert(reservations.capture());
+		assertThat(reservations.getAllValues())
+				.extracting(com.erp.admin.wms.model.entity.WmsInventoryReservation::getFulfillmentItemId)
+				.containsExactly(33L, 33L);
+		assertThat(reservations.getAllValues())
+				.extracting(com.erp.admin.wms.model.entity.WmsInventoryReservation::getLocationId)
+				.containsExactly(2L, 3L);
 	}
 
 	@Test
@@ -125,6 +134,7 @@ class LocationInventoryServiceTest {
 	private InventoryReservationRequest request(Long fulfillmentId, int quantity) {
 		InventoryReservationRequest request = new InventoryReservationRequest();
 		request.setFulfillmentOrderId(fulfillmentId);
+		org.springframework.test.util.ReflectionTestUtils.setField(request, "fulfillmentItemId", 33L);
 		request.setTenantId(1L);
 		request.setWmsTenantId(5L);
 		request.setErpTenantId(6L);

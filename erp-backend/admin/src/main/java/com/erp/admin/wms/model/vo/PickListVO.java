@@ -41,7 +41,7 @@ public class PickListVO {
     @Schema(title = "任务类型 SINGLE/WAVE")
     private String taskType;
 
-    @Schema(title = "任务状态 PICKING/EXCEPTION/SORTING/COMPLETED/CANCELLED")
+    @Schema(title = "任务状态 PICKING/EXCEPTION/RETURNING/SORTING/COMPLETED/CANCELLED")
     private String taskStatus;
 
     @Schema(title = "任务关联的出库单数")

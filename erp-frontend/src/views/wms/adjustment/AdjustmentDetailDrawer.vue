@@ -53,8 +53,9 @@ const loading = ref(false)
 const detail = ref<AdjustmentDetailVO | null>(null)
 
 const columns = [
-  { title: 'SKU', dataIndex: 'skuCode', width: 160, ellipsis: true },
-  { title: '库位', dataIndex: 'locationCode', width: 110 },
+  { title: '托盘号', dataIndex: 'palletNo', width: 190, ellipsis: true },
+  { title: '托位', dataIndex: 'slotCode', width: 140, ellipsis: true },
+  { title: '内部 SKU', dataIndex: 'warehouseSkuCode', width: 190, ellipsis: true },
   { title: '品质', key: 'quality', width: 80, align: 'center' as const },
   { title: '报废数量', dataIndex: 'quantity', width: 90, align: 'right' as const },
   { title: '备注', dataIndex: 'remark', ellipsis: true }

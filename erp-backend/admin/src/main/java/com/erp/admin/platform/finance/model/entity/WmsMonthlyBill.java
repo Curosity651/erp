@@ -54,6 +54,9 @@ public class WmsMonthlyBill {
 
     private LocalDateTime paidTime;
 
+    @Schema(title = "付款凭证文件ID")
+    private Long paymentVoucherFileId;
+
     private String remark;
 
     private Long createBy;

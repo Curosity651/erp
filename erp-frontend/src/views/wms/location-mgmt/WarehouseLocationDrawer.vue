@@ -238,7 +238,12 @@
             <a-button v-if="locations.length > 0" size="small" @click="printLocationLabels">
               打印库位标签
             </a-button>
-            <a-button v-if="palletSlots.length > 0" size="small" @click="openSlotPrintDialog">
+            <a-button
+              v-if="actualSlotCount > 0"
+              size="small"
+              :loading="slotPrinting"
+              @click="openSlotPrintDialog"
+            >
               打印托位标签
             </a-button>
             <a-radio-group v-model:value="viewMode" size="small" button-style="solid">
@@ -457,13 +462,19 @@ import {
   listZones,
   initDefaultZones,
   listLocations,
-  listOccupiedLocations,
+  listLocationSlotSummary,
+  getStructureLock,
   moveLocationZone,
   listVirtualLocations,
   createVirtualLocation,
   deleteVirtualLocation
 } from '@/api/wms/location-mgmt'
-import type { WarehouseStructure, WmsZone, WmsLocation } from '@/api/wms/location-mgmt/types'
+import type {
+  WarehouseStructure,
+  WmsZone,
+  WmsLocation,
+  LocationSlotSummary
+} from '@/api/wms/location-mgmt/types'
 import { useAuthorize } from '@/hooks/permission'
 import { listPalletSlots } from '@/api/wms/pallet'
 import type { PalletSlotVO } from '@/api/wms/inbound-execution'
@@ -512,6 +523,7 @@ const zones = ref<WmsZone[]>([])
 const physicalZones = computed(() => zones.value.filter(zone => zone.zoneType !== 'VIRTUAL'))
 const locations = ref<WmsLocation[]>([])
 const palletSlots = ref<PalletSlotVO[]>([])
+const slotSummaries = ref<LocationSlotSummary[]>([])
 const viewMode = ref<'grid' | 'list'>('grid')
 const slotPrintOpen = ref(false)
 const slotPrinting = ref(false)
@@ -598,9 +610,7 @@ const configuredSlotCount = computed(
 const actualLocationCount = computed(
   () => current.value?.actualPhysicalLocationCount ?? locations.value.length
 )
-const actualSlotCount = computed(
-  () => current.value?.actualPalletSlotCount ?? palletSlots.value.length
-)
+const actualSlotCount = computed(() => current.value?.actualPalletSlotCount ?? 0)
 const configurationMismatch = computed(
   () => currentGenerated.value && configuredLocationCount.value !== actualLocationCount.value
 )
@@ -705,32 +715,17 @@ interface SlotLevelSummary {
 
 const slotLevelsByLocationId = computed(() => {
   const result = new Map<number, SlotLevelSummary[]>()
-  for (const [locationId, slots] of slotsByLocationId.value) {
-    const levels = new Map<number, PalletSlotVO[]>()
-    for (const slot of slots) {
-      const levelSlots = levels.get(slot.levelNo)
-      if (levelSlots) levelSlots.push(slot)
-      else levels.set(slot.levelNo, [slot])
-    }
+  for (const summary of slotSummaries.value) {
     result.set(
-      locationId,
-      Array.from(levels.entries())
-        .sort(([a], [b]) => b - a)
-        .map(([levelNo, levelSlots]) => ({
-          levelNo,
-          occupiedCount: levelSlots.filter(slot => !!slot.palletId).length,
-          totalCount: levelSlots.length,
-          detail: levelSlots
-            .map(
-              slot =>
-                `P${slot.positionNo || '-'}：${
-                  slot.palletId
-                    ? `${slot.palletNo || '已占用'}（${Math.round(slot.capacityPercent || 0)}%）`
-                    : '空'
-                }`
-            )
-            .join('，')
+      summary.locationId,
+      summary.levels
+        .map(level => ({
+          levelNo: level.levelNo,
+          occupiedCount: level.occupiedCount,
+          totalCount: level.totalCount,
+          detail: `已占用 ${level.occupiedCount}/${level.totalCount} 个托位`
         }))
+        .sort((a, b) => b.levelNo - a.levelNo)
     )
   }
   return result
@@ -773,9 +768,21 @@ async function printLocationLabels() {
   page.onload = () => page.print()
 }
 
-function openSlotPrintDialog() {
-  slotPrintLocationIds.value = locations.value[0] ? [locations.value[0].id] : []
-  slotPrintOpen.value = true
+async function openSlotPrintDialog() {
+  if (!current.value) return
+  slotPrinting.value = true
+  try {
+    const res = await listPalletSlots(current.value.id)
+    if (!isSuccess(res)) {
+      message.error(res.message || '托位详情加载失败')
+      return
+    }
+    palletSlots.value = res.data || []
+    slotPrintLocationIds.value = locations.value[0] ? [locations.value[0].id] : []
+    slotPrintOpen.value = true
+  } finally {
+    slotPrinting.value = false
+  }
 }
 
 function selectAllPrintLocations() {
@@ -932,9 +939,11 @@ async function assignZone(zoneId: number) {
     })
     if (isSuccess(res)) {
       message.success(`已设置 ${res.data} 个库位的分区`)
+      const selected = new Set(selectedIds.value)
+      locations.value = locations.value.map(location =>
+        selected.has(location.id) ? { ...location, zoneId } : location
+      )
       clearSelection()
-      await loadLocations()
-      emits('success')
     } else {
       message.error(res.message || '设置失败')
     }
@@ -961,39 +970,73 @@ function fillForm(w?: WarehouseStructure) {
 
 async function loadZones() {
   if (!current.value) return
-  // 后端按类型补齐缺失分区；每次调用可修复“只缺一种”的历史仓库。
-  await initDefaultZones(current.value.id)
-  const res = await listZones(current.value.id)
-  zones.value = isSuccess(res) ? res.data || [] : []
+  let res = await listZones(current.value.id)
+  let loaded = isSuccess(res) ? res.data || [] : []
+  const existingTypes = new Set(loaded.map(zone => zone.zoneType))
+  const missingDefault = ['STANDARD', 'DEFECTIVE', 'RETURN', 'TEMP'].some(
+    type => !existingTypes.has(type)
+  )
+  if (missingDefault) {
+    const initRes = await initDefaultZones(current.value.id)
+    if (isSuccess(initRes)) {
+      res = await listZones(current.value.id)
+      loaded = isSuccess(res) ? res.data || [] : loaded
+    }
+  }
+  zones.value = loaded
 }
 
 async function loadLocations() {
   if (!current.value) return
   loadingLocations.value = true
   try {
-    const [res, slotRes] = await Promise.all([
+    const [res, summaryRes] = await Promise.all([
       listLocations(current.value.id),
-      listPalletSlots(current.value.id)
+      listLocationSlotSummary(current.value.id)
     ])
     if (isSuccess(res)) locations.value = [...(res.data || [])].sort(compareLocations)
-    if (isSuccess(slotRes)) palletSlots.value = slotRes.data || []
+    slotSummaries.value = isSuccess(summaryRes) ? summaryRes.data || [] : []
+    const locationCodeById = new Map(
+      locations.value.map(location => [location.id, location.locationCode])
+    )
+    occupiedCodes.value = new Set(
+      slotSummaries.value
+        .filter(summary => summary.blocked)
+        .map(summary => locationCodeById.get(summary.locationId))
+        .filter((code): code is string => !!code)
+    )
     current.value.actualPhysicalLocationCount = locations.value.length
-    current.value.actualPalletSlotCount = palletSlots.value.length
+    current.value.actualPalletSlotCount = slotSummaries.value.reduce(
+      (total, summary) => total + summary.totalSlots,
+      0
+    )
   } finally {
     loadingLocations.value = false
   }
-}
-
-async function loadOccupied() {
-  if (!current.value) return
-  const res = await listOccupiedLocations(current.value.id)
-  occupiedCodes.value = new Set(isSuccess(res) ? res.data || [] : [])
 }
 
 async function loadVirtual() {
   if (!current.value) return
   const res = await listVirtualLocations(current.value.id)
   virtualLocs.value = isSuccess(res) ? res.data || [] : []
+}
+
+async function loadStructureLock() {
+  if (!current.value) return
+  const res = await getStructureLock(current.value.id)
+  if (!isSuccess(res) || !res.data || !current.value) return
+  current.value = {
+    ...current.value,
+    structureLocked: res.data.locked,
+    occupied: res.data.occupied,
+    occupiedLocationCount: res.data.occupiedLocationCount,
+    assigned: res.data.assigned,
+    assignedRackCount: res.data.assignedRackCount,
+    assignedOperatorNames: res.data.assignedOperatorNames,
+    activePalletCount: res.data.activePalletCount,
+    unfinishedTransferCount: res.data.unfinishedTransferCount,
+    inProgressStocktakeCount: res.data.inProgressStocktakeCount
+  }
 }
 
 async function addVirtual() {
@@ -1077,7 +1120,11 @@ async function savePalletRuleSettings() {
     }
     current.value = { ...current.value, ...rules }
     palletRuleEditing.value = false
-    message.success('托盘规则已保存')
+    if ((res.data || 0) > 0) {
+      message.warning(`托盘规则已保存，当前有 ${res.data} 个在位托盘超过新承重，请安排复核`)
+    } else {
+      message.success('托盘规则已保存')
+    }
     emits('success')
   } finally {
     savingPalletRules.value = false
@@ -1089,6 +1136,8 @@ function openDrawer(warehouse: WarehouseStructure) {
   fillForm(warehouse)
   zones.value = []
   locations.value = []
+  palletSlots.value = []
+  slotSummaries.value = []
   selectedIds.value = new Set()
   settingMode.value = false
   viewMode.value = 'grid'
@@ -1099,8 +1148,8 @@ function openDrawer(warehouse: WarehouseStructure) {
   palletRuleEditing.value = false
   loadZones()
   loadLocations()
-  loadOccupied()
   loadVirtual()
+  loadStructureLock()
 }
 
 defineExpose({ open: openDrawer })

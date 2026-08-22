@@ -111,8 +111,10 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		Assert.notNull(detail, "入库单不存在");
 
 		// 查询明细列表
-		List<PurchaseInboundItemVO> items = purchaseInboundItemService.getVoListByInboundOrderId(id);
+		List<PurchaseInboundItemVO> items = purchaseInboundItemService
+				.getVoListByInboundOrderId(id, detail.getErpTenantId());
 		detail.setItems(items);
+		fillOwnerAndOperator(Collections.singletonList(detail));
 
 		// 注意：物流单扩展信息由 Controller 层组装，避免 Service 间依赖
 
@@ -251,6 +253,7 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 				continue;
 			}
 			vo.setOwnerName(owner.getTenantName());
+			vo.setOwnerCode(owner.getTenantCode());
 			Long operatorId = owner.getParentWmsTenantId();
 			vo.setOperatorId(operatorId);
 			SysTenant operator = operatorId == null ? null : operatorMap.get(operatorId);
@@ -285,6 +288,24 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 	 * 校验实到数量不超过应到数量
 	 * @param items 明细DTO列表
 	 */
+	private String buildInboundNo(Long ownerId, String suppliedInboundNo) {
+		Assert.hasText(suppliedInboundNo, "Inbound number is required");
+		SysTenant owner = sysTenantMapper.selectById(ownerId);
+		Assert.notNull(owner, "Owner does not exist");
+		Assert.hasText(owner.getTenantName(), "Owner name is not configured");
+
+		String prefix = owner.getTenantName().trim().replaceAll("\\s+", "_").toUpperCase();
+		String raw = suppliedInboundNo.trim();
+		String expectedPrefix = prefix + "-";
+		if (raw.regionMatches(true, 0, expectedPrefix, 0, expectedPrefix.length())) {
+			raw = raw.substring(expectedPrefix.length());
+		}
+		Assert.hasText(raw, "Inbound number is required");
+		String fullNo = expectedPrefix + raw;
+		Assert.isTrue(fullNo.length() <= 100, "Full inbound number cannot exceed 100 characters");
+		return fullNo;
+	}
+
 	private void validateItemQuantities(List<PurchaseInboundItemDTO> items) {
 		for (PurchaseInboundItemDTO item : items) {
 			Assert.isTrue(item.getActualQuantity() <= item.getExpectedQuantity(),
@@ -333,7 +354,9 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 	@Transactional(rollbackFor = Exception.class)
 	public Long createOrder(PurchaseInboundDTO dto) {
 		// 校验入库单号唯一性
-		checkInboundNoUnique(dto.getInboundNo(), null);
+		Long ownerId = resolveOwnerTenantId();
+		String inboundNo = buildInboundNo(ownerId, dto.getInboundNo());
+		checkInboundNoUnique(inboundNo, null);
 
 		// warehouseId 由 Facade 设置，不再依赖 ShippingOrderService
 		Assert.notNull(dto.getWarehouseId(), "仓库ID不能为空");
@@ -347,10 +370,11 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 
 		// 转换实体
 		PurchaseInboundOrder order = PurchaseInboundConverter.INSTANCE.dtoToEntity(dto);
+		order.setInboundNo(inboundNo);
 
 		// 来源=采购、货主归属=当前货主、初始状态=草稿
 		order.setSourceType(InboundSourceType.PURCHASE.name());
-		order.setErpTenantId(resolveOwnerTenantId());
+		order.setErpTenantId(ownerId);
 		order.setOrderStatus(PurchaseInboundStatus.DRAFT.name());
 
 		// 保存入库单
@@ -405,17 +429,19 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public Long createManualOrder(ManualInboundDTO dto) {
-		checkInboundNoUnique(dto.getInboundNo(), null);
+		Long ownerId = resolveOwnerTenantId();
+		String inboundNo = buildInboundNo(ownerId, dto.getInboundNo());
+		checkInboundNoUnique(inboundNo, null);
 		Assert.notNull(dto.getWarehouseId(), "仓库ID不能为空");
 		Assert.notEmpty(dto.getItems(), "入库明细不能为空");
 
 		PurchaseInboundOrder order = new PurchaseInboundOrder();
-		order.setInboundNo(dto.getInboundNo());
+		order.setInboundNo(inboundNo);
 		order.setWarehouseId(dto.getWarehouseId());
 		order.setInboundDate(dto.getInboundDate());
 		order.setRemark(dto.getRemark());
 		order.setSourceType(InboundSourceType.MANUAL.name());
-		order.setErpTenantId(resolveOwnerTenantId());
+		order.setErpTenantId(ownerId);
 		order.setOrderStatus(PurchaseInboundStatus.DRAFT.name());
 		this.save(order);
 
@@ -459,20 +485,22 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 	 */
 	@Transactional(rollbackFor = Exception.class)
 	public Long createCustomReturnOrder(CustomReturnDTO dto) {
-		checkInboundNoUnique(dto.getInboundNo(), null);
+		Long ownerId = resolveOwnerTenantId();
+		String inboundNo = buildInboundNo(ownerId, dto.getInboundNo());
+		checkInboundNoUnique(inboundNo, null);
 		Assert.notNull(dto.getWarehouseId(), "仓库ID不能为空");
 		Assert.notEmpty(dto.getItems(), "退货明细不能为空");
 		Assert.isTrue(CustomReturnType.isValid(dto.getReturnType()), "退货类型不合法");
 
 		PurchaseInboundOrder order = new PurchaseInboundOrder();
-		order.setInboundNo(dto.getInboundNo());
+		order.setInboundNo(inboundNo);
 		order.setReturnType(dto.getReturnType());
 		order.setRefNo(dto.getRefNo());
 		order.setWarehouseId(dto.getWarehouseId());
 		order.setInboundDate(dto.getInboundDate());
 		order.setRemark(dto.getRemark());
 		order.setSourceType(InboundSourceType.CUSTOM_RETURN.name());
-		order.setErpTenantId(resolveOwnerTenantId());
+		order.setErpTenantId(ownerId);
 		order.setOrderStatus(PurchaseInboundStatus.DRAFT.name());
 		this.save(order);
 

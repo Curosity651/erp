@@ -12,13 +12,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -142,6 +145,27 @@ class PlatformDashboardServiceTest {
                         vo.getCapacity().getByZone().stream()
                                 .map(PlatformDashboardDataVO.ZoneOccupancy::getZone)
                                 .collect(java.util.stream.Collectors.toList()));
+    }
+
+    @Test
+    void dashboard_queries_use_moscow_business_date() {
+        asPlatform();
+        when(mapper.selectOnHand(any())).thenReturn(new DashboardRowVO.StockRow());
+        when(mapper.selectTodayInbound(any())).thenReturn(metric(0, 0));
+        when(mapper.selectTodayOutbound(any())).thenReturn(metric(0, 0));
+        when(mapper.selectWarehouseCapacity(any())).thenReturn(Collections.emptyList());
+        when(mapper.selectZoneOccupancy(any())).thenReturn(Collections.emptyList());
+        when(mapper.selectInboundDaily(any())).thenReturn(Collections.emptyList());
+        when(mapper.selectOutboundDaily(any())).thenReturn(Collections.emptyList());
+        when(mapper.selectReturnDaily(any())).thenReturn(Collections.emptyList());
+        when(mapper.selectOperatorByStock(any())).thenReturn(Collections.emptyList());
+        when(mapper.selectOperatorByThroughput(any())).thenReturn(Collections.emptyList());
+
+        PlatformDashboardQO qo = new PlatformDashboardQO();
+        service.getData(qo);
+
+        verify(mapper, atLeastOnce()).selectTodayOutbound(qo);
+        assertThat(qo.getTodayDate()).isEqualTo(LocalDate.now(ZoneId.of("Europe/Moscow")));
     }
 
 }

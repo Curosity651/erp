@@ -11,6 +11,8 @@ public class StocktakeLocationTaskVO {
 	private Long stocktakeOrderId;
 	private Long warehouseId;
 	private Long zoneId;
+	private String zoneName;
+	private String zoneType;
 	private Long locationId;
 	private String locationCode;
 	private Integer isVirtual;

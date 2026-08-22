@@ -23,6 +23,15 @@ public interface WmsOutboundPickAllocationMapper extends ExtendMapper<WmsOutboun
             .orderByAsc(WmsOutboundPickAllocation::getPickOrder));
     }
 
+    default List<WmsOutboundPickAllocation> selectByOutboundOrderIdForUpdate(Long outboundOrderId) {
+        return this.selectList(WrappersX.lambdaQueryX(WmsOutboundPickAllocation.class)
+            .eq(WmsOutboundPickAllocation::getOutboundOrderId, outboundOrderId)
+            .orderByAsc(WmsOutboundPickAllocation::getInboundDate)
+            .orderByAsc(WmsOutboundPickAllocation::getPickOrder)
+            .orderByAsc(WmsOutboundPickAllocation::getId)
+            .last("FOR UPDATE"));
+    }
+
     default List<WmsOutboundPickAllocation> selectByOrdersAndInventory(
             Collection<Long> outboundOrderIds, Long physicalInventoryId) {
         if (outboundOrderIds == null || outboundOrderIds.isEmpty()) {

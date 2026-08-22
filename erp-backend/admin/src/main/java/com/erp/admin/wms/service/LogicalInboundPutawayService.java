@@ -78,7 +78,7 @@ public class LogicalInboundPutawayService {
 	public LogicalInboundPutawayPlanVO plan(Long inboundOrderId) {
 		PurchaseInboundOrder order = requireReceivedOrder(inboundOrderId, false);
 		Map<String, Integer> received = receivedBySku(order.getId());
-		Map<String, Sku> skus = skuByCode(received.keySet());
+		Map<String, Sku> skus = skuByCode(order.getErpTenantId(), received.keySet());
 		SysTenant owner = tenantMapper.selectById(order.getErpTenantId());
 		Assert.notNull(owner, "货主不存在");
 		Long wmsTenantId = owner.getParentWmsTenantId();
@@ -86,8 +86,8 @@ public class LogicalInboundPutawayService {
 		Set<String> allowedRacks = rackAssignmentService.activeRackNos(order.getWarehouseId(), wmsTenantId);
 		Map<Long, WmsLocation> locations = locationService.listByWarehouse(order.getWarehouseId()).stream()
 				.collect(Collectors.toMap(WmsLocation::getId, Function.identity()));
-		Map<Long, String> zoneTypes = zoneService.listByWarehouse(order.getWarehouseId()).stream()
-				.collect(Collectors.toMap(WmsZone::getId, WmsZone::getZoneType, (left, right) -> left));
+		Map<Long, WmsZone> zones = zoneService.listByWarehouse(order.getWarehouseId()).stream()
+				.collect(Collectors.toMap(WmsZone::getId, Function.identity(), (left, right) -> left));
 		LogicalInboundPutawayPlanVO result = new LogicalInboundPutawayPlanVO();
 		result.setInboundOrderId(order.getId());
 		result.setWarehouseId(order.getWarehouseId());
@@ -105,11 +105,11 @@ public class LogicalInboundPutawayService {
 			item.setRecommendations(recommendationService.recommend(order.getWarehouseId(), order.getErpTenantId(),
 					sku.getSkuCode(), entry.getValue(), GOOD).stream().filter(candidate -> {
 					WmsLocation location = locations.get(candidate.getLocationId());
-					if (location == null || !(isPublicTemp(location) || allowedRacks.contains(location.getRackNo()))) {
+					WmsZone zone = location == null ? null : zones.get(location.getZoneId());
+					if (location == null || !(isPublicTemp(location, zone) || allowedRacks.contains(location.getRackNo()))) {
 						return false;
 					}
-					String zoneType = zoneTypes.get(location.getZoneId());
-					candidate.setZoneType(zoneType);
+					candidate.setZoneType(zone == null ? null : zone.getZoneType());
 					return true;
 				}).collect(Collectors.toList()));
 			result.getItems().add(item);
@@ -128,14 +128,14 @@ public class LogicalInboundPutawayService {
 		validateAllocationTotals(received, lines);
 		Map<Long, WmsLocation> locations = locationService.listByWarehouse(order.getWarehouseId()).stream()
 				.collect(Collectors.toMap(WmsLocation::getId, Function.identity()));
-		Map<Long, String> zoneTypes = zoneService.listByWarehouse(order.getWarehouseId()).stream()
-				.collect(Collectors.toMap(WmsZone::getId, WmsZone::getZoneType, (left, right) -> left));
+		Map<Long, WmsZone> zones = zoneService.listByWarehouse(order.getWarehouseId()).stream()
+				.collect(Collectors.toMap(WmsZone::getId, Function.identity(), (left, right) -> left));
 		SysTenant owner = tenantMapper.selectById(order.getErpTenantId());
 		Assert.notNull(owner, "货主不存在");
 		Long wmsTenantId = owner.getParentWmsTenantId();
 		Assert.notNull(wmsTenantId, "货主未绑定WMS服务商");
 		Set<String> allowedRacks = rackAssignmentService.activeRackNos(order.getWarehouseId(), wmsTenantId);
-		Map<String, Sku> skus = skuByCode(received.keySet());
+		Map<String, Sku> skus = skuByCode(order.getErpTenantId(), received.keySet());
 		Map<Long, List<InboundPutawayDTO.PutawayLine>> byLocation = lines.stream()
 				.collect(Collectors.groupingBy(InboundPutawayDTO.PutawayLine::getLocationId));
 		for (Long locationId : byLocation.keySet().stream().sorted().collect(Collectors.toList())) {
@@ -147,12 +147,14 @@ public class LogicalInboundPutawayService {
 		for (Map.Entry<Long, List<InboundPutawayDTO.PutawayLine>> entry : byLocation.entrySet()) {
 			WmsLocation location = locations.get(entry.getKey());
 			Assert.notNull(location, "目标库位不存在：" + entry.getKey());
-			Assert.isTrue(isPublicTemp(location) || allowedRacks.contains(location.getRackNo()),
+			WmsZone zone = zones.get(location.getZoneId());
+			validateTargetLocation(order.getWarehouseId(), location, zone);
+			Assert.isTrue(isPublicTemp(location, zone) || allowedRacks.contains(location.getRackNo()),
 					"目标库位不属于当前服务商且不是公共暂存区：" + location.getLocationCode());
 			List<LocationCapacityService.PlacementLine> additions = new ArrayList<>();
 			for (InboundPutawayDTO.PutawayLine line : entry.getValue()) {
 				String quality = normalizeQuality(line.getQuality());
-				validateTargetType(quality, location, zoneTypes.get(location.getZoneId()));
+				validateTargetType(quality, location, zone.getZoneType());
 				Sku sku = skus.get(line.getSkuCode());
 				Assert.notNull(sku, "SKU不存在：" + line.getSkuCode());
 				additions.add(LocationCapacityService.fromSku(sku, line.getQuantity()));
@@ -250,14 +252,24 @@ public class LogicalInboundPutawayService {
 						PurchaseInboundOrderItem::getActualQuantity, Integer::sum, LinkedHashMap::new));
 	}
 
-	private Map<String, Sku> skuByCode(Set<String> codes) {
+	private Map<String, Sku> skuByCode(Long erpTenantId, Set<String> codes) {
 		if (codes.isEmpty()) return Collections.emptyMap();
-		return skuMapper.selectBySkuCodes(codes).stream()
-				.collect(Collectors.toMap(Sku::getSkuCode, Function.identity(), (left, right) -> left));
+		return TenantContext.runAs(erpTenantId, () -> skuMapper.selectBySkuCodes(codes).stream()
+				.collect(Collectors.toMap(Sku::getSkuCode, Function.identity(), (left, right) -> left)));
 	}
 
-	private boolean isPublicTemp(WmsLocation location) {
-		return "TEMP".equalsIgnoreCase(location.getLocationType()) && Integer.valueOf(1).equals(location.getPublicShared());
+	public static boolean isPublicTemp(WmsLocation location, WmsZone zone) {
+		return location != null && zone != null && "TEMP".equalsIgnoreCase(zone.getZoneType())
+				&& Integer.valueOf(1).equals(location.getPublicShared());
+	}
+
+	public static void validateTargetLocation(Long warehouseId, WmsLocation location, WmsZone zone) {
+		Assert.notNull(location, "目标库位不存在");
+		Assert.isTrue(warehouseId.equals(location.getWarehouseId()),
+				"目标库位不属于入库单仓库：" + location.getLocationCode());
+		Assert.notNull(zone, "目标库位分区不存在或不属于入库单仓库：" + location.getLocationCode());
+		Assert.isTrue(warehouseId.equals(zone.getWarehouseId()),
+				"目标库位分区不属于入库单仓库：" + location.getLocationCode());
 	}
 
 	private String normalizeQuality(String quality) {

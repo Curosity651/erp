@@ -68,6 +68,18 @@ public class LocationTransferPageVO {
 	@Schema(title = "调整完成时间")
 	private LocalDateTime completeTime;
 
+	@Schema(title = "创建人ID")
+	private Long createBy;
+
+	@Schema(title = "创建人名称")
+	private String createByName;
+
+	@Schema(title = "调整完成操作人ID")
+	private Long completeBy;
+
+	@Schema(title = "操作人名称；已完成取完成操作人，未完成取创建人")
+	private String operatorUserName;
+
 	@Schema(title = "创建时间")
 	private LocalDateTime createTime;
 

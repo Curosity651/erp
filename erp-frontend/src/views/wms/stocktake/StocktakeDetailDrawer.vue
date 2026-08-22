@@ -26,6 +26,8 @@
             detail.confirmTime || '-'
           }}</a-descriptions-item>
           <a-descriptions-item label="创建人">{{ detail.createByName || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="确认人">{{ detail.confirmByName || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="操作人">{{ detail.operatorNames || '-' }}</a-descriptions-item>
           <a-descriptions-item label="创建时间">{{ detail.createTime }}</a-descriptions-item>
           <a-descriptions-item label="备注" :span="2">{{
             detail.remark || '-'
@@ -85,7 +87,10 @@
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'skuInfo'">
-              <sku-brief-cell :brief="record.skuBrief" />
+              <div class="sku-info-cell">
+                <div class="sku-code">{{ record.warehouseSkuCode || record.skuCode }}</div>
+                <div class="sku-name">{{ record.skuBrief?.skuName || record.skuBrief?.skuChineseName || '-' }}</div>
+              </div>
             </template>
             <template v-else-if="column.key === 'sourceType'">
               <a-tag :color="record.sourceType === 'ADDED' ? 'orange' : 'blue'">
@@ -112,7 +117,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { PlusOutlined, MinusOutlined } from '@ant-design/icons-vue'
-import { SkuBriefCell } from '@/components/Sku'
 import { getStocktakeDetail } from '@/api/wms/stocktake'
 import { isSuccess } from '@/api'
 import type { StocktakeDetailVO, StocktakeStatus, StocktakeItemVO } from '@/api/wms/stocktake/types'
@@ -131,6 +135,7 @@ const showDiffOnly = ref(false)
 // 盘点单状态映射
 const StocktakeStatusMap: Record<string, string> = {
   COUNTING: '盘点中',
+  REVIEWING: '待复核',
   CONFIRMED: '已确认',
   CANCELLED: '已取消'
 }
@@ -141,6 +146,7 @@ const StocktakeStatusMap: Record<string, string> = {
 const getStatusColor = (status: StocktakeStatus): string => {
   const colorMap: Record<string, string> = {
     COUNTING: 'processing',
+    REVIEWING: 'warning',
     CONFIRMED: 'success',
     CANCELLED: 'error'
   }
@@ -178,6 +184,7 @@ const filteredItems = computed(() => {
     result = result.filter(
       (item: StocktakeItemVO) =>
         item.skuCode.toLowerCase().includes(keyword) ||
+        (item.warehouseSkuCode || '').toLowerCase().includes(keyword) ||
         (item.skuBrief?.skuName || '').toLowerCase().includes(keyword)
     )
   }
@@ -211,6 +218,12 @@ const lossQuantity = computed(() => {
 
 // 盘点明细列定义
 const itemColumns = [
+  {
+    title: '库位/托位',
+    key: 'position',
+    customRender: ({ record }: any) => record.slotCode || record.locationCode || '-',
+    width: 160
+  },
   { title: 'SKU信息', key: 'skuInfo', width: 200 },
   { title: '来源', key: 'sourceType', width: 70, align: 'center' as const },
   { title: '系统数量', dataIndex: 'systemQuantity', width: 90, align: 'right' as const },

@@ -9,7 +9,12 @@ import type {
   LogisticsChannelVO,
   PackPackageDTO,
   OzonActBatchVO,
-  PackageScanDTO
+  PackageScanDTO,
+  PackageLabelScanDTO,
+  PackShipPackageQO,
+  PackShipPackagePageVO,
+  ShipPackageDTO,
+  LabelBatchVO
 } from './types'
 import { mockPage, mockDetail, mockPack, mockShip, mockChannels } from './mock'
 
@@ -85,6 +90,27 @@ export function scanPackPackage(dto: PackageScanDTO): Promise<ApiResult<void>> {
   return httpClient.post(`${BASE}/pack-package/scan`, dto)
 }
 
+export function confirmPackageLabel(dto: PackageLabelScanDTO): Promise<ApiResult<void>> {
+  return httpClient.post(`${BASE}/pack-package/label-scan`, dto)
+}
+
+export function pagePackShipPackages(
+  pageParam: PageParam,
+  qo: PackShipPackageQO
+): Promise<ApiResult<PageResult<PackShipPackagePageVO>>> {
+  return httpClient.get(`${BASE}/package-page`, { params: { ...pageParam, ...qo } })
+}
+
+export function locatePackShipPackage(
+  scanCode: string
+): Promise<ApiResult<PackShipPackagePageVO>> {
+  return httpClient.get(`${BASE}/package/locate`, { params: { scanCode } })
+}
+
+export function confirmShipPackage(dto: ShipPackageDTO): Promise<ApiResult<ShipResultVO>> {
+  return httpClient.post(`${BASE}/ship-package`, dto)
+}
+
 export function confirmExternalHandover(
   outboundOrderId: number,
   packageId: number
@@ -94,8 +120,14 @@ export function confirmExternalHandover(
   })
 }
 
-export function prepareOutboundLabels(outboundOrderId: number): Promise<ApiResult<any>> {
+export function prepareOutboundLabels(outboundOrderId: number): Promise<ApiResult<LabelBatchVO>> {
   return httpClient.post(`${BASE}/documents/labels`, undefined, { params: { outboundOrderId } })
+}
+
+export function getLatestOutboundLabels(
+  outboundOrderId: number
+): Promise<ApiResult<LabelBatchVO | null>> {
+  return httpClient.get(`${BASE}/documents/labels/latest`, { params: { outboundOrderId } })
 }
 
 export function prepareOzonAct(

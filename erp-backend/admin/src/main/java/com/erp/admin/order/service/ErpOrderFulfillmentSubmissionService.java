@@ -56,11 +56,12 @@ public class ErpOrderFulfillmentSubmissionService {
 
 		FulfillmentCreateCommand command = buildCommand(order, erpTenantId, wmsTenantId, warehouseId);
 		Long fulfillmentId = fulfillmentOrderService.createAndReserve(command);
+		FulfillmentStatus currentStatus = fulfillmentOrderService.statusOf(fulfillmentId);
 		ErpOrder update = new ErpOrder();
 		update.setId(order.getId());
 		update.setFulfillmentOrderId(fulfillmentId);
 		update.setWmsWarehouseId(warehouseId);
-		update.setWarehouseFulfillmentStatus(FulfillmentStatus.WAITING_SHELF.name());
+		update.setWarehouseFulfillmentStatus(currentStatus.name());
 		Assert.isTrue(orderMapper.updateById(update) == 1, "订单仓库状态更新失败");
 		return fulfillmentId;
 	}

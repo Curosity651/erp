@@ -36,6 +36,9 @@ public class AdjustmentOrderItem {
 	@Schema(title = "目标批次ID（wms_physical_inventory.id）——报废锁定到具体批次/库位")
 	private Long physicalInventoryId;
 
+	@Schema(title = "逻辑库位库存ID")
+	private Long sourceInventoryId;
+
 	@Schema(title = "库位编码（冗余展示，取自批次）")
 	private String locationCode;
 

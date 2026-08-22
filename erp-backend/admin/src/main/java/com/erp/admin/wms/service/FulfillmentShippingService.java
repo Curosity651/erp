@@ -4,8 +4,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.erp.admin.order.mapper.ErpOrderMapper;
-import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.erp.admin.wms.mapper.WmsFulfillmentItemMapper;
 import com.erp.admin.wms.mapper.WmsFulfillmentOrderMapper;
@@ -25,7 +23,8 @@ import org.springframework.util.Assert;
 public class FulfillmentShippingService {
 	private final WmsFulfillmentOrderMapper orderMapper;
 	private final WmsFulfillmentItemMapper itemMapper;
-	private final ErpOrderMapper erpOrderMapper;
+	private final FulfillmentProgressService progressService;
+	private final PlatformLabelVerificationService labelVerificationService;
 	private final FulfillmentPlatformActionService platformActions;
 	private final LocationInventoryService inventoryService;
 	private final WarehouseBillingService billingService;
@@ -54,7 +53,7 @@ public class FulfillmentShippingService {
 		WmsFulfillmentOrder order = requireStatus(fulfillmentId, FulfillmentStatus.WAITING_PACK,
 				FulfillmentStatus.PACKED);
 		Assert.hasText(order.getLabelBarcode(), "请先获取并打印面单");
-		Assert.isTrue(order.getLabelBarcode().equals(barcode), "面单条码与当前订单不匹配");
+		Assert.isTrue(labelVerificationService.matches(order, barcode), "面单条码与当前订单不匹配");
 		platformActions.markReady(fulfillmentId);
 		order.setLabelVerifiedTime(LocalDateTime.now());
 		orderMapper.updateById(order);
@@ -71,6 +70,7 @@ public class FulfillmentShippingService {
 		orderMapper.updateById(order);
 		Assert.isTrue(orderMapper.transit(fulfillmentId, FulfillmentStatus.WAITING_PACK,
 				FulfillmentStatus.PACKED) == 1, "订单状态已变化，请刷新后重试");
+		progressService.sync(order, FulfillmentStatus.PACKED);
 	}
 
 	public FulfillmentBatchResultVO ship(List<Long> fulfillmentIds) {
@@ -111,13 +111,7 @@ public class FulfillmentShippingService {
 		orderMapper.updateById(order);
 		Assert.isTrue(orderMapper.transit(fulfillmentId, FulfillmentStatus.PACKED,
 				FulfillmentStatus.SHIPPED) == 1, "签出状态更新失败");
-		if (!"MANUAL".equals(order.getSourceType()) && order.getSourceOrderId() != null) {
-			ErpOrder erpOrder = erpOrderMapper.selectById(order.getSourceOrderId());
-			if (erpOrder != null) {
-				erpOrder.setWarehouseFulfillmentStatus(FulfillmentStatus.SHIPPED.name());
-				erpOrderMapper.updateById(erpOrder);
-			}
-		}
+		progressService.sync(order, FulfillmentStatus.SHIPPED);
 	}
 
 	private WmsFulfillmentOrder requireStatus(Long id, FulfillmentStatus... statuses) {

@@ -46,7 +46,8 @@ class FulfillmentOrderServiceTest {
 		FulfillmentCreateCommand command = command();
 
 		assertThat(service.createAndReserve(command)).isEqualTo(91L);
-		verify(reservationService).reserve(91L, command);
+		verify(reservationService).reserve(org.mockito.ArgumentMatchers.eq(91L),
+				org.mockito.ArgumentMatchers.eq(command), org.mockito.ArgumentMatchers.anyList());
 		verify(orderMapper).transit(91L, FulfillmentStatus.DRAFT, FulfillmentStatus.WAITING_SHELF);
 	}
 
@@ -54,11 +55,24 @@ class FulfillmentOrderServiceTest {
 	void repeated_submission_returns_existing_order_without_reserving_again() {
 		WmsFulfillmentOrder existing = new WmsFulfillmentOrder();
 		existing.setId(77L);
+		existing.setFulfillmentStatus(FulfillmentStatus.WAITING_PICK);
 		when(orderMapper.selectBySource("OZON", 20L)).thenReturn(existing);
 
 		assertThat(service.createAndReserve(command())).isEqualTo(77L);
 		verify(orderMapper, never()).insert(any());
-		verify(reservationService, never()).reserve(any(), any());
+		verify(reservationService, never()).reserve(any(), any(), any());
+	}
+
+	@Test
+	void cancelled_order_cannot_be_silently_resubmitted() {
+		WmsFulfillmentOrder existing = new WmsFulfillmentOrder();
+		existing.setId(77L);
+		existing.setFulfillmentStatus(FulfillmentStatus.CANCELLED);
+		when(orderMapper.selectBySource("OZON", 20L)).thenReturn(existing);
+
+		assertThatThrownBy(() -> service.createAndReserve(command()))
+				.hasMessageContaining("已取消");
+		verify(reservationService, never()).reserve(any(), any(), any());
 	}
 
 	@Test

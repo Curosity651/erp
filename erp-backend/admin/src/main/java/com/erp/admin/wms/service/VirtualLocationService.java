@@ -93,6 +93,7 @@ public class VirtualLocationService {
 		if (loc == null || loc.getIsVirtual() == null || loc.getIsVirtual() != 1) {
 			throw new BusinessException(400, "虚拟库位不存在：" + id);
 		}
+		warehouseService.validateOperableOwnWarehouse(loc.getWarehouseId());
 		boolean hasStock = physicalInventoryService.listAtLocation(loc.getWarehouseId(), loc.getLocationCode()).stream()
 				.anyMatch(b -> (b.getQuantity() != null && b.getQuantity() > 0)
 						|| (b.getReservedQty() != null && b.getReservedQty() > 0));
@@ -105,7 +106,9 @@ public class VirtualLocationService {
 		if (virtualLocationReferenceMapper.countBusinessReferences(loc.getWarehouseId(), loc.getLocationCode()) > 0) {
 			throw new BusinessException(400, "该虚拟库位仍被业务单据引用，不能删除");
 		}
-		wmsLocationService.removeById(id);
+		if (wmsLocationService.deleteVirtualById(id, loc.getWarehouseId()) != 1) {
+			throw new BusinessException(409, "虚拟库位已发生变化，请刷新后重试");
+		}
 	}
 
 	/** 取（不存在则建）某仓库的虚拟分区ID。 */

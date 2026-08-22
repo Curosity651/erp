@@ -1,5 +1,5 @@
 <template>
-  <a-modal :open="open" title="订单打包" :width="920" :footer="null" @cancel="handleClose">
+  <a-modal :open="open" title="逐单复核打包" :width="980" :footer="null" @cancel="handleClose">
     <a-spin :spinning="loading">
       <div v-if="order" class="order-head">
         <span class="ob-no">{{ order.outboundNo }}</span>
@@ -12,6 +12,12 @@
       </div>
 
       <template v-if="order?.sourceType === 'SALES'">
+        <a-alert
+          type="info"
+          show-icon
+          message="按平台订单依次完成：扫描商品复核 → 装箱 → 打印并粘贴面单 → 扫描面单 → 完成打包。"
+          style="margin-bottom: 12px"
+        />
         <div class="toolbar">
           <a-space>
             <a-tag :color="order.documentMode === 'OWNER_PROVIDED' ? 'gold' : 'blue'">
@@ -22,7 +28,7 @@
               type="primary"
               :loading="preparingLabels"
               @click="handlePrepareLabels"
-              >生成平台面单</a-button
+              >{{ labelBatch ? '重新生成平台面单' : '生成平台面单' }}</a-button
             >
             <a-button
               v-if="order.documentMode === 'WAREHOUSE_PRINT' && order.platform === 'ozon'"
@@ -78,7 +84,16 @@
           </a-button>
         </a-space>
 
-        <a-table :data-source="order.packages || []" :pagination="false" row-key="id" size="small">
+        <a-alert
+          v-if="labelBatch?.failedCount"
+          type="warning"
+          show-icon
+          :message="`有 ${labelBatch.failedCount} 个平台订单的面单生成失败`"
+          :description="labelFailureDescription"
+          style="margin-bottom: 12px"
+        />
+
+        <a-table :data-source="visiblePackages" :pagination="false" row-key="id" size="small">
           <a-table-column title="格口" data-index="sortCode" :width="90">
             <template #default="{ record }">{{ record.sortCode || '—' }}</template>
           </a-table-column>
@@ -86,16 +101,33 @@
           <a-table-column title="商品" :width="280">
             <template #default="{ record }">
               <div v-for="item in record.items" :key="item.skuCode">
-                {{ item.skuCode }}：已复核 {{ item.packedQty || 0 }} / {{ item.qty }}
+                {{ item.warehouseSkuCode || item.skuCode }}：已复核
+                {{ item.packedQty || 0 }} / {{ item.qty }}
               </div>
             </template>
           </a-table-column>
-          <a-table-column title="面单" :width="110" align="center">
+          <a-table-column title="面单贴附" :width="150" align="center">
             <template #default="{ record }">
-              <a-tag v-if="record.labelStatus === 'READY'" color="green">已生成</a-tag>
-              <a-tag v-else-if="record.labelStatus === 'EXTERNAL_CONFIRMED'" color="blue"
-                >已核对</a-tag
+              <a-tag v-if="record.labelStatus === 'ATTACHED_CONFIRMED'" color="green">已贴单</a-tag>
+              <a-space
+                v-else-if="
+                  record.labelStatus === 'READY' || record.labelStatus === 'EXTERNAL_CONFIRMED'
+                "
+                direction="vertical"
+                :size="0"
               >
+                <a-tag :color="record.labelStatus === 'READY' ? 'blue' : 'gold'">
+                  {{ record.labelStatus === 'READY' ? '已生成' : '资料已核对' }}
+                </a-tag>
+                <a-button
+                  type="link"
+                  size="small"
+                  :disabled="!packagePackVerified(record)"
+                  @click="openLabelScan(record)"
+                >
+                  扫描贴单
+                </a-button>
+              </a-space>
               <a-button
                 v-else-if="order.documentMode === 'OWNER_PROVIDED'"
                 type="link"
@@ -123,18 +155,18 @@
               <a-tag v-else color="orange">待生成</a-tag>
             </template>
           </a-table-column>
-          <a-table-column title="打包" :width="150" align="center">
+          <a-table-column title="复核与打包" :width="190" align="center">
             <template #default="{ record }">
               <a-tag v-if="record.packStatus === 'PACKED'" color="green">已完成</a-tag>
               <a-space v-else size="small">
-                <a-button type="link" size="small" @click="openPackScan(record)">扫码</a-button>
+                <a-button type="link" size="small" @click="openPackScan(record)">扫描商品</a-button>
                 <a-button
                   type="link"
                   size="small"
                   :loading="packingId === record.id"
-                  :disabled="!packagePackVerified(record)"
+                  :disabled="!packagePackReady(record)"
                   @click="handlePackagePack(record.id)"
-                  >完成</a-button
+                  >完成打包</a-button
                 >
               </a-space>
             </template>
@@ -150,7 +182,12 @@
           row-key="skuCode"
           size="small"
         >
-          <a-table-column title="SKU" data-index="skuCode" />
+          <a-table-column title="内部SKU">
+            <template #default="{ record }">
+              {{ record.warehouseSkuCode || record.skuCode }}
+              <div class="sku-origin">原SKU：{{ record.skuCode }}</div>
+            </template>
+          </a-table-column>
           <a-table-column title="数量" data-index="qty" :width="90" align="right" />
           <a-table-column title="品质" :width="90" align="center">
             <template #default="{ record }">{{
@@ -198,42 +235,85 @@
         <a-form-item label="平台订单">
           <a-input :value="packScanPackage?.platformOrderId" disabled />
         </a-form-item>
-        <a-form-item label="商品条码或ERP SKU" required>
+        <a-form-item label="商品条码或内部SKU" required>
           <a-input v-model:value="packScanForm.scanCode" autofocus />
         </a-form-item>
         <a-form-item label="本次数量" required>
           <a-input-number v-model:value="packScanForm.quantity" :min="1" style="width: 100%" />
         </a-form-item>
-        <a-checkbox v-model:checked="packScanForm.manual">手工输入ERP SKU</a-checkbox>
+        <a-checkbox v-if="canManual" v-model:checked="packScanForm.manual">
+          手工输入内部SKU
+        </a-checkbox>
+        <a-form-item v-if="packScanForm.manual" label="手工登记原因" required>
+          <a-textarea v-model:value="packScanForm.manualReason" :rows="2" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="labelScanOpen"
+      title="扫描并粘贴平台面单"
+      :confirm-loading="labelScanSubmitting"
+      ok-text="确认贴单"
+      @ok="submitLabelScan"
+    >
+      <a-alert
+        type="warning"
+        show-icon
+        message="请先把面单贴到当前包裹，再扫描面单上的平台订单号。系统会阻止贴错订单。"
+        style="margin-bottom: 16px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="当前平台订单">
+          <a-input :value="labelScanPackage?.platformOrderId" disabled />
+        </a-form-item>
+        <a-form-item label="面单平台订单号" required>
+          <a-input
+            v-model:value="labelScanCode"
+            autofocus
+            placeholder="扫描面单上的平台订单号"
+          />
+        </a-form-item>
       </a-form>
     </a-modal>
   </a-modal>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { isSuccess } from '@/api'
 import {
   confirmExternalDocument,
   confirmExternalHandover,
+  confirmPackageLabel,
   confirmPack,
   confirmPackPackage,
+  getLatestOutboundLabels,
   getPackShipDetail,
   pollOzonAct,
   prepareOutboundLabels,
   prepareOzonAct,
   scanPackPackage
 } from '@/api/wms/outbound-shipping'
-import type { OzonActBatchVO, PackMode, PackShipOrderVO } from '@/api/wms/outbound-shipping/types'
+import type {
+  LabelBatchVO,
+  OzonActBatchVO,
+  PackMode,
+  PackShipOrderVO
+} from '@/api/wms/outbound-shipping/types'
 import type { OutboundPackageVO } from '@/api/wms/outbound-picking/types'
 import { PACK_MODE_OPTIONS } from './packship-constants'
+import { useAuthorize } from '@/hooks/permission'
+import { describeLabelBatchResult } from './label-batch-result'
 
-const props = defineProps<{ open: boolean; orderId?: number }>()
+const props = defineProps<{ open: boolean; orderId?: number; packageId?: number }>()
 const emit = defineEmits<{ (e: 'update:open', value: boolean): void; (e: 'success'): void }>()
 
 const loading = ref(false)
+const { hasPermission } = useAuthorize()
+const canManual = hasPermission('wms:outbound-exec:supervise')
 const submitting = ref(false)
 const preparingLabels = ref(false)
 const preparingAct = ref(false)
@@ -241,14 +321,32 @@ const packingId = ref<number>()
 const order = ref<PackShipOrderVO | null>(null)
 const packMode = ref<PackMode>('BY_ORDER')
 const packerName = ref<string>()
-const labelFiles = ref<any[]>([])
+const labelFiles = ref<LabelBatchVO['files']>([])
+const labelBatch = ref<LabelBatchVO>()
 const actBatch = ref<OzonActBatchVO>()
 const departureDate = ref(dayjs().format('YYYY-MM-DD'))
 const packScanOpen = ref(false)
 const packScanSubmitting = ref(false)
 const packScanPackage = ref<OutboundPackageVO>()
-const packScanForm = ref({ scanCode: '', quantity: 1, manual: false })
+const packScanForm = ref({ scanCode: '', quantity: 1, manual: false, manualReason: '' })
+const labelScanOpen = ref(false)
+const labelScanSubmitting = ref(false)
+const labelScanPackage = ref<OutboundPackageVO>()
+const labelScanCode = ref('')
 let pollTimer: number | undefined
+
+const visiblePackages = computed(() => {
+  const packages = order.value?.packages || []
+  if (!props.packageId) return packages
+  return packages.filter(item => item.id === props.packageId)
+})
+
+const labelFailureDescription = computed(() =>
+  (labelBatch.value?.failedItems || [])
+    .slice(0, 5)
+    .map(item => `${item.platformOrderId || item.orderId}：${item.errorMsg || '平台未返回面单'}`)
+    .join('；')
+)
 
 async function loadData(id: number) {
   loading.value = true
@@ -260,13 +358,23 @@ async function loadData(id: number) {
   }
 }
 
+async function loadLatestLabels(id: number) {
+  const res = await getLatestOutboundLabels(id)
+  if (isSuccess(res) && res.data) {
+    labelBatch.value = res.data
+    labelFiles.value = res.data.files || []
+  }
+}
+
 watch(
   () => [props.open, props.orderId] as const,
   ([open, id]) => {
     if (open && id) {
       labelFiles.value = []
+      labelBatch.value = undefined
       actBatch.value = undefined
       loadData(id)
+      loadLatestLabels(id)
     } else stopPolling()
   },
   { immediate: true }
@@ -278,8 +386,12 @@ async function handlePrepareLabels() {
   try {
     const res = await prepareOutboundLabels(order.value.id)
     if (isSuccess(res)) {
+      labelBatch.value = res.data
       labelFiles.value = res.data?.files || []
-      message.success('平台面单已生成，请下载并打印')
+      const summary = describeLabelBatchResult(res.data || {})
+      if (summary.level === 'success') message.success(summary.text)
+      else if (summary.level === 'warning') message.warning(summary.text)
+      else message.error(summary.text)
       await loadData(order.value.id)
     }
   } finally {
@@ -304,12 +416,16 @@ async function handleExternalHandover(packageId: number) {
 
 function openPackScan(pack: OutboundPackageVO) {
   packScanPackage.value = pack
-  packScanForm.value = { scanCode: '', quantity: 1, manual: false }
+  packScanForm.value = { scanCode: '', quantity: 1, manual: false, manualReason: '' }
   packScanOpen.value = true
 }
 
 async function submitPackScan() {
   if (!order.value || !packScanPackage.value || !packScanForm.value.scanCode.trim()) return
+  if (packScanForm.value.manual && !packScanForm.value.manualReason.trim()) {
+    message.warning('请填写手工登记原因')
+    return
+  }
   packScanSubmitting.value = true
   try {
     const res = await scanPackPackage({
@@ -317,7 +433,8 @@ async function submitPackScan() {
       packageId: packScanPackage.value.id,
       scanCode: packScanForm.value.scanCode.trim(),
       quantity: packScanForm.value.quantity,
-      manual: packScanForm.value.manual
+      manual: packScanForm.value.manual,
+      manualReason: packScanForm.value.manualReason.trim() || undefined
     })
     if (isSuccess(res)) {
       packScanOpen.value = false
@@ -331,6 +448,42 @@ async function submitPackScan() {
 
 function packagePackVerified(pack: OutboundPackageVO) {
   return pack.items.every(item => (item.packedQty || 0) === item.qty)
+}
+
+function packagePackReady(pack: OutboundPackageVO) {
+  return packagePackVerified(pack) && pack.labelStatus === 'ATTACHED_CONFIRMED'
+}
+
+function openLabelScan(pack: OutboundPackageVO) {
+  if (!packagePackVerified(pack)) {
+    message.warning('请先完成该平台订单的商品扫码复核')
+    return
+  }
+  labelScanPackage.value = pack
+  labelScanCode.value = ''
+  labelScanOpen.value = true
+}
+
+async function submitLabelScan() {
+  if (!order.value || !labelScanPackage.value || !labelScanCode.value.trim()) {
+    message.warning('请扫描面单上的平台订单号')
+    return
+  }
+  labelScanSubmitting.value = true
+  try {
+    const res = await confirmPackageLabel({
+      outboundOrderId: order.value.id,
+      packageId: labelScanPackage.value.id,
+      scanCode: labelScanCode.value.trim()
+    })
+    if (isSuccess(res)) {
+      labelScanOpen.value = false
+      message.success('面单与当前平台订单匹配，已确认贴单')
+      await loadData(order.value.id)
+    }
+  } finally {
+    labelScanSubmitting.value = false
+  }
 }
 
 async function handlePackagePack(packageId: number) {

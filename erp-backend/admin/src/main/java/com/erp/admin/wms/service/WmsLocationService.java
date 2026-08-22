@@ -1,6 +1,7 @@
 package com.erp.admin.wms.service;
 
 import java.util.List;
+import java.util.Collections;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
@@ -9,6 +10,7 @@ import com.erp.admin.wms.model.dto.LogicalLocationCreateDTO;
 import com.erp.admin.wms.model.dto.LogicalLocationUpdateDTO;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsLocationInventory;
+import com.erp.admin.wms.model.vo.WarehouseLocationSummaryVO;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.mybatisplus.service.impl.ExtendServiceImpl;
 import org.springframework.stereotype.Service;
@@ -108,6 +110,17 @@ public class WmsLocationService extends ExtendServiceImpl<WmsLocationMapper, Wms
 		return baseMapper.listPhysicalByWarehouse(warehouseId);
 	}
 
+	public List<WmsLocation> listAssignableByWarehouse(Long warehouseId) {
+		return baseMapper.listAssignableByWarehouse(warehouseId);
+	}
+
+	public List<WarehouseLocationSummaryVO> summarizeByWarehouseIds(List<Long> warehouseIds) {
+		if (warehouseIds == null || warehouseIds.isEmpty()) {
+			return Collections.emptyList();
+		}
+		return baseMapper.summarizeByWarehouseIds(warehouseIds);
+	}
+
 	public long countByWarehouse(Long warehouseId) {
 		return baseMapper.countByWarehouse(warehouseId);
 	}
@@ -118,6 +131,10 @@ public class WmsLocationService extends ExtendServiceImpl<WmsLocationMapper, Wms
 
 	public int deletePhysicalByWarehouse(Long warehouseId) {
 		return baseMapper.deletePhysicalByWarehouse(warehouseId);
+	}
+
+	public int deleteVirtualById(Long id, Long warehouseId) {
+		return baseMapper.deleteVirtualById(id, warehouseId);
 	}
 
 	public long countPhysicalByWarehouse(Long warehouseId) {
