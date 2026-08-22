@@ -68,12 +68,13 @@
   >
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'status'">
-        <inbound-status-badge :status="record.orderStatus" />
+        <span v-if="record.orderStatus === InboundStatus.RECEIVED" class="pending-record">已收货 · 待登记上架</span>
+        <inbound-status-badge v-else :status="record.orderStatus" />
       </template>
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a v-if="record.orderStatus === InboundStatus.RECEIVED" @click="openPutaway(record)">
-            上架
+            登记上架
           </a>
           <a v-else-if="record.orderStatus === InboundStatus.COMPLETED" @click="openDetail(record)">
             详情
@@ -226,5 +227,8 @@ export default {
 }
 .inbound-search .search-actions-item {
   margin: 0;
+}
+.pending-record {
+  color: #d46b08;
 }
 </style>

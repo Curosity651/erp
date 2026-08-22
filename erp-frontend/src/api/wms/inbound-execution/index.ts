@@ -21,28 +21,17 @@ export interface InboundReceiveDTO {
   evidenceFileIds: number[]
 }
 
-/** 上架分配行 */
-export interface PutawayLine {
+export interface PutawayRecordLine {
   skuCode: string
   locationId: number
-  overrideReason?: string
-  locationCode?: string
-  palletKey?: string
-  palletId?: number
-  slotCode?: string
   quantity: number
-  quality?: string
-  zoneId?: number
-  capacityPercent?: number
-  capacitySource?: string
-  actualWeightKg?: number
-  manualFull?: boolean
+  quality: 'GOOD' | 'DAMAGED'
+  capacityOverrideReason?: string
 }
 
-/** 上架 DTO */
-export interface InboundPutawayDTO {
+export interface PutawayRecordDTO {
   inboundOrderId: number
-  lines: PutawayLine[]
+  lines: PutawayRecordLine[]
   confirmedVolumeCbm?: number
   afterHours?: boolean
   afterHoursReason?: string
@@ -132,38 +121,47 @@ export interface PutawayReceiptLineVO {
   overrideReason?: string
 }
 
-export interface LocationRecommendationVO {
+export interface PutawayRecordLocationVO {
   locationId: number
   locationCode: string
   rackNo?: string
-  sequenceNo?: number
-  locationType?: string
+  zoneId?: number
+  zoneName?: string
   zoneType?: string
   publicShared?: number
-  recommendedQuantity: number
-  maxByGeometry: number
-  maxByVolume: number
-  maxByWeight: number
-  remainingVolumeMm3: number
-  weightAllowed: boolean
-  skuKindsAllowed: boolean
+  capacityCalculable: boolean
+  capacityVolumeMm3?: number
+  occupiedVolumeMm3?: number
+  occupiedWeightGrams?: number
+  maxWeightGrams?: number
+  skuKindCount?: number
+  maxSkuKinds?: number
+  volumeAllowed?: boolean
+  weightAllowed?: boolean
+  skuKindsAllowed?: boolean
+  utilizationPercent?: number
 }
 
-export interface LogicalPutawaySkuPlanVO {
+export interface PutawayRecordSkuVO {
   skuCode: string
+  warehouseSkuCode?: string
   skuName?: string
+  imageUrl?: string
   receivedQuantity: number
-  outerLengthMm: number
-  outerWidthMm: number
-  outerHeightMm: number
-  outerGrossWeightG: number
-  recommendations: LocationRecommendationVO[]
+  outerLengthMm?: number
+  outerWidthMm?: number
+  outerHeightMm?: number
+  outerGrossWeightG?: number
 }
 
-export interface LogicalInboundPutawayPlanVO {
+export interface PutawayRecordContextVO {
   inboundOrderId: number
+  inboundNo: string
   warehouseId: number
-  items: LogicalPutawaySkuPlanVO[]
+  erpTenantId: number
+  ownerName?: string
+  items: PutawayRecordSkuVO[]
+  locations: PutawayRecordLocationVO[]
 }
 
 /** 平台待作业入库单分页（采购 + 自定义全来源，平台看全部） */
@@ -192,17 +190,17 @@ export function receiveInbound(dto: InboundReceiveDTO) {
   return httpClient.post<ApiResult<void>>('/wms/inbound-execution/receive', dto)
 }
 
-/** 平台上架（分配库位写批次） */
-export function putawayInbound(dto: InboundPutawayDTO) {
+/** 登记工作人员已经完成的实际放置结果。 */
+export function recordPutaway(dto: PutawayRecordDTO) {
   return httpClient.post<ApiResult<PutawayReceiptLineVO[]>>(
-    '/wms/inbound-execution/logical-putaway',
+    '/wms/inbound-execution/putaway-record',
     dto
   )
 }
 
-export function getPutawayPlan(inboundOrderId: number) {
-  return httpClient.get<ApiResult<LogicalInboundPutawayPlanVO>>(
-    '/wms/inbound-execution/logical-putaway-plan',
+export function getPutawayRecordContext(inboundOrderId: number) {
+  return httpClient.get<ApiResult<PutawayRecordContextVO>>(
+    '/wms/inbound-execution/putaway-record-context',
     { params: { inboundOrderId } }
   )
 }

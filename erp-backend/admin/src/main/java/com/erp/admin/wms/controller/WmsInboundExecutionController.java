@@ -2,6 +2,7 @@ package com.erp.admin.wms.controller;
 
 import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.InboundReceiveDTO;
+import com.erp.admin.wms.model.dto.PutawayRecordDTO;
 import com.erp.admin.wms.model.entity.PurchaseInboundOrder;
 import com.erp.admin.wms.model.qo.PurchaseInboundQO;
 import com.erp.admin.wms.model.vo.AvailableLocationVO;
@@ -10,6 +11,7 @@ import com.erp.admin.wms.model.vo.PutawayReceiptLineVO;
 import com.erp.admin.wms.model.vo.PurchaseInboundPageVO;
 import com.erp.admin.wms.model.vo.InboundPutawayPlanVO;
 import com.erp.admin.wms.model.vo.LogicalInboundPutawayPlanVO;
+import com.erp.admin.wms.model.vo.PutawayRecordContextVO;
 import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.service.PurchaseInboundService;
 import com.erp.admin.wms.service.WmsInboundExecutionService;
@@ -20,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
 import org.ballcat.common.model.result.ApiResult;
+import org.ballcat.common.core.exception.BusinessException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -87,13 +90,20 @@ public class WmsInboundExecutionController {
 	@GetMapping("/putaway-plan")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
 	public ApiResult<InboundPutawayPlanVO> putawayPlan(@RequestParam Long inboundOrderId) {
-		return ApiResult.ok(inboundExecutionService.planPutaway(inboundOrderId));
+		throw legacyPutawayDisabled();
 	}
 
 	@GetMapping("/logical-putaway-plan")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
 	public ApiResult<LogicalInboundPutawayPlanVO> logicalPutawayPlan(@RequestParam Long inboundOrderId) {
-		return ApiResult.ok(logicalPutawayService.plan(inboundOrderId));
+		throw legacyPutawayDisabled();
+	}
+
+	@Operation(summary = "取得人工上架补录上下文")
+	@GetMapping("/putaway-record-context")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<PutawayRecordContextVO> putawayRecordContext(@RequestParam Long inboundOrderId) {
+		return ApiResult.ok(logicalPutawayService.context(inboundOrderId));
 	}
 
 	@Operation(summary = "收货(录实收数量)")
@@ -108,13 +118,20 @@ public class WmsInboundExecutionController {
 	@PostMapping("/putaway")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
 	public ApiResult<List<PalletSummaryVO>> putaway(@Validated @RequestBody InboundPutawayDTO dto) {
-		return ApiResult.ok(inboundExecutionService.putaway(dto));
+		throw legacyPutawayDisabled();
 	}
 
 	@PostMapping("/logical-putaway")
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
 	public ApiResult<List<PutawayReceiptLineVO>> logicalPutaway(@Validated @RequestBody InboundPutawayDTO dto) {
-		return ApiResult.ok(logicalPutawayService.putaway(dto));
+		throw legacyPutawayDisabled();
+	}
+
+	@Operation(summary = "登记现场实际上架结果")
+	@PostMapping("/putaway-record")
+	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
+	public ApiResult<List<PutawayReceiptLineVO>> putawayRecord(@Validated @RequestBody PutawayRecordDTO dto) {
+		return ApiResult.ok(logicalPutawayService.record(dto));
 	}
 
 	@Operation(summary = "查询已上架入库单关联托盘")
@@ -129,6 +146,10 @@ public class WmsInboundExecutionController {
 	@PreAuthorize("hasAuthority('wms:inbound-exec:oper')")
 	public ApiResult<List<PutawayReceiptLineVO>> getPutawayReceiptLines(@RequestParam Long inboundOrderId) {
 		return ApiResult.ok(inboundExecutionService.getPutawayReceiptLines(inboundOrderId));
+	}
+
+	private BusinessException legacyPutawayDisabled() {
+		return new BusinessException(410, "旧版上架模式已停用，请使用上架记录功能");
 	}
 
 }

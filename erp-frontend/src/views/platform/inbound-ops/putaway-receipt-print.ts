@@ -33,6 +33,7 @@ export function printPutawayReceipt(
         <td>${escapeHtml(line.warehouseSkuCode || line.skuCode)}</td>
         <td>${qualityText(line.quality)}</td>
         <td class="number">${escapeHtml(line.quantity)}</td>
+        <td>${escapeHtml(line.overrideReason)}</td>
       </tr>`
     )
     .join('')
@@ -70,7 +71,7 @@ export function printPutawayReceipt(
         </div>
         <table>
           <thead>
-            <tr><th>序号</th><th>逻辑库位</th><th>内部 SKU</th><th>品质</th><th>数量</th></tr>
+            <tr><th>序号</th><th>逻辑库位</th><th>内部 SKU</th><th>品质</th><th>数量</th><th>现场说明</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
