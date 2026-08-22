@@ -20,6 +20,7 @@ import com.erp.admin.shop.model.enums.ShopStatusEnum;
 import com.erp.admin.shop.model.qo.ShopQO;
 import com.erp.admin.shop.model.vo.ShopDetailVO;
 import com.erp.admin.shop.model.vo.ShopPageVO;
+import com.erp.admin.wms.service.WmsLogisticsProductService;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
@@ -28,6 +29,8 @@ import org.ballcat.common.util.json.TypeReference;
 import org.ballcat.mybatisplus.service.impl.ExtendServiceImpl;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -35,6 +38,9 @@ import org.springframework.util.StringUtils;
 public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 
 	private final CredentialService credentialService;
+
+	@Autowired(required = false)
+	private WmsLogisticsProductService logisticsProductService;
 
 	public PageResult<ShopPageVO> queryPage(PageParam pageParam, ShopQO qo) {
 		return baseMapper.queryPage(pageParam, qo);
@@ -79,12 +85,14 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 			throw new IllegalArgumentException("该平台店铺已存在");
 		}
 
+		validateDefaults(req);
 		Shop shop = new Shop();
 		shop.setPlatform(item.getPlatform());
 		shop.setPlatformShopId(item.getPlatformShopId());
 		shop.setName(item.getShopName());
 		shop.setErpShopName(req.getErpShopName());
 		shop.setDefaultWmsWarehouseId(req.getDefaultWmsWarehouseId());
+		shop.setDefaultLogisticsProductId(req.getDefaultLogisticsProductId());
 		shop.setStatus(ShopStatusEnum.ENABLED.getCode());
 		shop.setCredential(JsonUtils.toJson(item.getCredential()));
 		shop.setLastTestedAt(LocalDateTime.now());
@@ -99,6 +107,7 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 			throw new IllegalArgumentException("店铺不存在");
 		}
 
+		validateDefaults(req);
 		if (credentialChanged) {
 			if (testItem == null) {
 				throw new IllegalArgumentException("凭证修改后需重新测试");
@@ -115,6 +124,7 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 
 		db.setErpShopName(req.getErpShopName());
 		db.setDefaultWmsWarehouseId(req.getDefaultWmsWarehouseId());
+		db.setDefaultLogisticsProductId(req.getDefaultLogisticsProductId());
 		db.setUpdateTime(LocalDateTime.now());
 		this.updateById(db);
 	}
@@ -149,7 +159,16 @@ public class ShopService extends ExtendServiceImpl<ShopMapper, Shop> {
 		});
 		vo.setCredentialMask(credentialService.mask(db.getPlatform(), credMap));
 		vo.setDefaultWmsWarehouseId(db.getDefaultWmsWarehouseId());
+		vo.setDefaultLogisticsProductId(db.getDefaultLogisticsProductId());
 		return vo;
+	}
+
+	private void validateDefaults(CreateOrUpdateShopRequest req) {
+		Assert.notNull(req.getDefaultWmsWarehouseId(), "请选择默认WMS仓库");
+		Assert.notNull(req.getDefaultLogisticsProductId(), "请选择默认物流产品");
+		Assert.notNull(logisticsProductService, "物流产品服务未初始化");
+		logisticsProductService.requireEnabledForOwner(req.getDefaultLogisticsProductId(),
+				TenantContext.getCurrentTenant());
 	}
 
 	/**

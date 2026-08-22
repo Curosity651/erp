@@ -58,6 +58,8 @@ public class WmsLogisticsProductService extends ExtendServiceImpl<WmsLogisticsPr
     public void saveProduct(LogisticsProductDTO dto) {
         Long wmsTenantId = currentOperatorId();
         Assert.isTrue(dto.getUnitPrice() != null && dto.getUnitPrice().compareTo(BigDecimal.ZERO) >= 0, "单价不能为负");
+		Assert.hasText(dto.getProductCode(), "产品编码不能为空");
+		Assert.hasText(dto.getCurrency(), "币种不能为空");
 
         WmsLogisticsProduct entity;
         if (dto.getId() != null) {
@@ -68,9 +70,11 @@ public class WmsLogisticsProductService extends ExtendServiceImpl<WmsLogisticsPr
             entity.setStatus(1);
         }
         entity.setProductName(dto.getProductName());
-        entity.setProductCode(dto.getProductCode());
+        entity.setProductCode(dto.getProductCode().trim().toUpperCase());
         entity.setTags(dto.getTags() == null || dto.getTags().isEmpty() ? null : JsonUtils.toJson(dto.getTags()));
         entity.setUnitPrice(dto.getUnitPrice());
+		entity.setCurrency(dto.getCurrency().trim().toUpperCase());
+		entity.setProductDescription(dto.getProductDescription());
         entity.setRemark(dto.getRemark());
         this.saveOrUpdate(entity);
         log.info("物流产品保存, id={}, wmsTenantId={}, name={}", entity.getId(), wmsTenantId, dto.getProductName());
@@ -123,6 +127,19 @@ public class WmsLogisticsProductService extends ExtendServiceImpl<WmsLogisticsPr
         return (product != null && product.getStatus() != null && product.getStatus() == 1) ? product : null;
     }
 
+	public WmsLogisticsProduct requireEnabledForOwner(Long productId, Long erpTenantId) {
+		Assert.notNull(productId, "请选择物流产品");
+		Assert.notNull(erpTenantId, "货主不能为空");
+		SysTenant owner = sysTenantMapper.selectById(erpTenantId);
+		Assert.notNull(owner, "货主不存在");
+		Assert.isTrue(TenantIdentityService.IDENTITY_ERP_USER.equals(owner.getTenantType()), "当前对象不是ERP货主");
+		Assert.notNull(owner.getParentWmsTenantId(), "货主未绑定WMS服务商");
+		WmsLogisticsProduct product = this.getById(productId);
+		Assert.isTrue(product != null && Integer.valueOf(1).equals(product.getStatus()), "物流产品不可用");
+		Assert.isTrue(owner.getParentWmsTenantId().equals(product.getWmsTenantId()), "物流产品不属于当前服务商");
+		return product;
+	}
+
     // ==================== 辅助 ====================
 
     private WmsLogisticsProduct loadOwned(Long id, Long wmsTenantId) {
@@ -151,6 +168,8 @@ public class WmsLogisticsProductService extends ExtendServiceImpl<WmsLogisticsPr
         vo.setProductCode(entity.getProductCode());
         vo.setTags(parseTags(entity.getTags()));
         vo.setUnitPrice(entity.getUnitPrice());
+		vo.setCurrency(entity.getCurrency());
+		vo.setProductDescription(entity.getProductDescription());
         vo.setStatus(entity.getStatus());
         vo.setRemark(entity.getRemark());
         vo.setCreateTime(entity.getCreateTime() == null ? null : entity.getCreateTime().format(DT));

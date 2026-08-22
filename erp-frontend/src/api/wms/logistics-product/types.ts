@@ -12,6 +12,8 @@ export interface LogisticsProductVO {
   tags: string[]
   // 统一单价（每次使用）
   unitPrice: number
+  currency: string
+  productDescription?: string
   // 1启用 / 0停用
   status: number
   remark?: string
@@ -25,6 +27,8 @@ export interface LogisticsProductDTO {
   productCode?: string
   tags?: string[]
   unitPrice: number
+  currency: string
+  productDescription?: string
   remark?: string
 }
 

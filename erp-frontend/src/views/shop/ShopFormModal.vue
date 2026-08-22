@@ -80,6 +80,14 @@
         />
       </a-form-item>
 
+      <a-form-item label="默认物流产品" required>
+        <a-select
+          v-model:value="formModel.defaultLogisticsProductId"
+          :options="logisticsProductOptions"
+          placeholder="确认发货时默认使用，可临时修改"
+        />
+      </a-form-item>
+
       <a-form-item label="测试">
         <a-space>
           <a-button :loading="testing" :disabled="!canTest" @click="testCred">{{ testBtnText }}</a-button>
@@ -104,6 +112,7 @@ import { FormAction } from '@/hooks/form'
 import { PlatformRadioGroup } from '@/components/Platform'
 import { message } from 'ant-design-vue'
 import { getWarehouseOptions } from '@/api/wms/warehouse'
+import { listOwnerLogisticsProducts } from '@/api/wms/logistics-product'
 
 defineOptions({ name: 'ShopFormModal' })
 
@@ -216,6 +225,7 @@ const formModel = reactive<{
   platformShopId?: string
   testToken?: string
   defaultWmsWarehouseId?: number
+  defaultLogisticsProductId?: number
 }>({
   platform: PLATFORMS.WILDBERRIES,
   credential: {}
@@ -229,6 +239,7 @@ const originalMaskedCredential = ref<Record<string, string>>({})
 const testError = ref<string | undefined>()
 const saving = ref(false)
 const warehouseOptions = ref<{ label: string; value: number }[]>([])
+const logisticsProductOptions = ref<{ label: string; value: number }[]>([])
 
 const currentPlatformConfig = computed(() => PLATFORM_FORM_CONFIG[formModel.platform])
 const requiresManualShopName = computed(() => currentPlatformConfig.value.shopNameRequired)
@@ -253,6 +264,7 @@ const canTest = computed(() => {
 const canSave = computed(() => {
   if (!hasText(formModel.erpShopName)) return false
   if (!formModel.defaultWmsWarehouseId) return false
+  if (!formModel.defaultLogisticsProductId) return false
 
   const needRetest =
     action.value === FormAction.CREATE ||
@@ -288,6 +300,7 @@ function open(newAction: FormAction, record?: ShopVO) {
   resetForm()
   action.value = newAction
   loadWarehouseOptions()
+  loadLogisticsProductOptions()
 
   if (newAction === FormAction.CREATE) {
     modalTitle.value = '新增店铺'
@@ -314,6 +327,7 @@ async function loadDetail(id: number) {
   formModel.erpShopName = data.erpShopName
   formModel.platformShopId = data.platformShopId
   formModel.defaultWmsWarehouseId = data.defaultWmsWarehouseId
+  formModel.defaultLogisticsProductId = data.defaultLogisticsProductId
   originalMaskedCredential.value = data.credentialMask || {}
   formModel.credential = { ...originalMaskedCredential.value }
 
@@ -331,7 +345,8 @@ function resetForm() {
     erpShopName: undefined,
     platformShopId: undefined,
     testToken: undefined,
-    defaultWmsWarehouseId: undefined
+    defaultWmsWarehouseId: undefined,
+    defaultLogisticsProductId: undefined
   })
 
   state.value = 'IDLE'
@@ -464,7 +479,8 @@ async function handleSave() {
     erpShopName: formModel.erpShopName!.trim(),
     platformShopId,
     testToken: credentialDirty.value ? formModel.testToken : undefined,
-    defaultWmsWarehouseId: formModel.defaultWmsWarehouseId!
+    defaultWmsWarehouseId: formModel.defaultWmsWarehouseId!,
+    defaultLogisticsProductId: formModel.defaultLogisticsProductId!
   }
 
   try {
@@ -493,6 +509,15 @@ async function loadWarehouseOptions() {
   warehouseOptions.value = (resp.data || [])
     .filter(item => item.warehouseType === 'OWN')
     .map(item => ({ label: `${item.warehouseName} (${item.warehouseCode})`, value: item.id }))
+}
+
+async function loadLogisticsProductOptions() {
+  const resp = await listOwnerLogisticsProducts()
+  if (resp.code !== 200) return
+  logisticsProductOptions.value = (resp.data || []).map(item => ({
+    label: `${item.productName} (${item.currency || 'RUB'} ${Number(item.unitPrice).toFixed(2)})`,
+    value: item.id
+  }))
 }
 
 defineExpose({ open })

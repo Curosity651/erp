@@ -48,7 +48,7 @@
         >
       </template>
       <template v-else-if="column.key === 'unitPrice'">
-        <span class="price">₽ {{ formatMoney(record.unitPrice) }}</span>
+        <span class="price">{{ record.currency || 'RUB' }} {{ formatMoney(record.unitPrice) }}</span>
         <span class="price-per"> / 次</span>
       </template>
       <template v-else-if="column.key === 'status'">
@@ -118,6 +118,7 @@ const columns: ProColumns[] = [
   { title: '编码', dataIndex: 'productCode', key: 'productCode', width: 120 },
   { title: '特性词条', key: 'tags', width: 220 },
   { title: '单价', key: 'unitPrice', width: 130, align: 'right' },
+  { title: '产品说明', dataIndex: 'productDescription', key: 'productDescription', width: 260, ellipsis: true },
   { title: '状态', key: 'status', width: 90, align: 'center' },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
   { title: '操作', key: 'operate', width: 150, align: 'center', fixed: 'right' }

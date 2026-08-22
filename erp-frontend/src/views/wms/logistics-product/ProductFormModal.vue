@@ -41,7 +41,7 @@
         <div class="tag-hint">预置：大件/小件/自提等，可直接输入自定义词条</div>
       </a-form-item>
       <a-form-item
-        label="单价(₽)"
+        label="默认费用"
         name="unitPrice"
         :rules="[{ required: true, message: '请输入单价' }]"
       >
@@ -52,7 +52,20 @@
           style="width: 200px"
           placeholder="每次使用收费"
         />
-        <span class="price-hint">名下货主每使用一次收取该金额</span>
+        <a-select v-model:value="formModel.currency" style="width: 100px; margin-left: 8px">
+          <a-select-option value="RUB">RUB</a-select-option>
+          <a-select-option value="CNY">CNY</a-select-option>
+          <a-select-option value="USD">USD</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="产品说明" name="productDescription">
+        <a-textarea
+          v-model:value="formModel.productDescription"
+          :rows="4"
+          :maxlength="2000"
+          show-count
+          placeholder="说明适用场景、预计时效和仓库处理方式"
+        />
       </a-form-item>
       <a-form-item label="备注" name="remark">
         <a-textarea v-model:value="formModel.remark" :rows="2" :maxlength="500" />
@@ -81,6 +94,8 @@ const formModel = reactive<LogisticsProductDTO>({
   productCode: undefined,
   tags: [],
   unitPrice: undefined as unknown as number,
+  currency: 'RUB',
+  productDescription: undefined,
   remark: undefined
 })
 
@@ -93,6 +108,8 @@ function openModal(record?: LogisticsProductVO) {
   formModel.productCode = record?.productCode
   formModel.tags = record?.tags ? [...record.tags] : []
   formModel.unitPrice = record?.unitPrice as unknown as number
+  formModel.currency = record?.currency || 'RUB'
+  formModel.productDescription = record?.productDescription
   formModel.remark = record?.remark
   open.value = true
 }
