@@ -42,6 +42,26 @@ public class FulfillmentStatusSyncService {
 	}
 
 	@Transactional(rollbackFor = Exception.class)
+	public void cancelFromException(Long fulfillmentOrderId, boolean goodsPicked,
+			String reason) {
+		WmsFulfillmentOrder order = orderMapper.selectForUpdate(fulfillmentOrderId);
+		Assert.notNull(order, "履约订单不存在");
+		Assert.isTrue(order.getFulfillmentStatus() == FulfillmentStatus.EXCEPTION,
+				"订单不是异常状态");
+		if (goodsPicked) {
+			Assert.isTrue(orderMapper.transitWithReason(order.getId(),
+					FulfillmentStatus.EXCEPTION, FulfillmentStatus.CANCEL_RETURNING,
+					reason) == 1, "取消状态已变化");
+			updateErp(order, FulfillmentStatus.CANCEL_RETURNING);
+			return;
+		}
+		inventoryService.release(order.getId());
+		Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.EXCEPTION,
+				FulfillmentStatus.CANCELLED) == 1, "取消状态已变化");
+		updateErp(order, FulfillmentStatus.CANCELLED);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
 	public void scanReturn(FulfillmentCancelReturnScanDTO dto) {
 		WmsFulfillmentOrder order = orderMapper.selectForUpdate(dto.getFulfillmentOrderId());
 		Assert.notNull(order, "履约订单不存在");

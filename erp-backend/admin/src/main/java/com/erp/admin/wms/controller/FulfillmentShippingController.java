@@ -10,6 +10,7 @@ import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
 import com.erp.admin.wms.service.FulfillmentShippingService;
 import com.erp.admin.wms.service.platform.PlatformLabelResult;
 import lombok.RequiredArgsConstructor;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.ballcat.common.model.result.ApiResult;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class FulfillmentShippingController {
 	private final FulfillmentShippingService service;
+	private final PrincipalAttributeAccessor principalAttributeAccessor;
 
 	@GetMapping
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
@@ -35,14 +37,14 @@ public class FulfillmentShippingController {
 	@PostMapping("/{id}/label")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<PlatformLabelResult> label(@PathVariable("id") Long id) {
-		return ApiResult.ok(service.printLabel(id));
+		return ApiResult.ok(service.printLabel(id, principalAttributeAccessor.getUserId()));
 	}
 
 	@PostMapping("/{id}/label/verify")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> verify(@PathVariable("id") Long id,
 			@RequestBody Map<String, String> body) {
-		service.verifyLabel(id, body.get("barcode"));
+		service.verifyLabel(id, body.get("barcode"), principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
 
@@ -50,7 +52,7 @@ public class FulfillmentShippingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> pack(@PathVariable("id") Long id,
 			@Validated @RequestBody FulfillmentPackDTO dto) {
-		service.pack(id, dto);
+		service.pack(id, dto, principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
 

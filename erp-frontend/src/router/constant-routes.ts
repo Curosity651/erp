@@ -27,6 +27,18 @@ export const HOME_ROUTE: RouteRecordRaw = {
     keepAlive: false
   },
   children: [
+    {
+      path: 'ops/fulfillment-picking/work/:taskId',
+      name: 'FulfillmentPickingWork',
+      component: () =>
+        import('@/views/platform/fulfillment-picking/FulfillmentPickingWorkPage.vue'),
+      meta: {
+        name: '拣货任务作业',
+        hideInMenu: true,
+        hideInTab: false,
+        keepAlive: false
+      }
+    },
     // SKU表单路由 - 作为根路由的子路由
     {
       path: 'product/sku/form/:mode/:id?',

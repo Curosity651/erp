@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 
 @Data
@@ -19,6 +20,11 @@ public class WmsFulfillmentPickTask {
 	private Integer orderCount;
 	private Integer totalQuantity;
 	private Long operatorId;
+	private LocalDateTime claimedTime;
 	private LocalDateTime createTime;
 	private LocalDateTime updateTime;
+	@TableField(exist = false)
+	private Integer completedOrderCount;
+	@TableField(exist = false)
+	private Integer exceptionOrderCount;
 }

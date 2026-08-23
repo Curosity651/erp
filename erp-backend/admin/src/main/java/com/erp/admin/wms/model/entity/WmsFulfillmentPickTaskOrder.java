@@ -15,6 +15,13 @@ public class WmsFulfillmentPickTaskOrder {
 	private Long fulfillmentOrderId;
 	private Integer sequenceNo;
 	private String orderStatus;
+	private String previousOrderStatus;
+	private String previousFulfillmentStatus;
+	private String exceptionType;
+	private String exceptionReason;
+	private String exceptionImageUrls;
+	private LocalDateTime startedTime;
+	private LocalDateTime completedTime;
 	private LocalDateTime createTime;
 	private LocalDateTime updateTime;
 }

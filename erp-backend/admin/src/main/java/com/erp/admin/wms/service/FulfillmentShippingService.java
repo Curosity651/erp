@@ -76,7 +76,8 @@ public class FulfillmentShippingService {
 		orderMapper.updateById(order);
 	}
 
-	public PlatformLabelResult printLabel(Long fulfillmentId) {
+	public PlatformLabelResult printLabel(Long fulfillmentId, Long userId) {
+		requireTaskOperator(fulfillmentId, userId);
 		WmsFulfillmentOrder order = requireStatus(fulfillmentId, FulfillmentStatus.WAITING_PACK,
 				FulfillmentStatus.PACKED);
 		PlatformLabelResult result = platformActions.fetchLabel(fulfillmentId);
@@ -88,7 +89,8 @@ public class FulfillmentShippingService {
 		return result;
 	}
 
-	public void verifyLabel(Long fulfillmentId, String barcode) {
+	public void verifyLabel(Long fulfillmentId, String barcode, Long userId) {
+		requireTaskOperator(fulfillmentId, userId);
 		WmsFulfillmentOrder order = requireStatus(fulfillmentId, FulfillmentStatus.WAITING_PACK,
 				FulfillmentStatus.PACKED);
 		Assert.hasText(order.getLabelBarcode(), "请先获取并打印面单");
@@ -98,7 +100,8 @@ public class FulfillmentShippingService {
 		orderMapper.updateById(order);
 	}
 
-	public void pack(Long fulfillmentId, FulfillmentPackDTO dto) {
+	public void pack(Long fulfillmentId, FulfillmentPackDTO dto, Long userId) {
+		requireTaskOperator(fulfillmentId, userId);
 		WmsFulfillmentOrder order = requireStatus(fulfillmentId, FulfillmentStatus.WAITING_PACK);
 		Assert.notNull(order.getLabelVerifiedTime(), "必须先扫描核验当前订单面单");
 		Assert.hasText(dto.getCarrierName(), "承运商不能为空");
@@ -118,6 +121,11 @@ public class FulfillmentShippingService {
 		Assert.notNull(pickingService, "拣货任务服务未初始化");
 		pickingService.completePackedOrder(fulfillmentId);
 		progressService.sync(order, FulfillmentStatus.PACKED);
+	}
+
+	private void requireTaskOperator(Long fulfillmentId, Long userId) {
+		Assert.notNull(pickingService, "拣货任务服务未初始化");
+		pickingService.assertTaskOperator(fulfillmentId, userId);
 	}
 
 	public FulfillmentBatchResultVO ship(List<Long> fulfillmentIds) {

@@ -5,6 +5,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.erp.admin.wms.mapper.WmsFulfillmentItemMapper;
@@ -15,6 +17,8 @@ import com.erp.admin.wms.mapper.WmsInventoryReservationMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
 import com.erp.admin.wms.mapper.WmsFulfillmentOrderMapper;
 import com.erp.admin.wms.model.dto.FulfillmentPickScanDTO;
+import com.erp.admin.wms.model.dto.FulfillmentPickTaskQueryDTO;
+import com.erp.admin.wms.model.dto.FulfillmentPickExceptionDTO;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
 import com.erp.admin.wms.model.entity.WmsFulfillmentItem;
 import com.erp.admin.wms.model.entity.WmsFulfillmentPickTask;
@@ -26,6 +30,7 @@ import com.erp.admin.wms.model.enums.FulfillmentStatus;
 import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
 import com.erp.admin.wms.model.vo.FulfillmentPickTaskDetailVO;
 import com.erp.admin.wms.model.vo.FulfillmentPickCurrentOrderVO;
+import com.erp.admin.wms.model.vo.FulfillmentPickTaskOrderVO;
 import com.erp.admin.wms.service.platform.PlatformActionResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -43,6 +48,8 @@ public class FulfillmentPickingService {
 	private WmsInventoryReservationMapper reservationMapper;
 	private WmsFulfillmentItemMapper itemMapper;
 	private WmsLocationMapper locationMapper;
+	@Autowired
+	private FulfillmentStatusSyncService statusSyncService;
 
 	public FulfillmentPickingService(WmsFulfillmentOrderMapper orderMapper,
 			FulfillmentPlatformActionService platformActionService) {
@@ -91,9 +98,21 @@ public class FulfillmentPickingService {
 	}
 
 	public List<WmsFulfillmentOrder> listShelfOrders() {
+		return listShelfOrders(null, null, null, null, null);
+	}
+
+	public List<WmsFulfillmentOrder> listShelfOrders(LocalDateTime startTime,
+			LocalDateTime endTime, Long erpTenantId, Long logisticsProductId,
+			Long warehouseId) {
 		return orderMapper.selectList(Wrappers.<WmsFulfillmentOrder>lambdaQuery()
 				.in(WmsFulfillmentOrder::getFulfillmentStatus, FulfillmentStatus.WAITING_SHELF,
 						FulfillmentStatus.WAITING_PICK, FulfillmentStatus.PICKING)
+				.ge(startTime != null, WmsFulfillmentOrder::getCreateTime, startTime)
+				.le(endTime != null, WmsFulfillmentOrder::getCreateTime, endTime)
+				.eq(erpTenantId != null, WmsFulfillmentOrder::getErpTenantId, erpTenantId)
+				.eq(logisticsProductId != null, WmsFulfillmentOrder::getLogisticsProductId,
+						logisticsProductId)
+				.eq(warehouseId != null, WmsFulfillmentOrder::getWarehouseId, warehouseId)
 				.orderByAsc(WmsFulfillmentOrder::getCreateTime));
 	}
 
@@ -112,20 +131,16 @@ public class FulfillmentPickingService {
 		WmsFulfillmentOrder first = orders.get(0);
 		for (WmsFulfillmentOrder order : orders) {
 			Assert.isTrue(first.getWarehouseId().equals(order.getWarehouseId()), "批量任务必须属于同一仓库");
-			Assert.isTrue(first.getErpTenantId().equals(order.getErpTenantId()), "批量任务必须属于同一货主");
-			Assert.isTrue(first.getWmsTenantId().equals(order.getWmsTenantId()), "批量任务必须属于同一服务商");
 		}
 
 		WmsFulfillmentPickTask task = new WmsFulfillmentPickTask();
 		task.setTaskNo("FPT" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
 				+ UUID.randomUUID().toString().substring(0, 6).toUpperCase());
 		task.setWarehouseId(first.getWarehouseId());
-		task.setWmsTenantId(first.getWmsTenantId());
-		task.setErpTenantId(first.getErpTenantId());
-		task.setTaskStatus("PICKING");
+		task.setTaskStatus("PENDING");
 		task.setOrderCount(orders.size());
 		task.setTotalQuantity(0);
-		task.setOperatorId(operatorId);
+		task.setOperatorId(null);
 		Assert.isTrue(taskMapper.insert(task) == 1, "拣货任务创建失败");
 
 		int total = 0;
@@ -167,9 +182,6 @@ public class FulfillmentPickingService {
 				taskLineMapper.insert(line);
 				total += reservation.getQuantity();
 			}
-			Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.WAITING_PICK,
-					FulfillmentStatus.PICKING) == 1, "订单状态已变化，请重新创建任务");
-			syncProgress(order, FulfillmentStatus.PICKING);
 		}
 		task.setTotalQuantity(total);
 		taskMapper.updateById(task);
@@ -177,12 +189,91 @@ public class FulfillmentPickingService {
 	}
 
 	public List<WmsFulfillmentPickTask> listTasks() {
+		return listTasks(new FulfillmentPickTaskQueryDTO());
+	}
+
+	public List<WmsFulfillmentPickTask> listTasks(FulfillmentPickTaskQueryDTO query) {
 		requireTaskDependencies();
-		return taskMapper.selectList(Wrappers.<WmsFulfillmentPickTask>lambdaQuery()
+		FulfillmentPickTaskQueryDTO filter = query == null
+				? new FulfillmentPickTaskQueryDTO() : query;
+		List<WmsFulfillmentPickTask> tasks = taskMapper.selectList(Wrappers.<WmsFulfillmentPickTask>lambdaQuery()
+				.like(filter.getTaskNo() != null && !filter.getTaskNo().trim().isEmpty(),
+						WmsFulfillmentPickTask::getTaskNo, filter.getTaskNo())
+				.eq(filter.getWarehouseId() != null, WmsFulfillmentPickTask::getWarehouseId,
+						filter.getWarehouseId())
+				.eq(filter.getTaskStatus() != null && !filter.getTaskStatus().trim().isEmpty(),
+						WmsFulfillmentPickTask::getTaskStatus, filter.getTaskStatus())
+				.eq(filter.getOperatorId() != null, WmsFulfillmentPickTask::getOperatorId,
+						filter.getOperatorId())
+				.ge(filter.getStartTime() != null, WmsFulfillmentPickTask::getCreateTime,
+						filter.getStartTime())
+				.le(filter.getEndTime() != null, WmsFulfillmentPickTask::getCreateTime,
+						filter.getEndTime())
 				.orderByDesc(WmsFulfillmentPickTask::getCreateTime));
+		for (WmsFulfillmentPickTask task : tasks) {
+			List<WmsFulfillmentPickTaskOrder> taskOrders = taskOrderMapper.selectList(
+					Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+							.eq(WmsFulfillmentPickTaskOrder::getTaskId, task.getId()));
+			int completed = 0;
+			int exceptions = 0;
+			for (WmsFulfillmentPickTaskOrder taskOrder : taskOrders) {
+				if ("COMPLETED".equals(taskOrder.getOrderStatus())
+						|| "CANCELLED".equals(taskOrder.getOrderStatus())) completed++;
+				if ("EXCEPTION".equals(taskOrder.getOrderStatus())) exceptions++;
+			}
+			task.setCompletedOrderCount(completed);
+			task.setExceptionOrderCount(exceptions);
+		}
+		return tasks;
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void claimTask(Long taskId, Long userId) {
+		requireTaskDependencies();
+		Assert.notNull(userId, "当前操作人不能为空");
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		Assert.isTrue("PENDING".equals(task.getTaskStatus()), "任务已被领取或不能领取");
+		Assert.isTrue(taskMapper.claim(taskId, userId, LocalDateTime.now()) == 1,
+				"任务已被其他员工领取，请刷新后重试");
+		List<WmsFulfillmentPickTaskOrder> orders = taskOrderMapper.selectList(
+				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskId));
+		for (WmsFulfillmentPickTaskOrder taskOrder : orders) {
+			WmsFulfillmentOrder order = orderMapper.selectForUpdate(taskOrder.getFulfillmentOrderId());
+			Assert.notNull(order, "履约订单不存在");
+			if (order.getFulfillmentStatus() == FulfillmentStatus.WAITING_PICK) {
+				Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.WAITING_PICK,
+						FulfillmentStatus.PICKING) == 1, "订单状态已变化，请刷新后重试");
+				syncProgress(order, FulfillmentStatus.PICKING);
+			}
+			else {
+				Assert.isTrue(order.getFulfillmentStatus() == FulfillmentStatus.PICKING
+								|| order.getFulfillmentStatus() == FulfillmentStatus.WAITING_PACK
+								|| order.getFulfillmentStatus() == FulfillmentStatus.PACKED,
+						"任务包含不可拣货订单：" + order.getFulfillmentNo());
+			}
+		}
+	}
+
+	public void releaseTask(Long taskId, Long userId) {
+		requireTaskDependencies();
+		Assert.isTrue(taskMapper.release(taskId, userId) == 1,
+				"只有当前拣货员可以释放进行中的任务");
+	}
+
+	public void transferTask(Long taskId, Long targetUserId) {
+		requireTaskDependencies();
+		Assert.notNull(targetUserId, "目标拣货员不能为空");
+		Assert.isTrue(taskMapper.transfer(taskId, targetUserId, LocalDateTime.now()) == 1,
+				"任务状态已变化，请刷新后重试");
 	}
 
 	public FulfillmentPickTaskDetailVO detail(Long taskId) {
+		return detail(taskId, null);
+	}
+
+	public FulfillmentPickTaskDetailVO detail(Long taskId, Long selectedOrderId) {
 		requireTaskDependencies();
 		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
 		Assert.notNull(task, "拣货任务不存在");
@@ -196,18 +287,54 @@ public class FulfillmentPickingService {
 				.orderByAsc(WmsFulfillmentPickTaskLine::getSequenceNo));
 		result.setOrders(orders);
 		result.setLines(lines);
+		List<FulfillmentPickTaskOrderVO> queue = new ArrayList<>();
+		FulfillmentPickTaskOrderVO selected = null;
 		for (WmsFulfillmentPickTaskOrder candidate : orders) {
-			if ("COMPLETED".equals(candidate.getOrderStatus())) continue;
-			FulfillmentPickCurrentOrderVO current = new FulfillmentPickCurrentOrderVO();
-			current.setTaskOrder(candidate);
-			current.setFulfillmentOrder(orderMapper.selectById(candidate.getFulfillmentOrderId()));
+			WmsFulfillmentOrder fulfillmentOrder = orderMapper.selectById(candidate.getFulfillmentOrderId());
 			List<WmsFulfillmentPickTaskLine> route = new ArrayList<>();
 			for (WmsFulfillmentPickTaskLine line : lines) {
 				if (candidate.getFulfillmentOrderId().equals(line.getFulfillmentOrderId())) route.add(line);
 			}
-			current.setRouteLines(route);
+			FulfillmentPickTaskOrderVO queueItem = new FulfillmentPickTaskOrderVO();
+			queueItem.setTaskOrder(candidate);
+			queueItem.setFulfillmentOrder(fulfillmentOrder);
+			queueItem.setRouteLines(route);
+			queueItem.setFirstLocationCode(route.isEmpty() ? null : route.get(0).getLocationCode());
+			Set<String> skus = new HashSet<>();
+			int total = 0;
+			int picked = 0;
+			for (WmsFulfillmentPickTaskLine line : route) {
+				skus.add(line.getWarehouseSkuCode());
+				total += line.getPlannedQuantity() == null ? 0 : line.getPlannedQuantity();
+				picked += line.getPickedQuantity() == null ? 0 : line.getPickedQuantity();
+			}
+			queueItem.setSkuCount(skus.size());
+			queueItem.setTotalQuantity(total);
+			queueItem.setPickedQuantity(picked);
+			queue.add(queueItem);
+			if (selectedOrderId != null && selectedOrderId.equals(candidate.getFulfillmentOrderId())) {
+				selected = queueItem;
+			}
+		}
+		queue.sort((left, right) -> compareLocation(left.getFirstLocationCode(),
+				right.getFirstLocationCode()));
+		result.setOrderQueue(queue);
+		if (selected == null) {
+			for (FulfillmentPickTaskOrderVO candidate : queue) {
+				String status = candidate.getTaskOrder().getOrderStatus();
+				if (!"COMPLETED".equals(status) && !"CANCELLED".equals(status)
+						&& !"EXCEPTION".equals(status)) {
+					selected = candidate;
+					break;
+				}
+			}
+		}
+		if (selected != null) {
+			FulfillmentPickCurrentOrderVO current = new FulfillmentPickCurrentOrderVO();
+			current.setTaskOrder(selected.getTaskOrder());
+			current.setFulfillmentOrder(selected.getFulfillmentOrder());
+			current.setRouteLines(selected.getRouteLines());
 			result.setCurrentOrder(current);
-			break;
 		}
 		return result;
 	}
@@ -220,12 +347,13 @@ public class FulfillmentPickingService {
 						.eq(WmsFulfillmentPickTaskOrder::getFulfillmentOrderId, fulfillmentOrderId));
 		Assert.isTrue(matches.size() == 1, "履约订单未关联唯一拣货任务");
 		WmsFulfillmentPickTaskOrder taskOrder = matches.get(0);
-		Assert.isTrue("WAITING_PACK".equals(taskOrder.getOrderStatus()), "任务订单尚未取齐或已完成");
+		Assert.isTrue("WAITING_LABEL".equals(taskOrder.getOrderStatus()), "任务订单尚未取齐或已完成");
 		taskOrder.setOrderStatus("COMPLETED");
+		taskOrder.setCompletedTime(LocalDateTime.now());
 		taskOrderMapper.updateById(taskOrder);
 		long pending = taskOrderMapper.selectCount(Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
 				.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskOrder.getTaskId())
-				.ne(WmsFulfillmentPickTaskOrder::getOrderStatus, "COMPLETED"));
+				.notIn(WmsFulfillmentPickTaskOrder::getOrderStatus, "COMPLETED", "CANCELLED"));
 		if (pending == 0) {
 			WmsFulfillmentPickTask task = taskMapper.selectById(taskOrder.getTaskId());
 			Assert.notNull(task, "拣货任务不存在");
@@ -235,21 +363,162 @@ public class FulfillmentPickingService {
 	}
 
 	@Transactional(rollbackFor = Exception.class)
-	public void scan(FulfillmentPickScanDTO dto) {
+	public void markException(Long taskId, Long fulfillmentOrderId,
+			FulfillmentPickExceptionDTO dto, Long userId) {
+		requireTaskDependencies();
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		requireOperator(task, userId);
+		WmsFulfillmentPickTaskOrder taskOrder = findTaskOrder(taskId, fulfillmentOrderId);
+		Assert.isTrue(!"COMPLETED".equals(taskOrder.getOrderStatus())
+						&& !"CANCELLED".equals(taskOrder.getOrderStatus())
+						&& !"EXCEPTION".equals(taskOrder.getOrderStatus()),
+				"当前订单状态不允许标记异常");
+		WmsFulfillmentOrder order = orderMapper.selectForUpdate(fulfillmentOrderId);
+		Assert.notNull(order, "履约订单不存在");
+		taskOrder.setPreviousOrderStatus(taskOrder.getOrderStatus());
+		taskOrder.setPreviousFulfillmentStatus(order.getFulfillmentStatus().name());
+		taskOrder.setExceptionType(dto.getExceptionType());
+		taskOrder.setExceptionReason(dto.getReason());
+		taskOrder.setExceptionImageUrls(dto.getImageUrls() == null
+				? null : String.join("\n", dto.getImageUrls()));
+		taskOrder.setOrderStatus("EXCEPTION");
+		taskOrderMapper.updateById(taskOrder);
+		Assert.isTrue(orderMapper.transit(order.getId(), order.getFulfillmentStatus(),
+				FulfillmentStatus.EXCEPTION) == 1, "订单状态已变化，请刷新后重试");
+		task.setTaskStatus("PARTIAL_EXCEPTION");
+		taskMapper.updateById(task);
+		syncProgress(order, FulfillmentStatus.EXCEPTION);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void restoreException(Long taskId, Long fulfillmentOrderId, Long userId) {
+		requireTaskDependencies();
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		requireOperator(task, userId);
+		WmsFulfillmentPickTaskOrder taskOrder = findTaskOrder(taskId, fulfillmentOrderId);
+		Assert.isTrue("EXCEPTION".equals(taskOrder.getOrderStatus()), "订单不是异常状态");
+		Assert.hasText(taskOrder.getPreviousOrderStatus(), "异常前任务状态缺失");
+		Assert.hasText(taskOrder.getPreviousFulfillmentStatus(), "异常前订单状态缺失");
+		WmsFulfillmentOrder order = orderMapper.selectForUpdate(fulfillmentOrderId);
+		Assert.notNull(order, "履约订单不存在");
+		FulfillmentStatus restored = FulfillmentStatus.valueOf(
+				taskOrder.getPreviousFulfillmentStatus());
+		Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.EXCEPTION,
+				restored) == 1, "订单状态已变化，请刷新后重试");
+		taskOrder.setOrderStatus(taskOrder.getPreviousOrderStatus());
+		clearException(taskOrder);
+		taskOrderMapper.updateById(taskOrder);
+		recalculateTaskStatus(taskId);
+		syncProgress(order, restored);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void cancelException(Long taskId, Long fulfillmentOrderId, Long userId) {
+		requireTaskDependencies();
+		Assert.notNull(statusSyncService, "履约状态服务未配置");
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		requireOperator(task, userId);
+		WmsFulfillmentPickTaskOrder taskOrder = findTaskOrder(taskId, fulfillmentOrderId);
+		Assert.isTrue("EXCEPTION".equals(taskOrder.getOrderStatus()), "订单不是异常状态");
+		List<WmsFulfillmentPickTaskLine> lines = taskLineMapper.selectList(
+				Wrappers.<WmsFulfillmentPickTaskLine>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskLine::getTaskId, taskId)
+						.eq(WmsFulfillmentPickTaskLine::getFulfillmentOrderId,
+								fulfillmentOrderId));
+		boolean goodsPicked = false;
+		for (WmsFulfillmentPickTaskLine line : lines) {
+			if (line.getPickedQuantity() != null && line.getPickedQuantity() > 0) {
+				goodsPicked = true;
+				break;
+			}
+		}
+		statusSyncService.cancelFromException(fulfillmentOrderId, goodsPicked,
+				taskOrder.getExceptionReason());
+		taskOrder.setOrderStatus("CANCELLED");
+		taskOrder.setCompletedTime(LocalDateTime.now());
+		taskOrderMapper.updateById(taskOrder);
+		recalculateTaskStatus(taskId);
+	}
+
+	private WmsFulfillmentPickTaskOrder findTaskOrder(Long taskId, Long fulfillmentOrderId) {
+		WmsFulfillmentPickTaskOrder taskOrder = taskOrderMapper.selectOne(
+				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskId)
+						.eq(WmsFulfillmentPickTaskOrder::getFulfillmentOrderId,
+								fulfillmentOrderId));
+		Assert.notNull(taskOrder, "订单不属于当前拣货任务");
+		return taskOrder;
+	}
+
+	private void clearException(WmsFulfillmentPickTaskOrder taskOrder) {
+		taskOrder.setPreviousOrderStatus(null);
+		taskOrder.setPreviousFulfillmentStatus(null);
+		taskOrder.setExceptionType(null);
+		taskOrder.setExceptionReason(null);
+		taskOrder.setExceptionImageUrls(null);
+	}
+
+	private void recalculateTaskStatus(Long taskId) {
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		long exceptions = taskOrderMapper.selectCount(
+				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskId)
+						.eq(WmsFulfillmentPickTaskOrder::getOrderStatus, "EXCEPTION"));
+		if (exceptions > 0) {
+			task.setTaskStatus("PARTIAL_EXCEPTION");
+		}
+		else {
+			long pending = taskOrderMapper.selectCount(
+					Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+							.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskId)
+							.notIn(WmsFulfillmentPickTaskOrder::getOrderStatus,
+									"COMPLETED", "CANCELLED"));
+			task.setTaskStatus(pending == 0 ? "COMPLETED" : "PICKING");
+		}
+		taskMapper.updateById(task);
+	}
+
+	private int compareLocation(String left, String right) {
+		if (left == null) return right == null ? 0 : 1;
+		if (right == null) return -1;
+		return left.compareToIgnoreCase(right);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void scan(FulfillmentPickScanDTO dto, Long userId) {
 		requireTaskDependencies();
 		WmsFulfillmentPickTask task = taskMapper.selectById(dto.getTaskId());
 		Assert.notNull(task, "拣货任务不存在");
-		Assert.isTrue("PICKING".equals(task.getTaskStatus()), "拣货任务已结束");
-		List<WmsFulfillmentPickTaskOrder> pendingOrders = taskOrderMapper.selectList(
+		Assert.isTrue("PICKING".equals(task.getTaskStatus())
+						|| "PARTIAL_EXCEPTION".equals(task.getTaskStatus()), "拣货任务已结束");
+		requireOperator(task, userId);
+		List<WmsFulfillmentPickTaskOrder> taskOrders = taskOrderMapper.selectList(
 				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
 						.eq(WmsFulfillmentPickTaskOrder::getTaskId, dto.getTaskId())
-						.ne(WmsFulfillmentPickTaskOrder::getOrderStatus, "COMPLETED")
 						.orderByAsc(WmsFulfillmentPickTaskOrder::getSequenceNo));
-		Assert.notEmpty(pendingOrders, "任务已全部拣完");
-		WmsFulfillmentPickTaskOrder current = pendingOrders.get(0);
-		WmsFulfillmentOrder order = orderMapper.selectById(current.getFulfillmentOrderId());
-		Assert.isTrue(order != null && dto.getFulfillmentNo().equals(order.getFulfillmentNo()),
-				"请先完成当前顺序订单：" + (order == null ? "-" : order.getFulfillmentNo()));
+		WmsFulfillmentPickTaskOrder current = null;
+		WmsFulfillmentOrder order = null;
+		for (WmsFulfillmentPickTaskOrder candidate : taskOrders) {
+			WmsFulfillmentOrder candidateOrder = orderMapper.selectById(candidate.getFulfillmentOrderId());
+			if (candidateOrder != null && dto.getFulfillmentNo().equals(candidateOrder.getFulfillmentNo())) {
+				current = candidate;
+				order = candidateOrder;
+				break;
+			}
+		}
+		Assert.notNull(current, "订单不属于当前拣货任务");
+		Assert.isTrue("PENDING".equals(current.getOrderStatus())
+						|| "PICKING".equals(current.getOrderStatus()),
+				"当前订单状态不允许继续取货");
+		if ("PENDING".equals(current.getOrderStatus())) {
+			current.setOrderStatus("PICKING");
+			current.setStartedTime(LocalDateTime.now());
+			taskOrderMapper.updateById(current);
+		}
 		List<WmsFulfillmentPickTaskLine> candidates = taskLineMapper.selectList(
 				Wrappers.<WmsFulfillmentPickTaskLine>lambdaQuery()
 						.eq(WmsFulfillmentPickTaskLine::getTaskId, dto.getTaskId())
@@ -272,11 +541,31 @@ public class FulfillmentPickingService {
 				.eq(WmsFulfillmentPickTaskLine::getFulfillmentOrderId, order.getId())
 				.ne(WmsFulfillmentPickTaskLine::getLineStatus, "COMPLETED"));
 		if (incomplete > 0) return;
-		current.setOrderStatus("WAITING_PACK");
+		current.setOrderStatus("WAITING_LABEL");
 		taskOrderMapper.updateById(current);
 		Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.PICKING,
 				FulfillmentStatus.WAITING_PACK) == 1, "订单拣货状态更新失败");
 		syncProgress(order, FulfillmentStatus.WAITING_PACK);
+	}
+
+	private void requireOperator(WmsFulfillmentPickTask task, Long userId) {
+		Assert.notNull(userId, "当前操作人不能为空");
+		Assert.isTrue(userId.equals(task.getOperatorId()), "只有领取该任务的拣货员可以操作");
+	}
+
+	public void assertTaskOperator(Long fulfillmentOrderId, Long userId) {
+		requireTaskDependencies();
+		List<WmsFulfillmentPickTaskOrder> matches = taskOrderMapper.selectList(
+				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskOrder::getFulfillmentOrderId,
+								fulfillmentOrderId));
+		Assert.isTrue(matches.size() == 1, "履约订单未关联唯一拣货任务");
+		WmsFulfillmentPickTask task = taskMapper.selectById(matches.get(0).getTaskId());
+		Assert.notNull(task, "拣货任务不存在");
+		Assert.isTrue("PICKING".equals(task.getTaskStatus())
+						|| "PARTIAL_EXCEPTION".equals(task.getTaskStatus()),
+				"拣货任务当前不能操作");
+		requireOperator(task, userId);
 	}
 
 	private void requireTaskDependencies() {

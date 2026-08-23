@@ -4,10 +4,13 @@ import type {
   FulfillmentItem,
   FulfillmentOrder,
   FulfillmentBatchResult,
+  FulfillmentDispatchResult,
   FulfillmentPickTask,
   FulfillmentPickTaskDetail,
   PlatformLabelResult,
-  ManualFulfillmentForm
+  ManualFulfillmentForm,
+  FulfillmentShelfOrderQuery,
+  FulfillmentPickTaskQuery
 } from './types'
 
 const baseUrl = '/wms/manual-fulfillment'
@@ -42,12 +45,12 @@ export function deleteManualFulfillment(id: number) {
 
 const pickingBaseUrl = '/wms/fulfillment-picking'
 
-export function listFulfillmentShelfOrders() {
-  return httpClient.get<ApiResult<FulfillmentOrder[]>>(`${pickingBaseUrl}/shelf-orders`)
+export function listFulfillmentShelfOrders(params?: FulfillmentShelfOrderQuery) {
+  return httpClient.get<ApiResult<FulfillmentOrder[]>>(`${pickingBaseUrl}/shelf-orders`, { params })
 }
 
 export function acceptFulfillmentOrders(ids: number[]) {
-  return httpClient.post<ApiResult<FulfillmentBatchResult>>(`${pickingBaseUrl}/accept`, ids)
+  return httpClient.post<ApiResult<FulfillmentDispatchResult>>(`${pickingBaseUrl}/accept`, ids)
 }
 
 export function createFulfillmentPickTask(ids: number[]) {
@@ -56,13 +59,43 @@ export function createFulfillmentPickTask(ids: number[]) {
   })
 }
 
-export function listFulfillmentPickTasks() {
-  return httpClient.get<ApiResult<FulfillmentPickTask[]>>(`${pickingBaseUrl}/tasks`)
+export function listFulfillmentPickTasks(params?: FulfillmentPickTaskQuery) {
+  return httpClient.get<ApiResult<FulfillmentPickTask[]>>(`${pickingBaseUrl}/tasks`, { params })
 }
 
-export function getFulfillmentPickTask(id: number) {
-  return httpClient.get<ApiResult<FulfillmentPickTaskDetail>>(`${pickingBaseUrl}/tasks/${id}`)
+export function getFulfillmentPickTask(id: number, fulfillmentOrderId?: number) {
+  return httpClient.get<ApiResult<FulfillmentPickTaskDetail>>(`${pickingBaseUrl}/tasks/${id}`, {
+    params: { fulfillmentOrderId }
+  })
 }
+
+export const claimFulfillmentPickTask = (id: number) =>
+  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${id}/claim`)
+
+export const releaseFulfillmentPickTask = (id: number) =>
+  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${id}/release`)
+
+export const transferFulfillmentPickTask = (id: number, operatorId: number) =>
+  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${id}/transfer`, { operatorId })
+
+export const markFulfillmentPickException = (
+  taskId: number,
+  orderId: number,
+  dto: { exceptionType: string; reason: string; imageUrls?: string[] }
+) => httpClient.post<ApiResult<void>>(
+  `${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/exception`,
+  dto
+)
+
+export const restoreFulfillmentPickException = (taskId: number, orderId: number) =>
+  httpClient.post<ApiResult<void>>(
+    `${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/restore`
+  )
+
+export const cancelFulfillmentPickException = (taskId: number, orderId: number) =>
+  httpClient.post<ApiResult<void>>(
+    `${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/cancel`
+  )
 
 export function scanFulfillmentPickLine(dto: {
   taskId: number

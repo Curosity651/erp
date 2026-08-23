@@ -13,6 +13,7 @@ export type FulfillmentStatus =
 
 export interface FulfillmentOrder {
   id: number
+  erpTenantId: number
   warehouseId: number
   fulfillmentNo: string
   sourceType: string
@@ -40,27 +41,57 @@ export interface FulfillmentOrder {
   createTime?: string
 }
 
+export interface FulfillmentShelfOrderQuery {
+  startTime?: string
+  endTime?: string
+  erpTenantId?: number
+  logisticsProductId?: number
+  warehouseId?: number
+}
+
 export interface FulfillmentBatchResult {
   successIds: number[]
   failures: Record<string, string>
+}
+
+export interface FulfillmentCreatedTask {
+  taskId: number
+  taskNo: string
+  warehouseId: number
+  orderCount: number
+  totalQuantity: number
+}
+
+export interface FulfillmentDispatchResult extends FulfillmentBatchResult {
+  tasks: FulfillmentCreatedTask[]
 }
 
 export interface FulfillmentPickTask {
   id: number
   taskNo: string
   warehouseId: number
-  taskStatus: string
+  taskStatus: import('@/views/platform/fulfillment-picking/picking-task-flow').PickingTaskStatus
   orderCount: number
   totalQuantity: number
   operatorId?: number
+  claimedTime?: string
   createTime?: string
+  completedOrderCount?: number
+  exceptionOrderCount?: number
 }
 
 export interface FulfillmentPickTaskOrder {
   id: number
   fulfillmentOrderId: number
   sequenceNo: number
-  orderStatus: string
+  orderStatus: import('@/views/platform/fulfillment-picking/picking-task-flow').PickingOrderStatus
+  previousOrderStatus?: string
+  previousFulfillmentStatus?: string
+  exceptionType?: string
+  exceptionReason?: string
+  exceptionImageUrls?: string
+  startedTime?: string
+  completedTime?: string
 }
 
 export interface FulfillmentPickTaskLine {
@@ -78,11 +109,31 @@ export interface FulfillmentPickTaskDetail {
   task: FulfillmentPickTask
   orders: FulfillmentPickTaskOrder[]
   lines: FulfillmentPickTaskLine[]
+  orderQueue: FulfillmentPickTaskOrderDetail[]
   currentOrder?: {
     taskOrder: FulfillmentPickTaskOrder
     fulfillmentOrder: FulfillmentOrder
     routeLines: FulfillmentPickTaskLine[]
   }
+}
+
+export interface FulfillmentPickTaskOrderDetail {
+  taskOrder: FulfillmentPickTaskOrder
+  fulfillmentOrder: FulfillmentOrder
+  routeLines: FulfillmentPickTaskLine[]
+  firstLocationCode?: string
+  skuCount: number
+  totalQuantity: number
+  pickedQuantity: number
+}
+
+export interface FulfillmentPickTaskQuery {
+  taskNo?: string
+  warehouseId?: number
+  taskStatus?: string
+  operatorId?: number
+  startTime?: string
+  endTime?: string
 }
 
 export interface PlatformLabelResult {

@@ -52,7 +52,7 @@ class FulfillmentShippingServiceTest {
 		FulfillmentPackDTO dto = validPack();
 		dto.setTrackingNo(null);
 
-		assertThatThrownBy(() -> service.pack(1L, dto)).hasMessageContaining("跟踪号");
+		assertThatThrownBy(() -> service.pack(1L, dto, 99L)).hasMessageContaining("跟踪号");
 	}
 
 	@Test
@@ -61,8 +61,9 @@ class FulfillmentShippingServiceTest {
 		when(orderMapper.selectById(1L)).thenReturn(order);
 		when(orderMapper.transit(1L, FulfillmentStatus.WAITING_PACK, FulfillmentStatus.PACKED)).thenReturn(1);
 
-		service.pack(1L, validPack());
+		service.pack(1L, validPack(), 99L);
 
+		verify(pickingService).assertTaskOperator(1L, 99L);
 		verify(pickingService).completePackedOrder(1L);
 	}
 
