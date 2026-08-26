@@ -97,6 +97,10 @@ public class FundLedgerPresentationService {
         row.setBusinessLabel(businessLabel(row.getBusinessNo()));
         if ("RECHARGE".equals(row.getEntryType())) row.setDescriptionLabel("服务商充值");
         else if ("REVERSAL".equals(row.getEntryType())) row.setDescriptionLabel("充值冲正");
+        else if (value(row.getBusinessNo()).startsWith("FULFILLMENT_LOGISTICS:")) {
+            row.setDescriptionLabel("物流产品费用" + (row.getDescription() == null
+                    ? "" : "（" + row.getDescription() + "）"));
+        }
         else row.setDescriptionLabel(FEE_LABELS.getOrDefault(value(row.getDescription()),
                 "其他服务费" + (row.getDescription() == null ? "" : "（" + row.getDescription() + "）")));
     }
@@ -105,7 +109,9 @@ public class FundLedgerPresentationService {
         if (businessNo == null) return "-";
         String[] parts = businessNo.split(":");
         if (parts.length >= 2) {
-            if ("FULFILLMENT".equals(parts[0])) return "出库履约单 #" + parts[1];
+            if ("FULFILLMENT".equals(parts[0]) || "FULFILLMENT_LOGISTICS".equals(parts[0])) {
+                return "履约订单 #" + parts[1];
+            }
             if ("INBOUND".equals(parts[0])) return "入库单 #" + parts[1];
             if ("OUTBOUND".equals(parts[0])) return "出库单 #" + parts[1];
         }

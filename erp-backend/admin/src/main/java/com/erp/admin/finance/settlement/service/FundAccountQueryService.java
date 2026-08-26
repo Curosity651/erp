@@ -46,6 +46,18 @@ public class FundAccountQueryService {
         return queryMapper.ownerLedger(wmsId, i.getTenantId(), qo);
     }
 
+    public List<FundLedgerMonthVO> ownerLedgerMonths(FundSettlementQO qo) {
+        TenantIdentityVO i = identity(TenantIdentityService.IDENTITY_ERP_USER);
+        List<FundAccountVO> accounts = queryMapper.ownerAccounts(i.getTenantId());
+        Long wmsId = accounts.isEmpty() ? null : accounts.get(0).getWmsTenantId();
+        if (wmsId == null) return java.util.Collections.emptyList();
+        FundSettlementQO allRowsQuery = new FundSettlementQO();
+        allRowsQuery.setCurrency(qo.getCurrency());
+        List<FundLedgerVO> rows = queryMapper.ownerLedger(wmsId, i.getTenantId(), allRowsQuery);
+        return ledgerPresentationService.group(rows, java.util.Collections.emptyMap(), LocalDate.now(),
+                qo.getStartDate(), qo.getEndDate());
+    }
+
     public List<FundAccountVO> operatorOwnerAccounts(FundSettlementQO qo) {
         return queryMapper.operatorOwnerAccounts(operatorId(), qo);
     }

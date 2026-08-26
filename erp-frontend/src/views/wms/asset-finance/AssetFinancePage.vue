@@ -3,14 +3,19 @@
     <a-card :bordered="false">
       <div class="page-toolbar">
         <a-segmented
+          class="finance-section-switcher"
           :value="activeSection"
           :options="sectionOptions"
           size="large"
           @change="onSectionChange"
         />
-        <a-space>
+        <a-space class="toolbar-actions">
+          <template v-if="activeSection === 'wms-account'">
+            <a-button type="primary" @click="openWmsRecharge">登记充值</a-button>
+            <a-button :loading="wmsFundAccountPanel?.loading" @click="refreshWmsAccount">刷新</a-button>
+          </template>
+          <a-button v-else :loading="summaryLoading" @click="refreshAll">刷新</a-button>
           <span class="updated-at">更新于 {{ updatedAt || '--' }}</span>
-          <a-button v-if="activeSection !== 'wms-account'" :loading="summaryLoading" @click="refreshAll">刷新</a-button>
         </a-space>
       </div>
 
@@ -90,7 +95,11 @@
         </div>
       </a-spin>
 
-      <WmsFundAccountPanel v-else />
+      <WmsFundAccountPanel
+        v-else
+        ref="wmsFundAccountPanel"
+        @updated="updatedAt = $event"
+      />
 
       <!-- 明细 -->
       <a-tabs v-if="activeSection === 'assets'" v-model:activeKey="activeTab" class="detail-tabs" @change="onTabChange">
@@ -274,7 +283,13 @@ defineOptions({ name: 'AssetFinancePage' })
 
 // ---------------- 页面视图 ----------------
 type SectionKey = 'assets' | 'payables' | 'wms-account'
+interface WmsFundAccountPanelExpose {
+  loading: boolean
+  openRecharge: () => void
+  refresh: () => Promise<void>
+}
 const activeSection = ref<SectionKey>('assets')
+const wmsFundAccountPanel = ref<WmsFundAccountPanelExpose>()
 const sectionOptions = [
   { label: '资产总览', value: 'assets' },
   { label: '应付账务', value: 'payables' },
@@ -448,7 +463,17 @@ async function onSectionChange(value: string | number) {
     activeTab.value = 'supplier'
     await loadPayablesOverview()
     await loadSupplier()
+  } else {
+    updatedAt.value = ''
   }
+}
+
+function openWmsRecharge() {
+  wmsFundAccountPanel.value?.openRecharge()
+}
+
+async function refreshWmsAccount() {
+  await wmsFundAccountPanel.value?.refresh()
 }
 
 async function refreshAll() {
@@ -512,6 +537,32 @@ onActivated(refreshAll)
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
+}
+.finance-section-switcher {
+  padding: 3px;
+  border: 1px solid var(--ant-color-border-secondary, #e8e8e8);
+  border-radius: 6px;
+  background: #f5f5f5;
+}
+.finance-section-switcher :deep(.ant-segmented-item) {
+  min-height: 36px;
+  border-radius: 4px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+  transition: color 0.15s, background-color 0.15s;
+}
+.finance-section-switcher :deep(.ant-segmented-item-label) {
+  min-height: 36px;
+  padding: 6px 14px;
+  line-height: 24px;
+}
+.finance-section-switcher :deep(.ant-segmented-item:hover:not(.ant-segmented-item-selected)) {
+  color: #1677ff;
+  background: #e6f4ff;
+}
+.finance-section-switcher :deep(.ant-segmented-item-selected) {
+  color: #fff;
+  background: #1677ff;
+  box-shadow: none;
 }
 .compact-summary-grid,
 .payable-summary-grid {
@@ -616,7 +667,8 @@ onActivated(refreshAll)
   color: #ff4d4f;
   font-weight: 600;
 }
-.updated-at { font-size: 12px; color: var(--ant-color-text-tertiary); }
+.toolbar-actions { min-height: 40px; }
+.updated-at { margin-left: 4px; font-size: 12px; color: var(--ant-color-text-tertiary); white-space: nowrap; }
 @media (max-width: 768px) {
   .page-toolbar {
     align-items: flex-start;

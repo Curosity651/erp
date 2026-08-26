@@ -30,4 +30,18 @@ describe('asset finance page sections', () => {
     expect(source).toContain('fund-summary-item')
     expect(source).toContain('account-detail-tabs')
   })
+
+  it('places WMS account actions and update time in the page toolbar', () => {
+    const page = readFileSync(fileURLToPath(new URL('./AssetFinancePage.vue', import.meta.url)), 'utf8')
+    const panel = readFileSync(fileURLToPath(new URL('./components/WmsFundAccountPanel.vue', import.meta.url)), 'utf8')
+
+    expect(page).toContain('ref="wmsFundAccountPanel"')
+    expect(page).toContain('activeSection === \'wms-account\'')
+    expect(page).toContain('登记充值')
+    expect(page.indexOf('登记充值')).toBeLessThan(page.indexOf('更新于'))
+    expect(page).toContain('finance-section-switcher')
+    expect(page).toContain('.ant-segmented-item-selected')
+    expect(panel).toContain('defineExpose')
+    expect(panel).not.toContain('class="panel-actions"')
+  })
 })

@@ -9,6 +9,8 @@ const PLATFORM = '/fund-settlement/platform'
 export const getOwnerFundAccounts = () => httpClient.get<ApiResult<FundAccount[]>>(`${OWNER}/accounts`)
 export const getOwnerRecharges = (params?: FundQuery) => httpClient.get<ApiResult<RechargeOrder[]>>(`${OWNER}/recharges`, { params })
 export const getOwnerLedger = (params?: FundQuery) => httpClient.get<ApiResult<FundLedger[]>>(`${OWNER}/ledger`, { params })
+export const getOwnerLedgerMonths = (params?: FundQuery) => httpClient.get<ApiResult<FundLedgerMonth[]>>(`${OWNER}/ledger/months`, { params })
+export const exportOwnerLedger = (params: Required<Pick<FundQuery, 'wmsTenantId' | 'currency' | 'startDate' | 'endDate'>>) => httpClient.get(`${OWNER}/ledger/export`, { params, responseType: 'blob' })
 export const createOwnerRecharge = (data: RechargeCreateForm) => httpClient.post<ApiResult<RechargeOrder>>(`${OWNER}/recharges`, data)
 export const cancelOwnerRecharge = (id: number) => httpClient.post<ApiResult<void>>(`${OWNER}/recharges/${id}/cancel`)
 

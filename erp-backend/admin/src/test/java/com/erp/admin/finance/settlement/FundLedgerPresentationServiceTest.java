@@ -53,6 +53,18 @@ class FundLedgerPresentationServiceTest {
         assertEquals("INBOUND_CBM", charge.getDescription());
     }
 
+    @Test
+    void labelsLogisticsProductLedgerUsingItsPersistedBusinessFormat() {
+        FundLedgerVO charge = row("CHARGE", "FULFILLMENT_LOGISTICS:7", "小件经济自提",
+                "-10.00", LocalDateTime.of(2026, 8, 25, 20, 0));
+
+        service.group(Collections.singletonList(charge), Collections.emptyMap(),
+                LocalDate.of(2026, 8, 26));
+
+        assertEquals("履约订单 #7", charge.getBusinessLabel());
+        assertEquals("物流产品费用（小件经济自提）", charge.getDescriptionLabel());
+    }
+
     private static FundLedgerVO row(String type, String businessNo, String description,
             String amount, LocalDateTime time) {
         FundLedgerVO row = new FundLedgerVO();
