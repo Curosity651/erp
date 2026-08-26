@@ -1,94 +1,99 @@
 <template>
   <div class="asset-finance-page">
-    <a-card title="资产与账务" :bordered="false">
-      <template #extra>
+    <a-card :bordered="false">
+      <div class="page-toolbar">
+        <a-segmented
+          :value="activeSection"
+          :options="sectionOptions"
+          size="large"
+          @change="onSectionChange"
+        />
         <a-space>
           <span class="updated-at">更新于 {{ updatedAt || '--' }}</span>
-          <a-button :loading="overviewLoading" @click="refreshAll">刷新</a-button>
+          <a-button v-if="activeSection !== 'wms-account'" :loading="summaryLoading" @click="refreshAll">刷新</a-button>
         </a-space>
-      </template>
-      <a-spin :spinning="overviewLoading">
-        <!-- 资产总览：分币种，不折算 -->
-        <div class="section-title">📦 资产估值（采购成本 + 物流附加，加权平均、分币种不折算）</div>
-        <a-row :gutter="16" class="stat-row">
-          <a-col v-for="a in assets" :key="a.currency" :xs="24" :sm="12" :lg="8">
-            <div class="stat-card asset">
-              <div class="sc-head">
-                <span class="sc-cur">{{ a.currency }}</span>
-                <span class="sc-total">{{ money(a.total) }}</span>
-              </div>
-              <div class="sc-split">
-                <span>采购 {{ money(a.procurement) }}</span>
-                <span>物流 {{ money(a.logistics) }}</span>
-              </div>
+      </div>
+
+      <a-spin v-if="activeSection === 'assets'" :spinning="summaryLoading">
+        <div class="compact-summary-grid">
+          <div v-for="a in assets" :key="a.currency" class="summary-metric asset-metric">
+            <div class="metric-label">资产总额 · {{ a.currency }}</div>
+            <div class="metric-value">{{ money(a.total) }}</div>
+            <div class="metric-detail">采购 {{ money(a.procurement) }} · 物流 {{ money(a.logistics) }}</div>
+          </div>
+          <div class="summary-metric">
+            <div class="metric-label">库存总量</div>
+            <div class="metric-value">{{ assetOverview?.totalHeldQuantity ?? 0 }} <small>件</small></div>
+            <div class="metric-detail">包含海外仓、在途及 FBO</div>
+          </div>
+          <div class="summary-metric">
+            <div class="metric-label">海外仓 / FBO</div>
+            <div class="metric-value compact-value">
+              {{ positionQuantity('OWN_AVAILABLE') + positionQuantity('OWN_RESERVED') + positionQuantity('OWN_DAMAGED') }}
+              <span>/</span>
+              {{ positionQuantity('FBO') }}
             </div>
-          </a-col>
-          <a-col v-if="!assets.length" :span="24">
-            <a-empty description="暂无持有资产" />
-          </a-col>
-        </a-row>
+            <div class="metric-detail">海外仓库存 / FBO 平台库存</div>
+          </div>
+          <div class="summary-metric" :class="{ 'warning-metric': assetOverview?.unvaluedQuantity }">
+            <div class="metric-label">未估值库存</div>
+            <div class="metric-value">{{ assetOverview?.unvaluedQuantity ?? 0 }} <small>件</small></div>
+            <div class="metric-detail">{{ assetOverview?.unvaluedSkuCount ?? 0 }} 个 SKU 未维护采购成本</div>
+          </div>
+          <div v-if="!assets.length" class="summary-metric empty-metric">
+            <div class="metric-label">资产估值</div>
+            <div class="metric-value muted-value">暂无金额</div>
+            <div class="metric-detail">库存数量仍正常统计</div>
+          </div>
+        </div>
 
-        <a-alert
-          v-if="overview?.unvaluedQuantity"
-          class="unvalued-alert"
-          type="warning"
-          show-icon
-          :message="`有 ${overview.unvaluedSkuCount} 个 SKU、${overview.unvaluedQuantity} 件库存尚未维护采购成本，数量已计入资产，金额暂未计入`"
-        />
+        <div class="position-strip">
+          <span class="strip-title">库存位置</span>
+          <span v-for="position in assetOverview?.holdingPositions ?? []" :key="position.code" class="position-chip">
+            {{ position.name }} <strong>{{ position.quantity.toLocaleString() }}</strong>
+          </span>
+          <span v-if="assetOverview?.fboLastSyncedAt" class="sync-note">
+            FBO 同步 {{ assetOverview.fboLastSyncedAt }}
+            <a-tag v-if="assetOverview.fboStale" color="orange">可能过期</a-tag>
+          </span>
+        </div>
 
-        <div class="section-title">库存位置分布 · 共 {{ overview?.totalHeldQuantity ?? 0 }} 件</div>
-        <a-row :gutter="12" class="position-row">
-          <a-col v-for="position in overview?.holdingPositions ?? []" :key="position.code" :xs="12" :md="8" :xl="6">
-            <div class="position-item">
-              <span>{{ position.name }}</span>
-              <strong>{{ position.quantity.toLocaleString() }}</strong>
-            </div>
-          </a-col>
-        </a-row>
+        <div v-if="assetOverview?.unvaluedQuantity" class="compact-warning">
+          未估值库存不会计入资产金额，请补充对应 SKU 的采购成本。
+        </div>
 
-        <!-- 账务总览 -->
-        <a-row :gutter="16">
-          <a-col :xs="24" :lg="12">
-            <div class="section-title">🏭 应付生产采购商（分币种）</div>
-            <a-table
-              :columns="supPayCols"
-              :data-source="overview?.supplierPayable ?? []"
-              row-key="currency"
-              size="small"
-              :pagination="false"
-            >
-              <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'contract'">{{ money(record.contract) }}</template>
-                <template v-else-if="column.key === 'paid'">{{ money(record.paid) }}</template>
-                <template v-else-if="column.key === 'outstanding'">
-                  <span class="danger-text">{{ money(record.outstanding) }}</span>
-                </template>
-              </template>
-            </a-table>
-          </a-col>
-          <a-col :xs="24" :lg="12">
-            <div class="section-title">🚚 应付物流商（USD）</div>
-            <a-table
-              :columns="provPayCols"
-              :data-source="overview ? [overview.providerPayable] : []"
-              row-key="currency"
-              size="small"
-              :pagination="false"
-            >
-              <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'contract'">{{ money(record.contract) }}</template>
-                <template v-else-if="column.key === 'paid'">{{ money(record.paid) }}</template>
-                <template v-else-if="column.key === 'outstanding'">
-                  <span class="danger-text">{{ money(record.outstanding) }}</span>
-                </template>
-              </template>
-            </a-table>
-          </a-col>
-        </a-row>
       </a-spin>
 
+      <a-spin v-else-if="activeSection === 'payables'" :spinning="summaryLoading">
+        <div class="payable-summary-grid">
+          <div
+            v-for="item in payablesOverview?.supplierPayable ?? []"
+            :key="`supplier-${item.currency}`"
+            class="summary-metric"
+          >
+            <div class="metric-label">采购应付 · {{ item.currency }}</div>
+            <div class="metric-value danger-value">{{ money(item.outstanding) }}</div>
+            <div class="metric-detail">合同 {{ money(item.contract) }} · 已付 {{ money(item.paid) }}</div>
+          </div>
+          <div v-if="payablesOverview?.providerPayable" class="summary-metric">
+            <div class="metric-label">物流应付 · {{ payablesOverview.providerPayable.currency }}</div>
+            <div class="metric-value danger-value">{{ money(payablesOverview.providerPayable.outstanding) }}</div>
+            <div class="metric-detail">
+              合同 {{ money(payablesOverview.providerPayable.contract) }} · 已付 {{ money(payablesOverview.providerPayable.paid) }}
+            </div>
+          </div>
+          <div v-if="!hasPayables" class="summary-metric empty-metric">
+            <div class="metric-label">应付余额</div>
+            <div class="metric-value muted-value">0.00</div>
+            <div class="metric-detail">当前没有待付款项</div>
+          </div>
+        </div>
+      </a-spin>
+
+      <WmsFundAccountPanel v-else />
+
       <!-- 明细 -->
-      <a-tabs v-model:activeKey="activeTab" class="detail-tabs" @change="onTabChange">
+      <a-tabs v-if="activeSection === 'assets'" v-model:activeKey="activeTab" class="detail-tabs" @change="onTabChange">
         <!-- 采购成本明细 -->
         <a-tab-pane key="procurement" tab="采购成本明细">
           <a-table
@@ -136,7 +141,9 @@
             </template>
           </a-table>
         </a-tab-pane>
+      </a-tabs>
 
+      <a-tabs v-else-if="activeSection === 'payables'" v-model:activeKey="activeTab" class="detail-tabs" @change="onTabChange">
         <!-- 应付供应商（下钻采购单） -->
         <a-tab-pane key="supplier" tab="应付供应商">
           <a-table
@@ -241,57 +248,78 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated } from 'vue'
+import { computed, ref, onMounted, onActivated } from 'vue'
 import { isSuccess } from '@/api'
 import SkuBriefCell from '@/components/Sku/SkuBriefCell.vue'
+import WmsFundAccountPanel from './components/WmsFundAccountPanel.vue'
 import {
-  getAssetFinanceOverview,
+  getAssetOverview,
+  getPayablesOverview,
   getProcurementDetail,
   getLogisticsDetail,
   getPayableSupplier,
   getPayableProvider
 } from '@/api/wms/asset-finance'
 import type {
-  AssetFinanceOverviewVO,
+  AssetOverviewVO,
   AssetCurrencyVO,
   AssetProcurementRowVO,
   AssetLogisticsRowVO,
+  PayablesOverviewVO,
   PayableSupplierVO,
   PayableProviderVO
 } from '@/api/wms/asset-finance/types'
 
 defineOptions({ name: 'AssetFinancePage' })
 
-// ---------------- 总览 ----------------
-const overview = ref<AssetFinanceOverviewVO>()
+// ---------------- 页面视图 ----------------
+type SectionKey = 'assets' | 'payables' | 'wms-account'
+const activeSection = ref<SectionKey>('assets')
+const sectionOptions = [
+  { label: '资产总览', value: 'assets' },
+  { label: '应付账务', value: 'payables' },
+  { label: 'WMS资金账户', value: 'wms-account' }
+]
+
+const assetOverview = ref<AssetOverviewVO>()
+const payablesOverview = ref<PayablesOverviewVO>()
 const assets = ref<AssetCurrencyVO[]>([])
-const overviewLoading = ref(false)
+const summaryLoading = ref(false)
 const updatedAt = ref('')
+const hasPayables = computed(() => {
+  const suppliers = payablesOverview.value?.supplierPayable ?? []
+  const provider = payablesOverview.value?.providerPayable
+  return suppliers.length > 0 || Number(provider?.contract ?? 0) !== 0 || Number(provider?.outstanding ?? 0) !== 0
+})
 
-const supPayCols = [
-  { title: '币种', dataIndex: 'currency', key: 'currency', width: 80 },
-  { title: '合同总额', key: 'contract' },
-  { title: '已付', key: 'paid' },
-  { title: '应付余额', key: 'outstanding' }
-]
-const provPayCols = [
-  { title: '币种', dataIndex: 'currency', key: 'currency', width: 80 },
-  { title: '合同总额', key: 'contract' },
-  { title: '已付', key: 'paid' },
-  { title: '应付余额', key: 'outstanding' }
-]
+function positionQuantity(code: string) {
+  return assetOverview.value?.holdingPositions?.find(item => item.code === code)?.quantity ?? 0
+}
 
-async function loadOverview() {
-  overviewLoading.value = true
+async function loadAssetOverview() {
+  summaryLoading.value = true
   try {
-    const res = await getAssetFinanceOverview()
+    const res = await getAssetOverview()
     if (isSuccess(res)) {
-      overview.value = res.data
+      assetOverview.value = res.data
       assets.value = res.data.assets
       updatedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
     }
   } finally {
-    overviewLoading.value = false
+    summaryLoading.value = false
+  }
+}
+
+async function loadPayablesOverview() {
+  summaryLoading.value = true
+  try {
+    const res = await getPayablesOverview()
+    if (isSuccess(res)) {
+      payablesOverview.value = res.data
+      updatedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
+    }
+  } finally {
+    summaryLoading.value = false
   }
 }
 
@@ -410,12 +438,29 @@ function onTabChange(key: string) {
   else if (key === 'provider') loadProvider()
 }
 
+async function onSectionChange(value: string | number) {
+  activeSection.value = value as SectionKey
+  if (activeSection.value === 'assets') {
+    activeTab.value = 'procurement'
+    await loadAssetOverview()
+    await loadProcurement()
+  } else if (activeSection.value === 'payables') {
+    activeTab.value = 'supplier'
+    await loadPayablesOverview()
+    await loadSupplier()
+  }
+}
+
 async function refreshAll() {
-  await loadOverview()
-  if (activeTab.value === 'procurement') await loadProcurement()
-  else if (activeTab.value === 'logistics') await loadLogistics()
-  else if (activeTab.value === 'supplier') await loadSupplier()
-  else if (activeTab.value === 'provider') await loadProvider()
+  if (activeSection.value === 'assets') {
+    await loadAssetOverview()
+    if (activeTab.value === 'procurement') await loadProcurement()
+    else if (activeTab.value === 'logistics') await loadLogistics()
+  } else if (activeSection.value === 'payables') {
+    await loadPayablesOverview()
+    if (activeTab.value === 'supplier') await loadSupplier()
+    else if (activeTab.value === 'provider') await loadProvider()
+  }
 }
 
 // ---------------- 工具 ----------------
@@ -447,7 +492,7 @@ function shipStatusText(s: string): string {
 }
 
 onMounted(() => {
-  loadOverview()
+  loadAssetOverview()
   loaded.value['procurement'] = true
   loadProcurement()
 })
@@ -456,59 +501,132 @@ onActivated(refreshAll)
 
 <style scoped>
 .asset-finance-page {
+  padding: 12px;
+}
+.asset-finance-page :deep(.ant-card-body) {
   padding: 16px;
 }
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 8px 0 12px;
-  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
-}
-.stat-row {
-  margin-bottom: 16px;
-}
-.stat-card {
-  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin-bottom: 16px;
-}
-.stat-card.asset {
-  background: linear-gradient(135deg, rgba(22, 119, 255, 0.06), rgba(22, 119, 255, 0.01));
-}
-.sc-head {
+.page-toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
 }
-.sc-cur {
-  font-size: 13px;
+.compact-summary-grid,
+.payable-summary-grid {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.summary-metric {
+  flex: 1 0 176px;
+  min-width: 0;
+  min-height: 88px;
+  padding: 11px 13px;
+  border: 1px solid var(--ant-color-border-secondary, #e8e8e8);
+  border-radius: 6px;
+  background: #fff;
+}
+.asset-metric {
+  border-color: #b7d5ff;
+}
+.metric-label {
   color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
-  font-weight: 600;
-}
-.sc-total {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1677ff;
-}
-.sc-split {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
   font-size: 12px;
+  line-height: 18px;
+}
+.metric-value {
+  margin-top: 3px;
+  font-size: 21px;
+  line-height: 28px;
+  font-weight: 650;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+  font-variant-numeric: tabular-nums;
+}
+.metric-value small {
+  font-size: 12px;
+  font-weight: 400;
+}
+.compact-value span {
+  margin: 0 4px;
   color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
 }
+.metric-detail {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.warning-metric {
+  border-color: #ffd591;
+  background: #fffaf0;
+}
+.danger-value {
+  color: #cf1322;
+}
+.muted-value {
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  font-size: 18px;
+}
+.position-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-top: 10px;
+  padding: 7px 10px;
+  overflow-x: auto;
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.strip-title {
+  padding-right: 8px;
+  border-right: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  font-weight: 600;
+}
+.position-chip {
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+  font-size: 12px;
+}
+.position-chip strong {
+  margin-left: 3px;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+  font-variant-numeric: tabular-nums;
+}
+.sync-note {
+  margin-left: auto;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  font-size: 12px;
+}
+.compact-warning {
+  margin-top: 8px;
+  color: #ad6800;
+  font-size: 12px;
+}
 .detail-tabs {
-  margin-top: 16px;
+  margin-top: 10px;
 }
 .danger-text {
   color: #ff4d4f;
   font-weight: 600;
 }
 .updated-at { font-size: 12px; color: var(--ant-color-text-tertiary); }
-.unvalued-alert { margin-bottom: 16px; }
-.position-row { margin-bottom: 18px; }
-.position-item { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 10px 12px; border: 1px solid var(--ant-color-border-secondary, #f0f0f0); border-radius: 6px; }
-.position-item span { color: var(--ant-color-text-secondary); }
-.position-item strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+@media (max-width: 768px) {
+  .page-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .page-toolbar :deep(.ant-segmented) {
+    max-width: 100%;
+  }
+  .summary-metric {
+    flex-basis: 158px;
+  }
+}
 </style>

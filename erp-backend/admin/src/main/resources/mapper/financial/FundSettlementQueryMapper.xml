@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.finance.settlement.mapper.FundSettlementQueryMapper">
+
+    <sql id="ownerAccountCore">
+        SELECT 'OWNER_ACCOUNT' AS accountScope, k.wms_tenant_id AS wmsTenantId,
+               wt.tenant_name AS wmsTenantName, k.erp_tenant_id AS erpTenantId,
+               et.tenant_name AS erpTenantName, k.currency,
+               COALESCE(r.recharge_amount, 0) AS rechargeAmount,
+               COALESCE(c.charge_amount, 0) AS chargeAmount,
+               COALESCE(r.recharge_amount, 0) - COALESCE(c.charge_amount, 0) AS balance,
+               CASE WHEN COALESCE(r.recharge_amount, 0) - COALESCE(c.charge_amount, 0) &lt; 0 THEN 1 ELSE 0 END AS negative,
+               COALESCE(p.pending_count, 0) AS pendingCount,
+               NULLIF(GREATEST(COALESCE(r.last_time, '1000-01-01 00:00:00'),
+                               COALESCE(c.last_time, '1000-01-01 00:00:00'),
+                               COALESCE(p.last_time, '1000-01-01 00:00:00')),
+                      '1000-01-01 00:00:00') AS lastChangeTime
+        FROM (
+            SELECT wms_tenant_id, erp_tenant_id, UPPER(currency) currency FROM wms_recharge_order
+             WHERE account_scope='OWNER_ACCOUNT' AND status IN ('PENDING','APPROVED')
+            UNION
+            SELECT wms_tenant_id, erp_tenant_id, UPPER(currency) currency FROM wms_client_billing_record
+             WHERE fee_type='SHIPPING'
+        ) k
+        LEFT JOIN (
+            SELECT wms_tenant_id, erp_tenant_id, UPPER(currency) currency,
+                   SUM(amount) recharge_amount, MAX(review_time) last_time
+              FROM wms_recharge_order
+             WHERE account_scope='OWNER_ACCOUNT' AND status = 'APPROVED'
+             GROUP BY wms_tenant_id, erp_tenant_id, UPPER(currency)
+        ) r ON r.wms_tenant_id=k.wms_tenant_id AND r.erp_tenant_id=k.erp_tenant_id AND r.currency=k.currency
+        LEFT JOIN (
+            SELECT wms_tenant_id, erp_tenant_id, UPPER(currency) currency,
+                   SUM(amount) charge_amount, MAX(create_time) last_time
+              FROM wms_client_billing_record WHERE fee_type = 'SHIPPING'
+             GROUP BY wms_tenant_id, erp_tenant_id, UPPER(currency)
+        ) c ON c.wms_tenant_id=k.wms_tenant_id AND c.erp_tenant_id=k.erp_tenant_id AND c.currency=k.currency
+        LEFT JOIN (
+            SELECT wms_tenant_id, erp_tenant_id, UPPER(currency) currency,
+                   COUNT(*) pending_count, MAX(create_time) last_time
+              FROM wms_recharge_order WHERE account_scope='OWNER_ACCOUNT' AND status='PENDING'
+             GROUP BY wms_tenant_id, erp_tenant_id, UPPER(currency)
+        ) p ON p.wms_tenant_id=k.wms_tenant_id AND p.erp_tenant_id=k.erp_tenant_id AND p.currency=k.currency
+        LEFT JOIN sys_tenant wt ON wt.id=k.wms_tenant_id
+        LEFT JOIN sys_tenant et ON et.id=k.erp_tenant_id
+    </sql>
+
+    <select id="ownerAccounts" resultType="com.erp.admin.finance.settlement.model.vo.FundAccountVO">
+        <include refid="ownerAccountCore"/>
+        WHERE k.erp_tenant_id=#{erpTenantId}
+        ORDER BY k.currency
+    </select>
+
+    <select id="operatorOwnerAccounts" resultType="com.erp.admin.finance.settlement.model.vo.FundAccountVO">
+        <include refid="ownerAccountCore"/>
+        WHERE k.wms_tenant_id=#{wmsTenantId}
+        <if test="qo.erpTenantId != null">AND k.erp_tenant_id=#{qo.erpTenantId}</if>
+        <if test="qo.currency != null and qo.currency != ''">AND k.currency=UPPER(#{qo.currency})</if>
+        <if test="qo.negative != null">AND (COALESCE(r.recharge_amount,0)-COALESCE(c.charge_amount,0) &lt; 0)=#{qo.negative}</if>
+        ORDER BY et.tenant_name, k.currency
+    </select>
+
+    <sql id="platformAccountCore">
+        SELECT 'PLATFORM_ACCOUNT' AS accountScope, k.wms_tenant_id AS wmsTenantId,
+               wt.tenant_name AS wmsTenantName, NULL AS erpTenantId, NULL AS erpTenantName,
+               k.currency, COALESCE(r.recharge_amount,0) AS rechargeAmount,
+               COALESCE(c.charge_amount,0) AS chargeAmount,
+               COALESCE(r.recharge_amount,0)-COALESCE(c.charge_amount,0) AS balance,
+               CASE WHEN COALESCE(r.recharge_amount,0)-COALESCE(c.charge_amount,0) &lt; 0 THEN 1 ELSE 0 END AS negative,
+               COALESCE(p.pending_count,0) AS pendingCount,
+               NULLIF(GREATEST(COALESCE(r.last_time, '1000-01-01 00:00:00'),
+                               COALESCE(c.last_time, '1000-01-01 00:00:00'),
+                               COALESCE(p.last_time, '1000-01-01 00:00:00')),
+                      '1000-01-01 00:00:00') AS lastChangeTime
+        FROM (
+            SELECT wms_tenant_id, UPPER(currency) currency FROM wms_recharge_order
+             WHERE account_scope='PLATFORM_ACCOUNT' AND status IN ('PENDING','APPROVED')
+            UNION
+            SELECT wms_tenant_id, UPPER(currency) currency FROM wms_billing_record
+             WHERE charge_status='POSTED'
+        ) k
+        LEFT JOIN (
+            SELECT wms_tenant_id, UPPER(currency) currency, SUM(amount) recharge_amount, MAX(review_time) last_time
+              FROM wms_recharge_order WHERE account_scope='PLATFORM_ACCOUNT' AND status='APPROVED'
+             GROUP BY wms_tenant_id, UPPER(currency)
+        ) r ON r.wms_tenant_id=k.wms_tenant_id AND r.currency=k.currency
+        LEFT JOIN (
+            SELECT wms_tenant_id, UPPER(currency) currency, SUM(amount) charge_amount, MAX(create_time) last_time
+              FROM wms_billing_record WHERE charge_status='POSTED'
+             GROUP BY wms_tenant_id, UPPER(currency)
+        ) c ON c.wms_tenant_id=k.wms_tenant_id AND c.currency=k.currency
+        LEFT JOIN (
+            SELECT wms_tenant_id, UPPER(currency) currency,
+                   COUNT(*) pending_count, MAX(create_time) last_time
+              FROM wms_recharge_order WHERE account_scope='PLATFORM_ACCOUNT' AND status='PENDING'
+             GROUP BY wms_tenant_id, UPPER(currency)
+        ) p ON p.wms_tenant_id=k.wms_tenant_id AND p.currency=k.currency
+        LEFT JOIN sys_tenant wt ON wt.id=k.wms_tenant_id
+    </sql>
+
+    <select id="operatorPlatformAccounts" resultType="com.erp.admin.finance.settlement.model.vo.FundAccountVO">
+        <include refid="platformAccountCore"/> WHERE k.wms_tenant_id=#{wmsTenantId} ORDER BY k.currency
+    </select>
+
+    <select id="platformProviderAccounts" resultType="com.erp.admin.finance.settlement.model.vo.FundAccountVO">
+        <include refid="platformAccountCore"/> WHERE 1=1
+        <if test="qo.wmsTenantId != null">AND k.wms_tenant_id=#{qo.wmsTenantId}</if>
+        <if test="qo.currency != null and qo.currency != ''">AND k.currency=UPPER(#{qo.currency})</if>
+        <if test="qo.negative != null">AND (COALESCE(r.recharge_amount,0)-COALESCE(c.charge_amount,0) &lt; 0)=#{qo.negative}</if>
+        ORDER BY wt.tenant_name, k.currency
+    </select>
+
+    <select id="recharges" resultType="com.erp.admin.finance.settlement.model.vo.RechargeOrderVO">
+        SELECT r.*, wt.tenant_name wmsTenantName, et.tenant_name erpTenantName
+          FROM wms_recharge_order r
+          LEFT JOIN sys_tenant wt ON wt.id=r.wms_tenant_id
+          LEFT JOIN sys_tenant et ON et.id=r.erp_tenant_id
+         WHERE r.account_scope=#{scope}
+        <if test="wmsTenantId != null">AND r.wms_tenant_id=#{wmsTenantId}</if>
+        <if test="erpTenantId != null">AND r.erp_tenant_id=#{erpTenantId}</if>
+        <if test="qo.status != null and qo.status != ''">AND r.status=#{qo.status}</if>
+        <if test="qo.currency != null and qo.currency != ''">AND UPPER(r.currency)=UPPER(#{qo.currency})</if>
+        <if test="qo.startDate != null">AND r.create_time &gt;= #{qo.startDate}</if>
+        <if test="qo.endDate != null">AND r.create_time &lt; DATE_ADD(#{qo.endDate}, INTERVAL 1 DAY)</if>
+        ORDER BY r.id DESC
+    </select>
+
+    <select id="ownerLedger" resultType="com.erp.admin.finance.settlement.model.vo.FundLedgerVO">
+        SELECT * FROM (
+          SELECT CASE WHEN status='REVERSED' THEN 'REVERSAL' ELSE 'RECHARGE' END entryType,
+                 recharge_no businessNo, COALESCE(remark,'充值记录') description,
+                 CASE WHEN status='APPROVED' THEN amount ELSE 0 END amount, currency, status,
+                 voucher_file_id voucherFileId, COALESCE(review_time,create_time) occurredTime,
+                 COALESCE(reviewer_name,applicant_name) operatorName
+            FROM wms_recharge_order WHERE account_scope='OWNER_ACCOUNT'
+             AND wms_tenant_id=#{wmsTenantId} AND erp_tenant_id=#{erpTenantId}
+          UNION ALL
+          SELECT 'CHARGE', biz_id, COALESCE(product_name_snapshot,'物流产品费用'), -amount,
+                 currency, 'POSTED', NULL, create_time, NULL
+            FROM wms_client_billing_record WHERE fee_type='SHIPPING'
+             AND wms_tenant_id=#{wmsTenantId} AND erp_tenant_id=#{erpTenantId}
+        ) x WHERE 1=1
+        <if test="qo.currency != null and qo.currency != ''">AND UPPER(x.currency)=UPPER(#{qo.currency})</if>
+        <if test="qo.startDate != null">AND x.occurredTime &gt;= #{qo.startDate}</if>
+        <if test="qo.endDate != null">AND x.occurredTime &lt; DATE_ADD(#{qo.endDate}, INTERVAL 1 DAY)</if>
+        ORDER BY x.occurredTime DESC
+    </select>
+
+    <select id="platformLedger" resultType="com.erp.admin.finance.settlement.model.vo.FundLedgerVO">
+        SELECT * FROM (
+          SELECT CASE WHEN recharge_no LIKE 'CZC%' THEN 'REVERSAL' ELSE 'RECHARGE' END entryType,
+                 recharge_no businessNo, COALESCE(remark,'服务商充值') description,
+                 CASE WHEN recharge_no LIKE 'CZC%' THEN -amount ELSE amount END amount, currency, status,
+                 voucher_file_id voucherFileId, COALESCE(review_time,create_time) occurredTime,
+                 COALESCE(reviewer_name,applicant_name) operatorName
+            FROM wms_recharge_order WHERE account_scope='PLATFORM_ACCOUNT' AND wms_tenant_id=#{wmsTenantId}
+             AND status IN ('APPROVED','REVERSED')
+          UNION ALL
+          SELECT 'CHARGE', biz_id, COALESCE(fee_code,'平台服务费'), -amount, currency,
+                 charge_status, NULL, create_time, NULL
+            FROM wms_billing_record WHERE charge_status='POSTED' AND wms_tenant_id=#{wmsTenantId}
+        ) x WHERE 1=1
+        <if test="qo.currency != null and qo.currency != ''">AND UPPER(x.currency)=UPPER(#{qo.currency})</if>
+        <if test="qo.startDate != null">AND x.occurredTime &gt;= #{qo.startDate}</if>
+        <if test="qo.endDate != null">AND x.occurredTime &lt; DATE_ADD(#{qo.endDate}, INTERVAL 1 DAY)</if>
+        ORDER BY x.occurredTime DESC
+    </select>
+
+    <select id="platformStatementStatuses" resultType="com.erp.admin.finance.settlement.model.vo.FundLedgerMonthStatusVO">
+        SELECT bill_month month, status
+          FROM wms_monthly_bill
+         WHERE wms_tenant_id=#{wmsTenantId} AND deleted=0
+        <if test="currency != null and currency != ''">AND UPPER(currency)=UPPER(#{currency})</if>
+         ORDER BY bill_month DESC, id DESC
+    </select>
+</mapper>

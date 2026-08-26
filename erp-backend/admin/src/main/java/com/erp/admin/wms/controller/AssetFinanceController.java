@@ -5,8 +5,10 @@ import java.util.List;
 import com.erp.admin.wms.facade.AssetFinanceFacade;
 import com.erp.admin.wms.model.vo.AssetFinanceOverviewVO;
 import com.erp.admin.wms.model.vo.AssetLogisticsRowVO;
+import com.erp.admin.wms.model.vo.AssetOverviewVO;
 import com.erp.admin.wms.model.vo.AssetProcurementRowVO;
 import com.erp.admin.wms.model.vo.PayableProviderVO;
+import com.erp.admin.wms.model.vo.PayablesOverviewVO;
 import com.erp.admin.wms.model.vo.PayableSupplierVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +38,18 @@ public class AssetFinanceController {
     @GetMapping("/overview")
     public ApiResult<AssetFinanceOverviewVO> getOverview() {
         return ApiResult.ok(assetFinanceFacade.getOverview());
+    }
+
+    @Operation(summary = "资产总览（库存位置、采购成本、物流资本化）")
+    @GetMapping("/assets-overview")
+    public ApiResult<AssetOverviewVO> getAssetsOverview() {
+        return ApiResult.ok(assetFinanceFacade.getAssetsOverview());
+    }
+
+    @Operation(summary = "应付总览（供应商、国内物流商）")
+    @GetMapping("/payables-overview")
+    public ApiResult<PayablesOverviewVO> getPayablesOverview() {
+        return ApiResult.ok(assetFinanceFacade.getPayablesOverview());
     }
 
     @Operation(summary = "采购成本明细（按 SKU × 币种）")

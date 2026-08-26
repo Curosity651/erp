@@ -16,6 +16,23 @@ export interface PayableCurrencyVO {
   outstanding: number
 }
 
+/** 资产总览 */
+export interface AssetOverviewVO {
+  assets: AssetCurrencyVO[]
+  unvaluedSkuCount: number
+  unvaluedQuantity: number
+  totalHeldQuantity: number
+  holdingPositions: HoldingPositionVO[]
+  fboLastSyncedAt: string | null
+  fboStale: boolean
+}
+
+/** 应付账务总览 */
+export interface PayablesOverviewVO {
+  supplierPayable: PayableCurrencyVO[]
+  providerPayable: PayableCurrencyVO
+}
+
 /** 资产与账务总览 */
 export interface AssetFinanceOverviewVO {
   assets: AssetCurrencyVO[]
@@ -25,6 +42,8 @@ export interface AssetFinanceOverviewVO {
   unvaluedQuantity: number
   totalHeldQuantity: number
   holdingPositions: HoldingPositionVO[]
+  fboLastSyncedAt: string | null
+  fboStale: boolean
 }
 
 export interface HoldingPositionVO {

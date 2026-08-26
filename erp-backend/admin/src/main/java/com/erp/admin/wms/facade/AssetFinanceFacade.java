@@ -15,22 +15,23 @@ import java.util.TreeSet;
 import com.erp.admin.product.service.SkuBriefService;
 import com.erp.admin.wms.mapper.AssetFinanceMapper;
 import com.erp.admin.wms.mapper.RegionInventoryMapper;
-import com.erp.admin.wms.mapper.ShipProdCalcMapper;
+import com.erp.admin.wms.model.dto.AssetLocationStockDTO;
 import com.erp.admin.wms.model.dto.PayableProviderRowDTO;
 import com.erp.admin.wms.model.dto.PayableSupplierRowDTO;
 import com.erp.admin.wms.model.dto.PurchaseCostAggDTO;
 import com.erp.admin.wms.model.dto.PurchaseUnshippedBatchDTO;
-import com.erp.admin.wms.model.dto.RegionSkuStockDTO;
 import com.erp.admin.wms.model.dto.ShippingCostLineDTO;
 import com.erp.admin.wms.model.dto.SkuQuantityDTO;
 import com.erp.admin.wms.model.entity.Region;
 import com.erp.admin.wms.model.vo.AssetFinanceOverviewVO;
 import com.erp.admin.wms.model.vo.AssetLogisticsRowVO;
+import com.erp.admin.wms.model.vo.AssetOverviewVO;
 import com.erp.admin.wms.model.vo.AssetProcurementRowVO;
+import com.erp.admin.wms.model.vo.FboInventorySummaryVO;
 import com.erp.admin.wms.model.vo.PayableProviderVO;
+import com.erp.admin.wms.model.vo.PayablesOverviewVO;
 import com.erp.admin.wms.model.vo.PayableSupplierVO;
 import com.erp.admin.wms.service.RegionService;
-import com.erp.admin.wms.service.RegionStockDataProvider;
 import com.erp.admin.wms.service.FboInventorySnapshotService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -50,9 +51,7 @@ public class AssetFinanceFacade {
     private static final String USD = "USD";
 
     private final RegionService regionService;
-    private final RegionStockDataProvider regionStockDataProvider;
     private final RegionInventoryMapper regionInventoryMapper;
-    private final ShipProdCalcMapper shipProdCalcMapper;
     private final AssetFinanceMapper assetFinanceMapper;
     private final SkuBriefService skuBriefService;
     private final FboInventorySnapshotService fboInventorySnapshotService;
@@ -60,12 +59,29 @@ public class AssetFinanceFacade {
     // ============================================================ 总览
 
     public AssetFinanceOverviewVO getOverview() {
+        AssetOverviewVO asset = getAssetsOverview();
+        PayablesOverviewVO payable = getPayablesOverview();
+        return AssetFinanceOverviewVO.builder()
+                .assets(asset.getAssets())
+                .supplierPayable(payable.getSupplierPayable())
+                .providerPayable(payable.getProviderPayable())
+                .unvaluedSkuCount(asset.getUnvaluedSkuCount())
+                .unvaluedQuantity(asset.getUnvaluedQuantity())
+                .totalHeldQuantity(asset.getTotalHeldQuantity())
+                .holdingPositions(asset.getHoldingPositions())
+                .fboLastSyncedAt(asset.getFboLastSyncedAt())
+                .fboStale(asset.getFboStale())
+                .build();
+    }
+
+    public AssetOverviewVO getAssetsOverview() {
+        Long tenantId = requireOwnerTenant();
         HeldQty held = loadHeldQty();
         List<AssetProcurementRowVO> proc = computeProcurementRows(held);
         List<AssetLogisticsRowVO> logi = computeLogisticsRows(held);
 
         Set<String> valuedSkus = new TreeSet<>();
-        for (PurchaseCostAggDTO row : assetFinanceMapper.selectPurchaseCostAgg()) {
+        for (PurchaseCostAggDTO row : assetFinanceMapper.selectPurchaseCostAgg(tenantId)) {
             if (nz(row.getQty()) > 0) valuedSkus.add(row.getSkuCode());
         }
         int unvaluedQuantity = held.universe.stream()
@@ -99,6 +115,20 @@ public class AssetFinanceFacade {
                     .build());
         }
 
+        FboInventorySummaryVO fboSummary = fboInventorySnapshotService.getSummary();
+        return AssetOverviewVO.builder()
+                .assets(assets)
+                .unvaluedSkuCount(unvaluedSkuCount)
+                .unvaluedQuantity(unvaluedQuantity)
+                .totalHeldQuantity(held.total())
+                .holdingPositions(buildHoldingPositions(held))
+                .fboLastSyncedAt(fboSummary.getLastSyncedAt())
+                .fboStale(fboSummary.getStale())
+                .build();
+    }
+
+    public PayablesOverviewVO getPayablesOverview() {
+        requireOwnerTenant();
         // 应付供应商按币种
         Map<String, BigDecimal[]> supByCur = new LinkedHashMap<>();
         for (PayableSupplierVO s : computePayableSuppliers()) {
@@ -122,11 +152,9 @@ public class AssetFinanceFacade {
         AssetFinanceOverviewVO.PayableCurrencyVO providerPayable = AssetFinanceOverviewVO.PayableCurrencyVO.builder()
                 .currency(USD).contract(money(pc)).paid(money(pp)).outstanding(money(po)).build();
 
-        return AssetFinanceOverviewVO.builder()
-                .assets(assets).supplierPayable(supplierPayable).providerPayable(providerPayable)
-                .unvaluedSkuCount(unvaluedSkuCount).unvaluedQuantity(unvaluedQuantity)
-                .totalHeldQuantity(held.total())
-                .holdingPositions(buildHoldingPositions(held))
+        return PayablesOverviewVO.builder()
+                .supplierPayable(supplierPayable)
+                .providerPayable(providerPayable)
                 .build();
     }
 
@@ -161,26 +189,25 @@ public class AssetFinanceFacade {
     /** 持有量：A+B 现货 / C 在途 / D+E 在制（采购未发货）。 */
     private HeldQty loadHeldQty() {
         HeldQty h = new HeldQty();
+        Long tenantId = requireOwnerTenant();
+        for (AssetLocationStockDTO stock : assetFinanceMapper.selectLocationHeldQuantity(tenantId)) {
+            h.available.merge(stock.getSkuCode(), nz(stock.getAvailableQuantity()), Integer::sum);
+            h.reserved.merge(stock.getSkuCode(), nz(stock.getReservedQuantity()), Integer::sum);
+            h.damaged.merge(stock.getSkuCode(), nz(stock.getDamagedQuantity()), Integer::sum);
+        }
         List<Region> regions = regionService.listEnabled();
         Set<Long> regionIds = new TreeSet<>();
         regions.forEach(r -> regionIds.add(r.getId()));
         if (!regionIds.isEmpty()) {
-            for (RegionSkuStockDTO s : regionStockDataProvider.getRegionSkuStocks(regionIds, null)) {
-                h.available.merge(s.getSkuCode(), nz(s.getTotalAvailable()), Integer::sum);
-                h.reserved.merge(s.getSkuCode(), nz(s.getTotalReserved()), Integer::sum);
-                h.inTransit.merge(s.getSkuCode(), nz(s.getTotalInTransit()), Integer::sum);
-                h.damaged.merge(s.getSkuCode(), nz(s.getTotalDamaged()), Integer::sum);
-            }
-            Long tenantId = com.erp.admin.common.tenant.TenantContext.getCurrentTenant();
             for (SkuQuantityDTO row : regionInventoryMapper.selectInTransitQuantityBySku(tenantId, regionIds)) {
                 h.inTransit.merge(row.getSkuCode(), nz(row.getQuantity()), Integer::sum);
             }
         }
-        for (PurchaseUnshippedBatchDTO b : shipProdCalcMapper.selectPurchaseUnshippedBatches(null)) {
+        for (PurchaseUnshippedBatchDTO b : assetFinanceMapper.selectPurchaseUnshippedBatches(tenantId)) {
             h.unshipped.merge(b.getSkuCode(), nz(b.getQuantity()), Integer::sum);
         }
         Map<String, Integer> fbo = fboInventorySnapshotService.sumQuantityBySku(
-                com.erp.admin.common.tenant.TenantContext.getCurrentTenant(), null);
+                tenantId, null);
         h.fbo.putAll(fbo);
         h.universe.addAll(h.available.keySet());
         h.universe.addAll(h.reserved.keySet());
@@ -195,7 +222,7 @@ public class AssetFinanceFacade {
         // 采购聚合：sku → currency → (qty, amount)
         Map<String, Map<String, PurchaseCostAggDTO>> bySku = new HashMap<>();
         Map<String, Integer> totalPurchased = new HashMap<>();
-        for (PurchaseCostAggDTO a : assetFinanceMapper.selectPurchaseCostAgg()) {
+        for (PurchaseCostAggDTO a : assetFinanceMapper.selectPurchaseCostAgg(requireOwnerTenant())) {
             bySku.computeIfAbsent(a.getSkuCode(), k -> new LinkedHashMap<>()).put(a.getCurrency(), a);
             totalPurchased.merge(a.getSkuCode(), nz(a.getQty()), Integer::sum);
         }
@@ -251,7 +278,7 @@ public class AssetFinanceFacade {
     }
 
     private List<AssetLogisticsRowVO> computeLogisticsRows(HeldQty held) {
-        List<ShippingCostLineDTO> lines = assetFinanceMapper.selectShippingCostLines();
+        List<ShippingCostLineDTO> lines = assetFinanceMapper.selectShippingCostLines(requireOwnerTenant());
         // 每物流单：总额 USD + 总数量（分摊基数）
         Map<Long, BigDecimal> orderTotal = new HashMap<>();
         Map<Long, Integer> orderQty = new HashMap<>();
@@ -297,7 +324,7 @@ public class AssetFinanceFacade {
     }
 
     private List<PayableSupplierVO> computePayableSuppliers() {
-        List<PayableSupplierRowDTO> rows = assetFinanceMapper.selectPayableSupplierRows();
+        List<PayableSupplierRowDTO> rows = assetFinanceMapper.selectPayableSupplierRows(requireOwnerTenant());
         Map<String, PayableSupplierVO> group = new LinkedHashMap<>();
         Map<String, List<PayableSupplierVO.OrderVO>> orders = new HashMap<>();
         Map<String, BigDecimal[]> acc = new HashMap<>();
@@ -344,7 +371,7 @@ public class AssetFinanceFacade {
     }
 
     private List<PayableProviderVO> computePayableProviders() {
-        List<PayableProviderRowDTO> rows = assetFinanceMapper.selectPayableProviderRows();
+        List<PayableProviderRowDTO> rows = assetFinanceMapper.selectPayableProviderRows(requireOwnerTenant());
         Map<Long, PayableProviderVO> group = new LinkedHashMap<>();
         Map<Long, List<PayableProviderVO.OrderVO>> orders = new HashMap<>();
         Map<Long, BigDecimal[]> acc = new HashMap<>();
@@ -459,5 +486,13 @@ public class AssetFinanceFacade {
 
     private static BigDecimal money(BigDecimal v) {
         return (v == null ? BigDecimal.ZERO : v).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private Long requireOwnerTenant() {
+        Long tenantId = com.erp.admin.common.tenant.TenantContext.getCurrentTenant();
+        if (tenantId == null || com.erp.admin.common.tenant.TenantContext.BLOCK_TENANT_ID.equals(tenantId)) {
+            throw new IllegalArgumentException("资产与账务仅支持 ERP 货主访问");
+        }
+        return tenantId;
     }
 }

@@ -2,7 +2,26 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.erp.admin.wms.mapper.AssetFinanceMapper">
 
-    <!-- 采购成本聚合（SKU × 币种）：非草稿非取消。erp_tenant_id 由拦截器注入 wms_purchase_order -->
+	<!-- 新逻辑库位库存是海外仓实物 SSOT。quantity 已包含 reserved，按桶拆分后总量仍等于实物量。 -->
+	<select id="selectLocationHeldQuantity" resultType="com.erp.admin.wms.model.dto.AssetLocationStockDTO">
+		SELECT
+			li.sku_code AS skuCode,
+			SUM(CASE WHEN UPPER(li.quality) &lt;&gt; 'DAMAGED'
+				THEN GREATEST(li.quantity - li.reserved_quantity, 0) ELSE 0 END) AS availableQuantity,
+			SUM(CASE WHEN UPPER(li.quality) &lt;&gt; 'DAMAGED'
+				THEN LEAST(GREATEST(li.reserved_quantity, 0), GREATEST(li.quantity, 0)) ELSE 0 END) AS reservedQuantity,
+			SUM(CASE WHEN UPPER(li.quality) = 'DAMAGED'
+				THEN GREATEST(li.quantity, 0) ELSE 0 END) AS damagedQuantity
+		FROM wms_location_inventory li
+		INNER JOIN wms_warehouse w ON w.id = li.warehouse_id
+		WHERE li.erp_tenant_id = #{erpTenantId}
+		  AND li.deleted = 0
+		  AND w.deleted = 0
+		  AND w.warehouse_type = 'OWN'
+		GROUP BY li.sku_code
+	</select>
+
+    <!-- 采购成本聚合（SKU × 币种）：非草稿非取消。 -->
     <select id="selectPurchaseCostAgg" resultType="com.erp.admin.wms.model.dto.PurchaseCostAggDTO">
         SELECT
             poi.sku_code AS skuCode,
@@ -12,9 +31,24 @@
         FROM wms_purchase_order po
         INNER JOIN wms_purchase_order_item poi ON poi.purchase_order_id = po.id
         WHERE po.deleted = 0
+          AND po.erp_tenant_id = #{erpTenantId}
           AND po.order_status IN ('CONFIRMED', 'IN_PRODUCTION', 'COMPLETED')
         GROUP BY poi.sku_code, po.currency_code
     </select>
+
+	<select id="selectPurchaseUnshippedBatches"
+			resultType="com.erp.admin.wms.model.dto.PurchaseUnshippedBatchDTO">
+		SELECT poi.sku_code AS skuCode,
+		       (poi.quantity - IFNULL(poi.shipped_quantity, 0)) AS quantity,
+		       po.expected_delivery_date AS expectedDeliveryDate,
+		       po.order_no AS orderNo
+		FROM wms_purchase_order po
+		INNER JOIN wms_purchase_order_item poi ON poi.purchase_order_id = po.id
+		WHERE po.deleted = 0
+		  AND po.erp_tenant_id = #{erpTenantId}
+		  AND po.order_status IN ('CONFIRMED', 'IN_PRODUCTION')
+		  AND (poi.quantity - IFNULL(poi.shipped_quantity, 0)) &gt; 0
+	</select>
 
     <!-- 应付供应商原始行（每采购单）：非草稿非取消。supplier 自动按 tenant_id 隔离 -->
     <select id="selectPayableSupplierRows" resultType="com.erp.admin.wms.model.dto.PayableSupplierRowDTO">
@@ -34,6 +68,7 @@
         FROM wms_purchase_order po
         LEFT JOIN supplier s ON s.id = po.supplier_id
         WHERE po.deleted = 0
+          AND po.erp_tenant_id = #{erpTenantId}
           AND (po.order_status IN ('CONFIRMED', 'IN_PRODUCTION', 'COMPLETED')
                OR po.prepay_status = 1 OR po.balance_status = 1)
     </select>
@@ -51,6 +86,7 @@
         FROM wms_shipping_order so
         INNER JOIN wms_shipping_order_item soi ON soi.shipping_order_id = so.id
         WHERE so.deleted = 0
+          AND so.erp_tenant_id = #{erpTenantId}
           AND so.shipping_status &lt;&gt; 'PENDING'
     </select>
 
@@ -68,6 +104,7 @@
         FROM wms_shipping_order so
         LEFT JOIN wms_logistics_provider lp ON lp.id = so.provider_id
         WHERE so.deleted = 0
+          AND so.erp_tenant_id = #{erpTenantId}
     </select>
 
 </mapper>

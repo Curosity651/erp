@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -29,6 +30,10 @@ public class AssetFinanceOverviewVO {
     private Integer unvaluedQuantity;
     private Integer totalHeldQuantity;
     private List<HoldingPositionVO> holdingPositions;
+
+    /** FBO snapshot freshness, retained on the compatibility endpoint. */
+    private LocalDateTime fboLastSyncedAt;
+    private Boolean fboStale;
 
     @Data
     @Builder

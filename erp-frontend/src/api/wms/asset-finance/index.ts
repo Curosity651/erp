@@ -1,14 +1,26 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult } from '@/api/types'
 import type {
+  AssetOverviewVO,
   AssetFinanceOverviewVO,
   AssetProcurementRowVO,
   AssetLogisticsRowVO,
+  PayablesOverviewVO,
   PayableSupplierVO,
   PayableProviderVO
 } from './types'
 
-/** 资产与账务总览 */
+/** 资产总览 */
+export function getAssetOverview() {
+  return httpClient.get<ApiResult<AssetOverviewVO>>('/wms/asset-finance/assets-overview')
+}
+
+/** 应付账务总览 */
+export function getPayablesOverview() {
+  return httpClient.get<ApiResult<PayablesOverviewVO>>('/wms/asset-finance/payables-overview')
+}
+
+/** 资产与账务总览（兼容旧调用） */
 export function getAssetFinanceOverview() {
   return httpClient.get<ApiResult<AssetFinanceOverviewVO>>('/wms/asset-finance/overview')
 }
