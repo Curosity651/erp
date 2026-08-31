@@ -41,36 +41,6 @@ export interface WarehouseStructure {
   inProgressStocktakeCount?: number
 }
 
-/** 仓库结构参数更新 */
-export interface WarehouseStructureUpdate {
-  id: number
-  rackRows?: number
-  rackColumns?: number
-  rackNoPrefix?: string
-  codePadWidth?: number
-  defaultLocationType?: string
-  palletLevels?: number
-  palletPositionsPerLevel?: number
-  maxSkuKindsPerPallet?: number
-  allowCrossOwnerMix?: number
-  defaultPalletLengthMm?: number
-  defaultPalletWidthMm?: number
-  defaultPalletHeightMm?: number
-  defaultPalletMaxWeightKg?: number
-  defaultPalletUtilization?: number
-}
-
-export interface WarehousePalletRuleUpdate {
-  id: number
-  maxSkuKindsPerPallet: number
-  allowCrossOwnerMix: number
-  defaultPalletLengthMm: number
-  defaultPalletWidthMm: number
-  defaultPalletHeightMm: number
-  defaultPalletMaxWeightKg: number
-  defaultPalletUtilization: number
-}
-
 /** 品质分区 */
 export interface WmsZone {
   id: number
@@ -114,32 +84,4 @@ export interface LogicalLocationSave {
   maxWeightKg: number
   maxSkuKinds: number
   publicShared: number
-}
-
-export interface LocationSlotLevelSummary {
-  locationId: number
-  levelNo: number
-  totalCount: number
-  occupiedCount: number
-  blocked?: number
-}
-
-export interface LocationSlotSummary {
-  locationId: number
-  totalSlots: number
-  occupiedSlots: number
-  blocked?: boolean
-  levels: LocationSlotLevelSummary[]
-}
-
-export interface StructureLockInfo {
-  locked: boolean
-  occupied: boolean
-  occupiedLocationCount: number
-  assigned: boolean
-  assignedRackCount: number
-  assignedOperatorNames: string[]
-  activePalletCount: number
-  unfinishedTransferCount: number
-  inProgressStocktakeCount: number
 }

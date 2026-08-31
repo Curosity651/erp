@@ -53,6 +53,23 @@ class LogicalInventoryCutoverContractTest {
 		assertEveryLegacyWriteIsGuarded("admin/src/main/java/com/erp/admin/wms/controller/OutboundShippingController.java");
 	}
 
+	@Test
+	void location_management_guards_retired_geometry_writes() throws IOException {
+		String source = read("admin/src/main/java/com/erp/admin/wms/controller/WmsLocationManageController.java");
+		assertThat(source).contains("private final WmsCoreModeGuard coreModeGuard;");
+		assertThat(source).contains(
+				"coreModeGuard.assertLegacyWriteAllowed(\"仓库结构生成\")",
+				"coreModeGuard.assertLegacyWriteAllowed(\"托盘规则修改\")",
+				"coreModeGuard.assertLegacyWriteAllowed(\"批量生成几何库位\")");
+	}
+
+	@Test
+	void menu_cutover_points_to_real_pages_and_hides_retired_custom_return() throws IOException {
+		String sql = read("sql/migration/V139__finish_logical_location_menu_cutover.sql");
+		assertThat(sql).contains("platform/return-ops/ReturnQcPage", "wms/storage-overview/index",
+				"id = 162004", "hidden = 1");
+	}
+
 	private void assertEveryLegacyWriteIsGuarded(String relative) throws IOException {
 		String source = read(relative);
 		assertThat(source).contains("private final WmsCoreModeGuard coreModeGuard;");

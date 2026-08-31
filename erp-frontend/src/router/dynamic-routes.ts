@@ -23,8 +23,6 @@ const COMPONENT_OVERRIDES: Record<string, () => Promise<unknown>> = {
   picking: () => import('@/views/platform/outbound-ops/OutboundPickingPage.vue'),
   // packing(170504)：海外仓平台「海外仓作业 · 打包签出」
   packing: () => import('@/views/platform/outbound-ops/PackShipPage.vue'),
-  // return-qc(170505)：海外仓平台「海外仓作业 · 退货质检」
-  'return-qc': () => import('@/views/platform/return-ops/ReturnQcPage.vue'),
   // inbound-ops(170501)：海外仓平台「入库收货」（收货与上架已拆分为两页）
   'inbound-ops': () => import('@/views/platform/inbound-ops/InboundReceivePage.vue'),
   // putaway(170502)：海外仓平台「入库上架」
@@ -32,9 +30,6 @@ const COMPONENT_OVERRIDES: Record<string, () => Promise<unknown>> = {
   'location-inventory': () => import('@/views/platform/location-inventory/index.vue'),
   // Compatible with databases that have not applied the menu cutover migration yet.
   pallets: () => import('@/views/platform/location-inventory/index.vue'),
-  // rack-inventory(180400)：WMS 服务商「仓储概览」（原“货架库存(只读)”占位，改真实只读页）
-  'rack-inventory': () => import('@/views/wms/storage-overview/index.vue')
-  ,
   'fund-settlement': () => import('@/views/wms/fund-settlement/index.vue'),
   'provider-funds': () => import('@/views/platform-finance/provider-funds/index.vue')
 }

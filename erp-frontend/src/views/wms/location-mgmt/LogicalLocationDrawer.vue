@@ -14,8 +14,18 @@
         <a-collapse-panel v-for="group in rowGroups" :key="group.rackNo">
           <template #header>
             <div class="row-header">
-              <strong>{{ group.rackNo }} 排</strong>
-              <span>{{ group.locations.length }} 个库位</span>
+              <div>
+                <strong>{{ group.rackNo }} 排</strong>
+                <span>{{ group.locations.length }} 个库位</span>
+              </div>
+              <a-button
+                v-if="canEdit"
+                type="link"
+                size="small"
+                @click.stop="openCreate(group.rackNo)"
+              >
+                该排新增库位
+              </a-button>
             </div>
           </template>
           <a-table
@@ -303,6 +313,7 @@ defineExpose({ open })
 .summary { margin-top: 4px; color: #8c8c8c; }
 .row-collapse { background: transparent; }
 .row-header { width: 100%; padding-right: 12px; }
+.row-header > div { display: flex; align-items: center; gap: 12px; }
 .row-header span { color: #8c8c8c; font-size: 12px; }
 .location-form :deep(.ant-input-number) { width: 100%; }
 </style>

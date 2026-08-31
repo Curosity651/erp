@@ -60,6 +60,8 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 
 	private final SysTenantMapper sysTenantMapper;
 
+	private final InboundSkuReadinessService inboundSkuReadinessService;
+
 	/**
 	 * 分页查询
 	 * @param pageParam 分页参数
@@ -148,6 +150,8 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 
 		// 校验明细不为空
 		Assert.notEmpty(dto.getItems(), "入库明细不能为空");
+		inboundSkuReadinessService.assertReadyForInbound(
+				dto.getItems().stream().map(PurchaseInboundItemDTO::getSkuCode).collect(Collectors.toList()));
 
 		// 校验实到数量不超过应到数量
 		validateItemQuantities(dto.getItems());
@@ -383,6 +387,8 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 
 		// 校验明细不为空
 		Assert.notEmpty(dto.getItems(), "入库明细不能为空");
+		inboundSkuReadinessService.assertReadyForInbound(
+				dto.getItems().stream().map(PurchaseInboundItemDTO::getSkuCode).collect(Collectors.toList()));
 
 		// 校验实到数量不超过应到数量
 		validateItemQuantities(dto.getItems());
@@ -453,6 +459,8 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		checkInboundNoUnique(inboundNo, null);
 		Assert.notNull(dto.getWarehouseId(), "仓库ID不能为空");
 		Assert.notEmpty(dto.getItems(), "入库明细不能为空");
+		inboundSkuReadinessService.assertReadyForInbound(
+				dto.getItems().stream().map(item -> item.getSkuCode()).collect(Collectors.toList()));
 
 		PurchaseInboundOrder order = new PurchaseInboundOrder();
 		order.setInboundNo(inboundNo);
@@ -483,6 +491,8 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		assertSourceType(order, InboundSourceType.MANUAL);
 		Assert.isTrue(PurchaseInboundStatus.DRAFT.name().equals(order.getOrderStatus()), "只有草稿状态的入库单可以编辑");
 		Assert.notEmpty(dto.getItems(), "入库明细不能为空");
+		inboundSkuReadinessService.assertReadyForInbound(
+				dto.getItems().stream().map(item -> item.getSkuCode()).collect(Collectors.toList()));
 
 		purchaseInboundItemService.deleteByInboundOrderId(order.getId());
 
@@ -510,6 +520,8 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		checkInboundNoUnique(inboundNo, null);
 		Assert.notNull(dto.getWarehouseId(), "仓库ID不能为空");
 		Assert.notEmpty(dto.getItems(), "退货明细不能为空");
+		inboundSkuReadinessService.assertReadyForInbound(
+				dto.getItems().stream().map(item -> item.getSkuCode()).collect(Collectors.toList()));
 		Assert.isTrue(CustomReturnType.isValid(dto.getReturnType()), "退货类型不合法");
 
 		PurchaseInboundOrder order = new PurchaseInboundOrder();
@@ -543,6 +555,8 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		assertSourceType(order, InboundSourceType.CUSTOM_RETURN);
 		Assert.isTrue(PurchaseInboundStatus.DRAFT.name().equals(order.getOrderStatus()), "只有草稿状态的退货单可以编辑");
 		Assert.notEmpty(dto.getItems(), "退货明细不能为空");
+		inboundSkuReadinessService.assertReadyForInbound(
+				dto.getItems().stream().map(item -> item.getSkuCode()).collect(Collectors.toList()));
 		Assert.isTrue(CustomReturnType.isValid(dto.getReturnType()), "退货类型不合法");
 
 		purchaseInboundItemService.deleteByInboundOrderId(order.getId());

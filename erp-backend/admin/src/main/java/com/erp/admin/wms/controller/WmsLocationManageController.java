@@ -16,6 +16,7 @@ import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.vo.WarehouseStructureVO;
 import com.erp.admin.wms.model.vo.WarehouseLocationSummaryVO;
 import com.erp.admin.wms.model.vo.LocationSlotSummaryVO;
+import com.erp.admin.wms.config.WmsCoreModeGuard;
 import com.erp.admin.wms.service.WarehouseService;
 import com.erp.admin.wms.service.WmsLocationGenerator;
 import com.erp.admin.wms.service.WmsLocationService;
@@ -70,6 +71,8 @@ public class WmsLocationManageController {
 
 	private final WmsPalletService wmsPalletService;
 
+	private final WmsCoreModeGuard coreModeGuard;
+
 	@Operation(summary = "自有仓库列表（含结构参数）")
 	@GetMapping("/warehouses")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
@@ -118,6 +121,7 @@ public class WmsLocationManageController {
 	@PatchMapping("/structure")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<Integer> updateStructure(@Validated @RequestBody WarehouseStructureDTO dto) {
+		coreModeGuard.assertLegacyWriteAllowed("仓库结构生成");
 		return ApiResult.ok(wmsLocationGenerator.saveStructureAndGenerate(dto));
 	}
 
@@ -125,6 +129,7 @@ public class WmsLocationManageController {
 	@PatchMapping("/pallet-rules")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<Integer> updatePalletRules(@Validated @RequestBody WarehousePalletRuleDTO dto) {
+		coreModeGuard.assertLegacyWriteAllowed("托盘规则修改");
 		return ApiResult.ok(warehouseService.updatePalletRules(dto));
 	}
 
@@ -148,6 +153,7 @@ public class WmsLocationManageController {
 	@PostMapping("/generate")
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<Integer> generate(@RequestParam("warehouseId") Long warehouseId) {
+		coreModeGuard.assertLegacyWriteAllowed("批量生成几何库位");
 		return ApiResult.ok(wmsLocationGenerator.generateLocations(warehouseId));
 	}
 

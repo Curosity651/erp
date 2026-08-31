@@ -1,29 +1,15 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult } from '@/api/types'
 import type {
-  WarehousePalletRuleUpdate,
   WarehouseStructure,
-  WarehouseStructureUpdate,
   WmsZone,
   WmsLocation,
-  LocationSlotSummary,
-  StructureLockInfo,
   LogicalLocationSave
 } from './types'
 
 /** 自有仓库列表（含结构参数） */
 export function listStructureWarehouses() {
   return httpClient.get<ApiResult<WarehouseStructure[]>>('/wms/location-mgmt/warehouses')
-}
-
-/** 更新仓库结构参数 */
-export function updateWarehouseStructure(data: WarehouseStructureUpdate) {
-  return httpClient.patch<ApiResult<number>>('/wms/location-mgmt/structure', data)
-}
-
-/** 更新托盘规则，不重新生成库位或托位 */
-export function updateWarehousePalletRules(data: WarehousePalletRuleUpdate) {
-  return httpClient.patch<ApiResult<number>>('/wms/location-mgmt/pallet-rules', data)
 }
 
 /** 仓库分区列表 */
@@ -36,13 +22,6 @@ export function listZones(warehouseId: number) {
 /** 初始化默认四类分区 */
 export function initDefaultZones(warehouseId: number) {
   return httpClient.post<ApiResult<number>>('/wms/location-mgmt/zones/init-defaults', undefined, {
-    params: { warehouseId }
-  })
-}
-
-/** 批量生成库位 */
-export function generateLocations(warehouseId: number) {
-  return httpClient.post<ApiResult<number>>('/wms/location-mgmt/generate', undefined, {
     params: { warehouseId }
   })
 }
@@ -70,18 +49,6 @@ export function updateLogicalLocation(id: number, data: LogicalLocationSave) {
 
 export function deleteLogicalLocation(id: number) {
   return httpClient.delete<ApiResult<void>>(`/wms/location-mgmt/locations/${id}`)
-}
-
-export function listLocationSlotSummary(warehouseId: number) {
-  return httpClient.get<ApiResult<LocationSlotSummary[]>>('/wms/location-mgmt/slot-summary', {
-    params: { warehouseId }
-  })
-}
-
-export function getStructureLock(warehouseId: number) {
-  return httpClient.get<ApiResult<StructureLockInfo>>('/wms/location-mgmt/structure-lock', {
-    params: { warehouseId }
-  })
 }
 
 /** 该仓有货占用的库位编码集合（锁定有货格子改分区用） */
