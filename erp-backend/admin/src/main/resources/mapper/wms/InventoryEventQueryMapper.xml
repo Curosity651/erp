@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.InventoryEventQueryMapper">
+    <sql id="ownerFilter">
+        <if test="ownerIds != null">
+            AND e.erp_tenant_id IN
+            <foreach collection="ownerIds" item="ownerId" open="(" separator="," close=")">#{ownerId}</foreach>
+        </if>
+    </sql>
+    <sql id="qoOwnerFilter">
+        <if test="qo.erpTenantIds != null">
+            AND e.erp_tenant_id IN
+            <foreach collection="qo.erpTenantIds" item="ownerId" open="(" separator="," close=")">#{ownerId}</foreach>
+        </if>
+    </sql>
+
+    <select id="queryFlowPage" resultType="com.erp.admin.wms.model.vo.StockFlowPageVO">
+        SELECT l.id, e.warehouse_id, 0 AS region_id, l.sku_code,
+               CASE WHEN l.reserved_delta != 0 AND l.quantity_delta = 0 THEN 'RESERVED'
+                    WHEN l.quality = 'DEFECTIVE' THEN 'DAMAGED' ELSE 'AVAILABLE' END AS bucket,
+               CASE WHEN l.quantity_delta &lt; 0 OR (l.quantity_delta = 0 AND l.reserved_delta &lt; 0)
+                    THEN 'OUT' ELSE 'IN' END AS direction,
+               ABS(CASE WHEN l.quantity_delta != 0 THEN l.quantity_delta ELSE l.reserved_delta END) AS quantity,
+               l.before_quantity, l.after_quantity, e.id AS posting_id, e.event_no AS posting_no,
+               l.id AS posting_item_id, e.event_type AS posting_type, e.source_type, e.source_id,
+               e.source_no, e.reason AS remark, e.operator_id AS create_by, e.occurred_at AS create_time,
+               l.location_id, loc.location_code, l.counterpart_location_id,
+               target.location_code AS counterpart_location_code, l.quality,
+               l.quantity_delta, l.reserved_delta, l.before_reserved, l.after_reserved
+        FROM wms_inventory_event_line l
+        JOIN wms_inventory_event e ON e.id = l.event_id
+        LEFT JOIN wms_location loc ON loc.id = l.location_id AND loc.deleted = 0
+        LEFT JOIN wms_location target ON target.id = l.counterpart_location_id AND target.deleted = 0
+        WHERE 1 = 1
+        <include refid="qoOwnerFilter"/>
+        <if test="qo.warehouseId != null">AND e.warehouse_id = #{qo.warehouseId}</if>
+        <if test="qo.regionWarehouseIds != null and qo.regionWarehouseIds.size() > 0">
+            AND e.warehouse_id IN
+            <foreach collection="qo.regionWarehouseIds" item="warehouseId" open="(" separator="," close=")">#{warehouseId}</foreach>
+        </if>
+        <if test="qo.regionWarehouseIds != null and qo.regionWarehouseIds.size() == 0">AND 1 = 0</if>
+        <if test="qo.skuCode != null and qo.skuCode != ''">AND l.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')</if>
+        <if test="qo.postingType != null and qo.postingType != ''">AND e.event_type = #{qo.postingType}</if>
+        <if test="qo.postingTypes != null and qo.postingTypes.size() > 0">
+            AND e.event_type IN
+            <foreach collection="qo.postingTypes" item="type" open="(" separator="," close=")">#{type}</foreach>
+        </if>
+        <if test="qo.sourceNo != null and qo.sourceNo != ''">AND e.source_no LIKE CONCAT('%', #{qo.sourceNo}, '%')</if>
+        <if test="qo.postingNo != null and qo.postingNo != ''">AND e.event_no LIKE CONCAT('%', #{qo.postingNo}, '%')</if>
+        <if test="qo.startTime != null">AND e.occurred_at &gt;= #{qo.startTime}</if>
+        <if test="qo.endTime != null">AND e.occurred_at &lt;= #{qo.endTime}</if>
+        <if test="qo.direction == 'IN'">AND (l.quantity_delta &gt; 0 OR (l.quantity_delta = 0 AND l.reserved_delta &gt; 0))</if>
+        <if test="qo.direction == 'OUT'">AND (l.quantity_delta &lt; 0 OR (l.quantity_delta = 0 AND l.reserved_delta &lt; 0))</if>
+        ORDER BY e.occurred_at DESC, l.id DESC
+    </select>
+
+    <select id="selectFlowDetail" resultType="com.erp.admin.wms.model.vo.StockFlowDetailVO">
+        SELECT l.id, e.warehouse_id, l.sku_code,
+               CASE WHEN l.reserved_delta != 0 AND l.quantity_delta = 0 THEN 'RESERVED'
+                    WHEN l.quality = 'DEFECTIVE' THEN 'DAMAGED' ELSE 'AVAILABLE' END AS bucket,
+               CASE WHEN l.quantity_delta &lt; 0 OR (l.quantity_delta = 0 AND l.reserved_delta &lt; 0)
+                    THEN 'OUT' ELSE 'IN' END AS direction,
+               ABS(CASE WHEN l.quantity_delta != 0 THEN l.quantity_delta ELSE l.reserved_delta END) AS quantity,
+               l.before_quantity, l.after_quantity, e.id AS posting_id, e.event_no AS posting_no,
+               l.id AS posting_item_id, e.event_type AS posting_type, e.source_type, e.source_id,
+               e.source_no, e.reason AS remark, e.operator_id AS create_by, e.occurred_at AS create_time,
+               l.location_id, loc.location_code, l.counterpart_location_id,
+               target.location_code AS counterpart_location_code, l.quality,
+               l.quantity_delta, l.reserved_delta, l.before_reserved, l.after_reserved
+        FROM wms_inventory_event_line l
+        JOIN wms_inventory_event e ON e.id = l.event_id
+        LEFT JOIN wms_location loc ON loc.id = l.location_id AND loc.deleted = 0
+        LEFT JOIN wms_location target ON target.id = l.counterpart_location_id AND target.deleted = 0
+        WHERE l.id = #{id}
+        <include refid="ownerFilter"/>
+    </select>
+
+    <select id="listEventTypes" resultType="java.lang.String">
+        SELECT DISTINCT e.event_type FROM wms_inventory_event e
+        JOIN wms_inventory_event_line l ON l.event_id = e.id
+        WHERE 1 = 1
+        <include refid="ownerFilter"/>
+        <if test="warehouseId != null">AND e.warehouse_id = #{warehouseId}</if>
+        <if test="skuCode != null and skuCode != ''">AND l.sku_code = #{skuCode}</if>
+        ORDER BY e.event_type
+    </select>
+
+    <select id="selectTodaySummary" resultType="com.erp.admin.wms.model.vo.StockFlowTodaySummaryVO">
+        SELECT COALESCE(SUM(CASE WHEN e.event_type IN ('INBOUND_PUTAWAY','RETURN_PUTAWAY','STOCKTAKE_GAIN')
+                                     AND l.quantity_delta &gt; 0 THEN l.quantity_delta ELSE 0 END), 0) AS in_quantity,
+               COALESCE(SUM(CASE WHEN e.event_type IN ('SHIP','DECREASE','STOCKTAKE_LOSS','SCRAP')
+                                     AND l.quantity_delta &lt; 0 THEN -l.quantity_delta ELSE 0 END), 0) AS out_quantity,
+               COALESCE(SUM(CASE WHEN l.reserved_delta &gt; 0 THEN l.reserved_delta ELSE 0 END), 0) AS reserve_quantity,
+               COALESCE(SUM(CASE WHEN l.reserved_delta &lt; 0 THEN -l.reserved_delta ELSE 0 END), 0) AS release_quantity
+        FROM wms_inventory_event e JOIN wms_inventory_event_line l ON l.event_id = e.id
+        WHERE e.occurred_at &gt;= CURRENT_DATE
+        <include refid="ownerFilter"/>
+        <if test="warehouseId != null">AND e.warehouse_id = #{warehouseId}</if>
+    </select>
+
+    <select id="selectTrend" resultType="com.erp.admin.wms.model.vo.StockFlowTrendVO">
+        SELECT DATE_FORMAT(e.occurred_at, '%Y-%m-%d') AS date,
+               SUM(CASE WHEN e.event_type IN ('INBOUND_PUTAWAY','RETURN_PUTAWAY','STOCKTAKE_GAIN')
+                             AND l.quantity_delta &gt; 0 THEN l.quantity_delta ELSE 0 END) AS in_quantity,
+               SUM(CASE WHEN e.event_type IN ('SHIP','DECREASE','STOCKTAKE_LOSS','SCRAP')
+                             AND l.quantity_delta &lt; 0 THEN -l.quantity_delta ELSE 0 END) AS out_quantity
+        FROM wms_inventory_event e JOIN wms_inventory_event_line l ON l.event_id = e.id
+        WHERE e.occurred_at &gt;= DATE_SUB(CURRENT_DATE, INTERVAL #{days} DAY)
+        <include refid="ownerFilter"/>
+        <if test="warehouseId != null">AND e.warehouse_id = #{warehouseId}</if>
+        GROUP BY DATE(e.occurred_at) ORDER BY DATE(e.occurred_at)
+    </select>
+
+    <select id="queryEventPage" resultType="com.erp.admin.wms.model.vo.StockPostingPageVO">
+        SELECT e.id, e.event_no AS posting_no, e.warehouse_id, 0 AS region_id,
+               e.event_type AS posting_type, e.source_type, e.source_id, e.source_no,
+               e.occurred_at AS biz_time, e.occurred_at AS post_time, e.reason AS remark,
+               e.operator_id AS create_by, e.create_time,
+               COUNT(DISTINCT l.sku_code) AS sku_count,
+               SUM(ABS(CASE WHEN l.quantity_delta != 0 THEN l.quantity_delta ELSE l.reserved_delta END)) AS total_quantity
+        FROM wms_inventory_event e JOIN wms_inventory_event_line l ON l.event_id = e.id
+        WHERE 1 = 1
+        <include refid="qoOwnerFilter"/>
+        <if test="qo.postingNo != null and qo.postingNo != ''">AND e.event_no LIKE CONCAT('%', #{qo.postingNo}, '%')</if>
+        <if test="qo.warehouseId != null">AND e.warehouse_id = #{qo.warehouseId}</if>
+        <if test="qo.postingType != null and qo.postingType != ''">AND e.event_type = #{qo.postingType}</if>
+        <if test="qo.sourceType != null and qo.sourceType != ''">AND e.source_type = #{qo.sourceType}</if>
+        <if test="qo.sourceNo != null and qo.sourceNo != ''">AND e.source_no LIKE CONCAT('%', #{qo.sourceNo}, '%')</if>
+        <if test="qo.postTimeStart != null">AND e.occurred_at &gt;= #{qo.postTimeStart}</if>
+        <if test="qo.postTimeEnd != null">AND e.occurred_at &lt;= #{qo.postTimeEnd}</if>
+        GROUP BY e.id ORDER BY e.occurred_at DESC, e.id DESC
+    </select>
+
+    <select id="selectEventDetail" resultType="com.erp.admin.wms.model.vo.StockPostingDetailVO">
+        SELECT e.id, e.event_no AS posting_no, e.warehouse_id, e.event_type AS posting_type,
+               e.source_type, e.source_id, e.source_no, e.occurred_at AS biz_time,
+               e.occurred_at AS post_time, 'COMPLETED' AS status, e.reason AS remark,
+               COUNT(DISTINCT l.sku_code) AS sku_count,
+               SUM(ABS(CASE WHEN l.quantity_delta != 0 THEN l.quantity_delta ELSE l.reserved_delta END)) AS total_quantity
+        FROM wms_inventory_event e JOIN wms_inventory_event_line l ON l.event_id = e.id
+        WHERE e.id = #{id}
+        <include refid="ownerFilter"/>
+        GROUP BY e.id
+    </select>
+
+    <sql id="eventItemColumns">
+        SELECT l.id, l.event_id AS posting_id, e.warehouse_id, 0 AS region_id, l.sku_code,
+               CASE WHEN l.reserved_delta != 0 AND l.quantity_delta = 0 THEN 'RESERVED'
+                    WHEN l.quality = 'DEFECTIVE' THEN 'DAMAGED' ELSE 'AVAILABLE' END AS bucket,
+               CASE WHEN l.quantity_delta &lt; 0 OR (l.quantity_delta = 0 AND l.reserved_delta &lt; 0)
+                    THEN 'OUT' ELSE 'IN' END AS direction,
+               ABS(CASE WHEN l.quantity_delta != 0 THEN l.quantity_delta ELSE l.reserved_delta END) AS quantity,
+               l.location_id, loc.location_code, l.counterpart_location_id,
+               target.location_code AS counterpart_location_code, l.quality,
+               l.quantity_delta, l.reserved_delta, l.before_quantity, l.after_quantity,
+               l.before_reserved, l.after_reserved
+        FROM wms_inventory_event_line l JOIN wms_inventory_event e ON e.id = l.event_id
+        LEFT JOIN wms_location loc ON loc.id = l.location_id AND loc.deleted = 0
+        LEFT JOIN wms_location target ON target.id = l.counterpart_location_id AND target.deleted = 0
+    </sql>
+
+    <select id="selectEventItems" resultType="com.erp.admin.wms.model.vo.StockPostingItemVO">
+        <include refid="eventItemColumns"/>
+        WHERE e.id = #{eventId}
+        <include refid="ownerFilter"/>
+        <if test="skuCode != null and skuCode != ''">AND l.sku_code LIKE CONCAT('%', #{skuCode}, '%')</if>
+        ORDER BY l.line_no
+    </select>
+
+    <select id="queryEventItemPage" resultType="com.erp.admin.wms.model.vo.StockPostingItemVO">
+        <include refid="eventItemColumns"/>
+        WHERE e.id = #{qo.postingId}
+        <if test="qo.erpTenantIds != null">
+            AND e.erp_tenant_id IN
+            <foreach collection="qo.erpTenantIds" item="ownerId" open="(" separator="," close=")">#{ownerId}</foreach>
+        </if>
+        <if test="qo.skuCode != null and qo.skuCode != ''">AND l.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')</if>
+        ORDER BY l.line_no
+    </select>
+</mapper>

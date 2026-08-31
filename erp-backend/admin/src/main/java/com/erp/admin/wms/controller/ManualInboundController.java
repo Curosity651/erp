@@ -70,7 +70,7 @@ public class ManualInboundController {
     @GetMapping("/detail")
     @PreAuthorize("@per.hasPermission('wms:manual-inbound:read')")
     public ApiResult<PurchaseInboundDetailVO> getDetail(@RequestParam Long id) {
-        return ApiResult.ok(this.purchaseInboundService.getDetail(id));
+        return ApiResult.ok(this.purchaseInboundService.getDetail(id, InboundSourceType.MANUAL));
     }
 
     /**
@@ -92,7 +92,7 @@ public class ManualInboundController {
     @PutMapping
     @PreAuthorize("@per.hasPermission('wms:manual-inbound:edit')")
     public ApiResult<Void> update(@Validated({Default.class, UpdateGroup.class}) @RequestBody ManualInboundDTO dto) {
-        this.purchaseInboundService.updateManualOrder(dto);
+        this.purchaseInboundFacade.updateManual(dto);
         return ApiResult.ok();
     }
 
@@ -104,7 +104,7 @@ public class ManualInboundController {
     @PatchMapping("/submit")
     @PreAuthorize("@per.hasPermission('wms:manual-inbound:edit')")
     public ApiResult<Void> submit(@RequestParam Long id) {
-        this.purchaseInboundFacade.submit(id);
+        this.purchaseInboundFacade.submit(id, InboundSourceType.MANUAL);
         return ApiResult.ok();
     }
 
@@ -116,7 +116,7 @@ public class ManualInboundController {
     @PatchMapping("/cancel")
     @PreAuthorize("@per.hasPermission('wms:manual-inbound:edit')")
     public ApiResult<Void> cancel(@RequestParam Long id) {
-        this.purchaseInboundFacade.cancel(id);
+        this.purchaseInboundFacade.cancel(id, InboundSourceType.MANUAL);
         return ApiResult.ok();
     }
 
@@ -128,7 +128,7 @@ public class ManualInboundController {
     @DeleteMapping
     @PreAuthorize("@per.hasPermission('wms:manual-inbound:del')")
     public ApiResult<Void> delete(@RequestBody List<Long> ids) {
-        this.purchaseInboundFacade.delete(ids);
+        this.purchaseInboundFacade.delete(ids, InboundSourceType.MANUAL);
         return ApiResult.ok();
     }
 

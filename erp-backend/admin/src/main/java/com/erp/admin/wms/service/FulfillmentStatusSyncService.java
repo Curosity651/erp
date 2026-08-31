@@ -27,7 +27,7 @@ public class FulfillmentStatusSyncService {
 				|| order.getFulfillmentStatus() == FulfillmentStatus.SHIPPED) return;
 		FulfillmentStatus status = order.getFulfillmentStatus();
 		if (status == FulfillmentStatus.WAITING_SHELF || status == FulfillmentStatus.WAITING_PICK) {
-			inventoryService.release(order.getId());
+			releaseInventory(order, reason);
 			Assert.isTrue(orderMapper.transit(order.getId(), status, FulfillmentStatus.CANCELLED) == 1,
 					"取消状态已变化");
 			updateErp(order, FulfillmentStatus.CANCELLED);
@@ -55,7 +55,7 @@ public class FulfillmentStatusSyncService {
 			updateErp(order, FulfillmentStatus.CANCEL_RETURNING);
 			return;
 		}
-		inventoryService.release(order.getId());
+		releaseInventory(order, reason);
 		Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.EXCEPTION,
 				FulfillmentStatus.CANCELLED) == 1, "取消状态已变化");
 		updateErp(order, FulfillmentStatus.CANCELLED);
@@ -80,7 +80,7 @@ public class FulfillmentStatusSyncService {
 				.eq(WmsFulfillmentPickTaskLine::getFulfillmentOrderId, order.getId())
 				.apply("returned_quantity < picked_quantity"));
 		if (remaining == 0) {
-			inventoryService.release(order.getId());
+			releaseInventory(order, "取消回退完成");
 			Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.CANCEL_RETURNING,
 					FulfillmentStatus.CANCELLED) == 1, "取消完成状态更新失败");
 			updateErp(order, FulfillmentStatus.CANCELLED);
@@ -89,5 +89,12 @@ public class FulfillmentStatusSyncService {
 
 	private void updateErp(WmsFulfillmentOrder fulfillment, FulfillmentStatus status) {
 		progressService.sync(fulfillment, status);
+	}
+
+	private void releaseInventory(WmsFulfillmentOrder order, String reason) {
+		inventoryService.release(order.getId(), com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+				.eventType(com.erp.admin.wms.model.enums.InventoryEventType.RELEASE)
+				.sourceType("FULFILLMENT").sourceId(order.getId()).sourceNo(order.getSourceOrderNo())
+				.reason(reason).idempotencyKey("fulfillment-release:" + order.getId()).build());
 	}
 }

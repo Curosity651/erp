@@ -9,6 +9,60 @@
   <select id="selectForUpdate" resultType="com.erp.admin.wms.model.entity.WmsFulfillmentOrder">
     SELECT * FROM wms_fulfillment_order WHERE id = #{id} AND deleted = 0 FOR UPDATE
   </select>
+  <select id="selectShippingPage" resultType="com.erp.admin.wms.model.vo.FulfillmentShippingOrderVO">
+    SELECT
+      fulfillment.id,
+      fulfillment.erp_tenant_id,
+      owner.tenant_name AS owner_name,
+      fulfillment.warehouse_id,
+      warehouse.warehouse_name,
+      fulfillment.fulfillment_no,
+      fulfillment.source_type,
+      fulfillment.source_order_no,
+      fulfillment.fulfillment_status,
+      fulfillment.recipient_name,
+      fulfillment.logistics_product_name,
+      fulfillment.logistics_product_actual_fee,
+      fulfillment.logistics_product_currency,
+      fulfillment.carrier_name,
+      fulfillment.shipping_method,
+      fulfillment.tracking_no,
+      fulfillment.package_weight_kg,
+      fulfillment.shipped_by,
+      COALESCE(NULLIF(shipped_user.nickname, ''), shipped_user.username) AS shipped_by_name,
+      fulfillment.shipped_time,
+      fulfillment.create_time
+    FROM wms_fulfillment_order fulfillment
+    LEFT JOIN sys_tenant owner
+      ON owner.id = fulfillment.erp_tenant_id AND owner.deleted = 0
+    LEFT JOIN wms_warehouse warehouse
+      ON warehouse.id = fulfillment.warehouse_id AND warehouse.deleted = 0
+    LEFT JOIN sys_user shipped_user
+      ON shipped_user.user_id = fulfillment.shipped_by AND shipped_user.deleted = 0
+    <where>
+      fulfillment.deleted = 0
+      AND fulfillment.fulfillment_status IN ('WAITING_PACK', 'PACKED', 'SHIPPED')
+      <if test="query.erpTenantId != null">
+        AND fulfillment.erp_tenant_id = #{query.erpTenantId}
+      </if>
+      <if test="query.warehouseId != null">
+        AND fulfillment.warehouse_id = #{query.warehouseId}
+      </if>
+      <if test="query.fulfillmentStatus != null and query.fulfillmentStatus != ''">
+        AND fulfillment.fulfillment_status = #{query.fulfillmentStatus}
+      </if>
+      <if test="query.shippedBy != null">
+        AND fulfillment.shipped_by = #{query.shippedBy}
+      </if>
+      <if test="query.startDate != null">
+        AND fulfillment.create_time &gt;= #{query.startDate}
+      </if>
+      <if test="query.endDate != null">
+        AND fulfillment.create_time &lt; DATE_ADD(#{query.endDate}, INTERVAL 1 DAY)
+      </if>
+    </where>
+    ORDER BY fulfillment.create_time DESC, fulfillment.id DESC
+  </select>
   <update id="transit">
     UPDATE wms_fulfillment_order
     SET fulfillment_status = #{to}, version = version + 1, update_time = NOW()

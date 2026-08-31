@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+import java.time.LocalDateTime;
 
 /**
  * 月度应收账单 Mapper：账单头 CRUD + 计费聚合（货架租金/操作费/折扣/服务商列表）。
@@ -40,11 +42,30 @@ public interface WmsMonthlyBillMapper extends ExtendMapper<WmsMonthlyBill> {
     /** 操作费按类型汇总（wms_billing_record） */
     List<FeeAmountRow> sumFeeByType(@Param("wmsTenantId") Long wmsTenantId, @Param("billMonth") String billMonth);
 
+    List<FeeAmountRow> sumFeeByBill(@Param("billId") Long billId);
+
     /** 全部 WMS 服务商 ID */
     List<Long> selectWmsOperatorIds();
 
     /** 服务商费率折扣百分比（无则返回 null） */
-    BigDecimal selectDiscountPct(@Param("wmsTenantId") Long wmsTenantId);
+    BigDecimal selectDiscountPct(@Param("wmsTenantId") Long wmsTenantId,
+            @Param("billingDate") LocalDate billingDate);
+
+    @Update("UPDATE wms_monthly_bill SET status='CONFIRMED', confirmed_time=#{time}, "
+            + "reviewer_id=#{reviewerId}, reviewer_name=#{reviewerName}, remark=NULL "
+            + "WHERE id=#{id} AND status IN ('DRAFT','DISPUTED') AND deleted=0")
+    int confirmIfPending(@Param("id") Long id, @Param("reviewerId") Long reviewerId,
+            @Param("reviewerName") String reviewerName, @Param("time") LocalDateTime time);
+
+    @Update("UPDATE wms_monthly_bill SET status='PAID', paid_time=#{time}, "
+            + "payment_voucher_file_id=#{voucherId} "
+            + "WHERE id=#{id} AND status='CONFIRMED' AND deleted=0")
+    int payIfConfirmed(@Param("id") Long id, @Param("voucherId") Long voucherId,
+            @Param("time") LocalDateTime time);
+
+    @Update("UPDATE wms_monthly_bill SET status='DISPUTED', remark=#{remark} "
+            + "WHERE id=#{id} AND status='CONFIRMED' AND deleted=0")
+    int disputeIfConfirmed(@Param("id") Long id, @Param("remark") String remark);
 
     @Select("SELECT COALESCE(SUM(total_amount), 0) FROM wms_monthly_bill "
             + "WHERE wms_tenant_id = #{wmsTenantId} AND status <> 'PAID' "

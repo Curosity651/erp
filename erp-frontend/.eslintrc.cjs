@@ -3,6 +3,7 @@ require('@rushstack/eslint-patch/modern-module-resolution')
 
 module.exports = {
   root: true,
+  ignorePatterns: ['dist/**'],
   extends: [
     'eslint:recommended',
     'plugin:vue/vue3-recommended',
@@ -15,6 +16,8 @@ module.exports = {
     'vue/setup-compiler-macros': true
   },
   rules: {
+    // Route and reusable component entry files intentionally use index.vue/index.tsx.
+    'vue/multi-word-component-names': 'off',
     // 允许使用 any
     '@typescript-eslint/no-explicit-any': 'off',
     // 允许使用 @ts-ignore 注释

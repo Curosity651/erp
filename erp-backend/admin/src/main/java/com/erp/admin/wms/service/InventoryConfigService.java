@@ -5,6 +5,7 @@ import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.wms.mapper.InventoryConfigMapper;
 import com.erp.admin.wms.model.dto.GlobalInventoryConfigDTO;
 import com.erp.admin.wms.model.dto.InventoryConfigDTO;
+import com.erp.admin.wms.model.dto.EffectiveInventoryConfig;
 import com.erp.admin.wms.model.entity.InventoryAlertConfig;
 import com.erp.admin.wms.model.entity.InventoryConfig;
 import com.erp.admin.wms.model.vo.GlobalInventoryConfigVO;
@@ -22,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.ballcat.mybatisplus.toolkit.WrappersX;
+import org.springframework.util.Assert;
 
 /**
  * 库存配置服务
@@ -142,10 +145,14 @@ public class InventoryConfigService extends ExtendServiceImpl<InventoryConfigMap
         InventoryConfig entity;
 
         if (dto.getId() != null) {
-            entity = this.getById(dto.getId());
+            entity = baseMapper.selectOne(WrappersX.lambdaQueryX(InventoryConfig.class)
+                    .eq(InventoryConfig::getId, dto.getId())
+                    .eq(InventoryConfig::getErpTenantId, currentErp() == null ? -1L : currentErp()));
             if (entity == null) {
                 throw new IllegalArgumentException("配置不存在");
             }
+			Assert.isTrue(entity.getRegionId().equals(dto.getRegionId())
+					&& entity.getSkuCode().equals(dto.getSkuCode()), "配置维度不允许修改");
         } else {
             entity = baseMapper.selectByRegionAndSku(currentErp(), dto.getRegionId(), dto.getSkuCode());
             if (entity == null) {
@@ -168,29 +175,40 @@ public class InventoryConfigService extends ExtendServiceImpl<InventoryConfigMap
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteSkuConfig(Long id) {
-        this.removeById(id);
+		InventoryConfig entity = baseMapper.selectOne(WrappersX.lambdaQueryX(InventoryConfig.class)
+				.eq(InventoryConfig::getId, id)
+				.eq(InventoryConfig::getErpTenantId, currentErp() == null ? -1L : currentErp()));
+		Assert.notNull(entity, "配置不存在");
+		Assert.isTrue(baseMapper.delete(WrappersX.lambdaQueryX(InventoryConfig.class)
+				.eq(InventoryConfig::getId, id)
+				.eq(InventoryConfig::getErpTenantId, currentErp())) == 1, "配置已变化，请刷新后重试");
     }
+
+	public EffectiveInventoryConfig getEffectiveConfig(Long regionId, String skuCode) {
+		InventoryAlertConfig global = getGlobalAlertConfig();
+		InventoryConfig sku = baseMapper.selectByRegionAndSku(currentErp(), regionId, skuCode);
+		return EffectiveInventoryConfig.builder()
+				.safetyStock(sku != null && sku.getSafetyStock() != null ? sku.getSafetyStock() : global.getSafetyStock())
+				.notifyEnabled(sku != null && sku.getNotifyEnabled() != null
+						? sku.getNotifyEnabled() : global.getNotifyEnabled())
+				.notifyThresholdDays(sku != null && sku.getNotifyThresholdDays() != null
+						? sku.getNotifyThresholdDays() : global.getNotifyThresholdDays())
+				.source(sku == null ? "GLOBAL" : "SKU")
+				.build();
+	}
 
     /**
      * 获取 SKU 的有效安全库存（优先 SKU 配置，否则全局配置）
      */
     public Integer getEffectiveSafetyStock(Long regionId, String skuCode) {
-        InventoryConfig config = baseMapper.selectByRegionAndSku(currentErp(), regionId, skuCode);
-        if (config != null && config.getSafetyStock() != null) {
-            return config.getSafetyStock();
-        }
-        return getGlobalAlertConfig().getSafetyStock();
+		return getEffectiveConfig(regionId, skuCode).getSafetyStock();
     }
 
     /**
      * 获取有效预警阈值天数
      */
     public Integer getEffectiveThresholdDays(Long regionId, String skuCode) {
-        InventoryConfig config = baseMapper.selectByRegionAndSku(currentErp(), regionId, skuCode);
-        if (config != null && config.getNotifyThresholdDays() != null) {
-            return config.getNotifyThresholdDays();
-        }
-        return getGlobalAlertConfig().getNotifyThresholdDays();
+		return getEffectiveConfig(regionId, skuCode).getNotifyThresholdDays();
     }
 
     /**
@@ -222,4 +240,9 @@ public class InventoryConfigService extends ExtendServiceImpl<InventoryConfigMap
         int thresholdDays = getEffectiveThresholdDays(regionId, skuCode);
         return Math.max(safetyStock, dailySales * thresholdDays);
     }
+
+	public List<InventoryConfig> listConfiguredRegionSkus(java.util.Collection<Long> regionIds,
+			String skuKeyword) {
+		return baseMapper.selectByOwnerAndRegions(currentErp(), regionIds, skuKeyword);
+	}
 }

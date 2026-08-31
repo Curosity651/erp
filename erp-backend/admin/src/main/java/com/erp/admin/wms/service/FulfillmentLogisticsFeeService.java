@@ -1,6 +1,8 @@
 package com.erp.admin.wms.service;
 
+import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.ZoneId;
 
 import com.erp.admin.wms.mapper.WmsClientBillingRecordMapper;
 import com.erp.admin.wms.model.entity.WmsClientBillingRecord;
@@ -12,6 +14,10 @@ import org.springframework.util.Assert;
 @Service
 @RequiredArgsConstructor
 public class FulfillmentLogisticsFeeService {
+
+	private static final ZoneId STORAGE_ZONE = ZoneId.of("Asia/Shanghai");
+
+	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Europe/Moscow");
 
 	private final WmsClientBillingRecordMapper billingRecordMapper;
 
@@ -40,9 +46,16 @@ public class FulfillmentLogisticsFeeService {
 		record.setLogisticsProductId(order.getLogisticsProductId());
 		record.setProductNameSnapshot(order.getLogisticsProductName());
 		record.setProductDescriptionSnapshot(order.getLogisticsProductDescription());
-		record.setBillMonth(YearMonth.now().toString());
+		record.setBillMonth(resolveBillMonth(order.getShippedTime()));
 		billingRecordMapper.insert(record);
 		return record;
+	}
+
+	public static String resolveBillMonth(LocalDateTime shippedTime) {
+		if (shippedTime == null) {
+			return YearMonth.now(BUSINESS_ZONE).toString();
+		}
+		return YearMonth.from(shippedTime.atZone(STORAGE_ZONE).withZoneSameInstant(BUSINESS_ZONE)).toString();
 	}
 
 }

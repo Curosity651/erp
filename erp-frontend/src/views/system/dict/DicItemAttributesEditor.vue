@@ -153,7 +153,7 @@ watch(
 )
 
 // dict-tag 的拾色器
-const tagColorPicker = ''
+const tagColorPicker = ref('')
 
 const presetTagColor = (tagColor: string) => {
   attributes.value.tagColor = tagColor
@@ -169,7 +169,7 @@ const clearTagColor = () => {
 }
 
 // dict-text 的拾色器
-const textColorPicker = ''
+const textColorPicker = ref('')
 const presetBadgeColor = (badgeColor: string) => {
   attributes.value.badgeColor = badgeColor
   emits('update:value', attributes.value)
@@ -188,7 +188,7 @@ const changeBadgeStatus = (value: any) => {
 }
 
 // dict-badge 的拾色器
-const badgeColorPicker = ''
+const badgeColorPicker = ref('')
 const onTextColorPicker = (textColorPicker: any) => {
   attributes.value.textColor = textColorPicker.hex
   emits('update:value', attributes.value)

@@ -16,4 +16,7 @@ public class FeeAmountRow {
 
     private BigDecimal amount;
 
+    /** 已由复核人确认的补收/冲减净额，不再参与服务商折扣。 */
+    private BigDecimal adjustmentAmount;
+
 }

@@ -20,8 +20,10 @@ import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -56,9 +58,15 @@ public class OperatorFinanceService {
 
         OperatorIncomeVO.Summary summary = new OperatorIncomeVO.Summary();
         summary.setRows(rows);
-        summary.setTotalAmount(rows.stream()
-            .map(r -> r.getSubtotal() == null ? BigDecimal.ZERO : r.getSubtotal())
-            .reduce(BigDecimal.ZERO, BigDecimal::add));
+        Map<String, BigDecimal> totals = new TreeMap<>();
+        for (OperatorIncomeVO.SummaryRow row : rows) {
+            String currency = normalizeCurrency(row.getCurrency());
+            row.setCurrency(currency);
+            totals.merge(currency, row.getSubtotal() == null ? BigDecimal.ZERO : row.getSubtotal(), BigDecimal::add);
+        }
+        summary.setCurrencyTotals(totals.entrySet().stream()
+            .map(entry -> new OperatorIncomeVO.CurrencyTotal(entry.getKey(), entry.getValue()))
+            .collect(Collectors.toList()));
         summary.setTotalCount(rows.stream().mapToLong(r -> r.getUsageCount() == null ? 0 : r.getUsageCount()).sum());
         return summary;
     }
@@ -68,15 +76,7 @@ public class OperatorFinanceService {
         Long wmsTenantId = currentOperatorId();
         List<OperatorIncomeVO.Record> records = operatorFinanceMapper.listIncomeRecords(wmsTenantId, monthStart,
                 monthEnd, erpTenantId, productId);
-        // 补产品名
-        Set<Long> ids = records.stream()
-            .map(OperatorIncomeVO.Record::getProductId)
-            .filter(java.util.Objects::nonNull)
-            .collect(Collectors.toSet());
-        Map<Long, String> nameById = logisticsProductMapper.listByIds(ids)
-            .stream()
-            .collect(Collectors.toMap(WmsLogisticsProduct::getId, WmsLogisticsProduct::getProductName, (a, b) -> a));
-        records.forEach(r -> r.setProductName(nameById.getOrDefault(r.getProductId(), "已删除产品")));
+        records.forEach(r -> r.setCurrency(normalizeCurrency(r.getCurrency())));
         return records;
     }
 
@@ -134,6 +134,12 @@ public class OperatorFinanceService {
         Long wmsTenantId = WmsTenantContext.getCurrentWmsTenant();
         Assert.notNull(wmsTenantId, "服务商上下文缺失");
         return wmsTenantId;
+    }
+
+    private static String normalizeCurrency(String currency) {
+        return currency == null || currency.trim().isEmpty()
+                ? "UNKNOWN"
+                : currency.trim().toUpperCase(Locale.ROOT);
     }
 
 }

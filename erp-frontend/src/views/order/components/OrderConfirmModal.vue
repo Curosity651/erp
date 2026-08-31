@@ -12,14 +12,24 @@
       <span>不可确认：{{ ineligible.length }} 单</span>
     </div>
 
-  <a-form-item label="物流产品" class="product-field">
-    <a-select
-      v-model:value="productModel"
-      :options="productOptions"
-      allow-clear
-      placeholder="留空则自动使用每个店铺的默认物流产品"
-    />
-  </a-form-item>
+    <div class="fulfillment-fields">
+      <a-form-item label="物流产品" class="fulfillment-field">
+        <a-select
+          v-model:value="productModel"
+          :options="productOptions"
+          allow-clear
+          placeholder="使用店铺默认物流产品"
+        />
+      </a-form-item>
+      <a-form-item label="发货仓库" class="fulfillment-field">
+        <a-select
+          v-model:value="warehouseModel"
+          :options="warehouseOptions"
+          allow-clear
+          placeholder="使用店铺默认仓库"
+        />
+      </a-form-item>
+    </div>
 
     <div v-if="eligible.length" class="confirm-section">
       <div class="confirm-section-title">可确认订单</div>
@@ -56,6 +66,7 @@
 import { ref, watch } from 'vue'
 import type { BaseOrderVO } from '@/api/order/types'
 import { listOwnerLogisticsProducts } from '@/api/wms/logistics-product'
+import { getWarehouseOptions } from '@/api/wms/warehouse'
 
 interface Props {
   loading?: boolean
@@ -73,16 +84,29 @@ withDefaults(defineProps<Props>(), {
 
 const openModel = defineModel<boolean>('open', { required: true })
 const productModel = defineModel<number | undefined>('logisticsProductId')
+const warehouseModel = defineModel<number | undefined>('wmsWarehouseId')
 const productOptions = ref<{ label: string; value: number }[]>([])
+const warehouseOptions = ref<{ label: string; value: number }[]>([])
 
 watch(openModel, async value => {
-  if (!value || productOptions.value.length) return
-  const response = await listOwnerLogisticsProducts()
-  if (response.code !== 200) return
-  productOptions.value = (response.data || []).map(item => ({
-    label: `${item.productName} (${item.currency || 'RUB'} ${Number(item.unitPrice).toFixed(2)})`,
-    value: item.id
-  }))
+  if (!value) return
+  if (!productOptions.value.length) {
+    const response = await listOwnerLogisticsProducts()
+    if (response.code === 200) {
+      productOptions.value = (response.data || []).map(item => ({
+        label: `${item.productName} (${item.currency || 'RUB'} ${Number(item.unitPrice).toFixed(2)})`,
+        value: item.id
+      }))
+    }
+  }
+  if (!warehouseOptions.value.length) {
+    const response = await getWarehouseOptions()
+    if (response.code === 200) {
+      warehouseOptions.value = (response.data || [])
+        .filter(item => item.warehouseType === 'OWN')
+        .map(item => ({ label: `${item.warehouseName} (${item.warehouseCode})`, value: item.id }))
+    }
+  }
 })
 
 defineEmits<{
@@ -97,8 +121,15 @@ defineEmits<{
   margin-bottom: 8px;
 }
 
-.product-field {
-  margin: 12px 0;
+.fulfillment-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.fulfillment-field {
+  margin-bottom: 0;
 }
 
 .confirm-section {

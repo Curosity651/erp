@@ -108,7 +108,6 @@
             录入
           </a>
           <a @click="handleViewDetail(record)">查看</a>
-          <a v-if="isConfirmed(record)" @click="handlePrintPallets(record)">打印托盘</a>
 
           <a
             v-if="record.orderStatus === 'REVIEWING' && hasPermission('wms:stocktake:confirm')"
@@ -148,7 +147,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import StocktakePageSearch from './StocktakePageSearch.vue'
@@ -164,12 +162,9 @@ import { doRequest } from '@/utils/axios/request'
 import {
   pageStocktake,
   cancelStocktake,
-  deleteStocktake,
-  getStocktakePallets
+  deleteStocktake
 } from '@/api/wms/stocktake'
 import type { StocktakePageVO, StocktakeQO, StocktakeStatus } from '@/api/wms/stocktake/types'
-import { isSuccess } from '@/api'
-import { printPalletLabels } from '@/views/platform/pallet/pallet-label-print'
 
 defineOptions({ name: 'StocktakePage' })
 
@@ -219,7 +214,7 @@ const isInProgress = (record: StocktakePageVO): boolean => {
 }
 
 const getModeText = (mode?: string) =>
-  ({ FULL: '全仓盘点', CYCLE: '循环盘点', SPECIAL: '专项盘点' })[mode || ''] || '历史盘点'
+  ({ FULL: '全仓盘点', CYCLE: '循环盘点', SPECIAL: '历史专项盘点' })[mode || ''] || '历史盘点'
 
 const getModeColor = (mode?: string) =>
   ({ FULL: 'blue', CYCLE: 'cyan', SPECIAL: 'orange' })[mode || ''] || 'default'
@@ -364,31 +359,6 @@ const handleDelete = (record: StocktakePageVO) => {
     successMessage: '删除成功',
     onSuccess: () => reloadTable(true)
   })
-}
-
-const handlePrintPallets = async (record: StocktakePageVO) => {
-  const printPage = window.open('', '_blank')
-  if (!printPage) {
-    message.warning('浏览器阻止了打印窗口，请允许本站弹出窗口后重试')
-    return
-  }
-  try {
-    const result = await getStocktakePallets(record.id)
-    if (!isSuccess(result)) {
-      printPage.close()
-      return
-    }
-    const pallets = result.data || []
-    if (!pallets.length) {
-      printPage.close()
-      message.info('该盘点单没有需要更新的托盘标签')
-      return
-    }
-    await printPalletLabels(pallets, printPage)
-  } catch (error: any) {
-    printPage.close()
-    message.error(error?.message || '托盘标签加载失败')
-  }
 }
 
 // ==================== Tabs 逻辑 ====================

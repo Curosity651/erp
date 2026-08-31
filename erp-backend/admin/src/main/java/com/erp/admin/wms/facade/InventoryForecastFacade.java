@@ -15,7 +15,9 @@ import com.erp.admin.product.model.vo.SkuBriefVO;
 import com.erp.admin.product.service.SkuBriefService;
 import com.erp.admin.wms.constant.ForecastConstants;
 import com.erp.admin.wms.model.dto.RegionSkuStockDTO;
+import com.erp.admin.wms.model.dto.EffectiveInventoryConfig;
 import com.erp.admin.wms.model.entity.Region;
+import com.erp.admin.wms.model.entity.InventoryConfig;
 import com.erp.admin.wms.model.enums.ForecastStatus;
 import com.erp.admin.wms.model.qo.ForecastDetailQO;
 import com.erp.admin.wms.model.qo.ForecastSummaryQO;
@@ -84,11 +86,23 @@ public class InventoryForecastFacade {
         }
 
         // 2. 查询区域 SKU 库存聚合
-        List<RegionSkuStockDTO> stockList = regionStockDataProvider.getRegionSkuStocks(
-                regionIds, qo.getSkuKeyword());
-        if (stockList.isEmpty()) {
-            return ForecastSummaryResult.empty(thresholdDays);
-        }
+        List<RegionSkuStockDTO> stockList = new ArrayList<>(regionStockDataProvider.getRegionSkuStocks(
+                regionIds, qo.getSkuKeyword()));
+		Map<String, RegionSkuStockDTO> stockByKey = stockList.stream().collect(Collectors.toMap(
+				row -> row.getRegionId() + ":" + row.getSkuCode(), row -> row, (a, b) -> a));
+		Map<Long, Set<String>> salesSkus = regionSalesDataProvider.getRegionSkuCodesWithSales(regionIds,
+				qo.getSkuKeyword());
+		for (Map.Entry<Long, Set<String>> entry : salesSkus.entrySet()) {
+			for (String sku : entry.getValue()) {
+				stockByKey.putIfAbsent(entry.getKey() + ":" + sku, RegionSkuStockDTO.empty(entry.getKey(), sku));
+			}
+		}
+		for (InventoryConfig config : inventoryConfigService.listConfiguredRegionSkus(regionIds, qo.getSkuKeyword())) {
+			stockByKey.putIfAbsent(config.getRegionId() + ":" + config.getSkuCode(),
+					RegionSkuStockDTO.empty(config.getRegionId(), config.getSkuCode()));
+		}
+		stockList = new ArrayList<>(stockByKey.values());
+		if (stockList.isEmpty()) return ForecastSummaryResult.empty(thresholdDays);
 
         // 3. 收集 SKU 编码
         Set<String> skuCodes = stockList.stream()
@@ -139,7 +153,8 @@ public class InventoryForecastFacade {
         String skuCode = qo.getSkuCode();
 
         // 获取配置
-        int thresholdDays = inventoryConfigService.getGlobalThresholdDays();
+        EffectiveInventoryConfig effectiveConfig = inventoryConfigService.getEffectiveConfig(regionId, skuCode);
+        int thresholdDays = effectiveConfig.getNotifyThresholdDays();
         int forecastDays = qo.getDays() != null ? qo.getDays() : ForecastConstants.DEFAULT_FORECAST_DAYS;
 
         // 1. 查询当前库存（区域聚合）
@@ -178,6 +193,9 @@ public class InventoryForecastFacade {
         result.setSellableDays(sellableDays);
         result.setStatus(ForecastStatus.fromSellableDays(sellableDays, thresholdDays).name());
         result.setThresholdDays(thresholdDays);
+		result.setNotifyEnabled(effectiveConfig.getNotifyEnabled());
+		result.setNotifyThresholdDays(effectiveConfig.getNotifyThresholdDays());
+		result.setConfigSource(effectiveConfig.getSource());
         result.setForecastList(forecastList);
         result.setIncomingSources(incomingSources);
         result.setPendingShipmentTotal(currentStock.getPendingShipment());
@@ -226,12 +244,15 @@ public class InventoryForecastFacade {
             // 预占和可售
             int reserved = reservedMap.getOrDefault(key, 0);
             vo.setReservedQuantity(reserved);
-            vo.setSellableQuantity(stock.getTotalAvailable() - reserved);
+            // 新库存查询层返回的 available 已经扣除预占，禁止二次扣减。
+            vo.setSellableQuantity(stock.getTotalAvailable());
 
             vo.setPendingShipmentQuantity(pendingShipmentMap.getOrDefault(key, 0));
 
             // 计算动态安全库存
             int dailySales = dailySalesMap.getOrDefault(key, 0);
+            EffectiveInventoryConfig effectiveConfig = inventoryConfigService.getEffectiveConfig(
+                    stock.getRegionId(), stock.getSkuCode());
             int effectiveSafety = inventoryConfigService.getEffectiveSafetyStockDynamic(
                     stock.getRegionId(), stock.getSkuCode(), dailySales);
 
@@ -239,7 +260,8 @@ public class InventoryForecastFacade {
 
             // 计算可售天数（逐日模拟，统一算法）
             Map<LocalDate, Integer> incomingByDate = incomingByDateMap.getOrDefault(key, Collections.emptyMap());
-            calculateRegionSellableDays(vo, incomingByDate, effectiveSafety, thresholdDays, forecastDays);
+            calculateRegionSellableDays(vo, incomingByDate, effectiveSafety,
+                    effectiveConfig.getNotifyThresholdDays(), forecastDays);
 
             results.add(vo);
         }
@@ -364,7 +386,7 @@ public class InventoryForecastFacade {
         CurrentStockVO currentStock = new CurrentStockVO();
         currentStock.setAvailable(stock.getTotalAvailable());
         currentStock.setReserved(reserved);
-        currentStock.setSellable(stock.getTotalAvailable() - reserved);
+        currentStock.setSellable(stock.getTotalAvailable());
         currentStock.setInTransit(stock.getTotalInTransit());
         currentStock.setPendingShipment(pending);
 

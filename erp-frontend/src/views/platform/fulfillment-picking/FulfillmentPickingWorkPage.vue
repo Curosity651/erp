@@ -73,7 +73,7 @@
             v-if="!canOperate"
             type="warning"
             show-icon
-            message="该任务由其他拣货员领取，当前页面只允许查看。"
+            :message="operationWarning"
             class="workflow-alert"
           />
           <a-alert
@@ -100,7 +100,7 @@
             class="line-table"
           />
 
-          <a-form v-if="isPicking" layout="vertical" class="action-form" @finish="submitScan">
+          <a-form v-if="isPicking" layout="vertical" class="action-form">
             <a-row :gutter="16">
               <a-col :span="9">
                 <a-form-item label="扫描库位码" required>
@@ -127,7 +127,13 @@
               <a-button danger :disabled="!canOperate" @click="exceptionOpen = true">
                 标记异常
               </a-button>
-              <a-button type="primary" html-type="submit" :disabled="!canOperate">
+              <a-button
+                type="primary"
+                html-type="button"
+                :loading="scanSubmitting"
+                :disabled="!canOperate || scanSubmitting"
+                @click="submitScan"
+              >
                 确认取货
               </a-button>
             </div>
@@ -256,6 +262,7 @@ const queueFilter = ref('ALL')
 const warehouseName = ref('')
 const exceptionOpen = ref(false)
 const uploading = ref(false)
+const scanSubmitting = ref(false)
 const { uploadFile } = useFileUpload()
 const scan = reactive({ locationCode: '', warehouseSkuCode: '', quantity: 1 })
 const pack = reactive({
@@ -319,7 +326,13 @@ const completedCount = computed(
 const canOperate = computed(
   () =>
     detail.value?.task.operatorId === userStore.userInfo?.userId &&
+    detail.value?.task.operationMode !== 'SIMPLE' &&
     ['PICKING', 'PARTIAL_EXCEPTION'].includes(detail.value.task.taskStatus)
+)
+const operationWarning = computed(() =>
+  detail.value?.task.operationMode === 'SIMPLE'
+    ? '该任务已进入整单作业模式，请返回拣货任务列表继续整单作业。'
+    : '该任务由其他拣货员领取或已经结束，当前页面只允许查看。'
 )
 const isPicking = computed(
   () => current.value && ['PENDING', 'PICKING'].includes(current.value.taskOrder.orderStatus)
@@ -362,26 +375,47 @@ const submitScan = async () => {
   if (!current.value || !scan.locationCode || !scan.warehouseSkuCode) {
     return message.warning('请扫描库位码和内部 SKU')
   }
-  const result = await scanFulfillmentPickLine({
-    taskId,
-    fulfillmentNo: current.value.fulfillmentOrder.fulfillmentNo,
-    ...scan
-  })
-  if (isSuccess(result)) {
+  if (scanSubmitting.value) return
+  scanSubmitting.value = true
+  try {
+    const result = await scanFulfillmentPickLine({
+      taskId,
+      fulfillmentNo: current.value.fulfillmentOrder.fulfillmentNo,
+      locationCode: scan.locationCode.trim(),
+      warehouseSkuCode: scan.warehouseSkuCode.trim(),
+      quantity: scan.quantity
+    })
+    if (!isSuccess(result)) {
+      return message.error(result.message || '取货记录失败')
+    }
     message.success('取货已记录')
     scan.locationCode = ''
     scan.warehouseSkuCode = ''
     scan.quantity = 1
     await load(selectedOrderId.value)
+  } finally {
+    scanSubmitting.value = false
   }
 }
 const printLabel = async () => {
   if (!current.value) return
-  const result = await printFulfillmentLabel(current.value.fulfillmentOrder.id)
-  if (isSuccess(result)) {
-    if (result.data.labelUrl) window.open(result.data.labelUrl, '_blank')
+  const labelPage = window.open('', '_blank')
+  if (!labelPage) return message.error('浏览器阻止了面单窗口，请允许本站打开弹窗')
+  try {
+    const result = await printFulfillmentLabel(current.value.fulfillmentOrder.id)
+    if (!isSuccess(result)) {
+      labelPage.close()
+      return
+    }
+    if (!result.data.labelUrl) {
+      labelPage.close()
+      return message.error('平台没有返回可打印的面单文件')
+    }
+    labelPage.location.href = result.data.labelUrl
     message.success('面单已生成，请打印并贴到当前包裹')
     await load(selectedOrderId.value)
+  } catch {
+    labelPage.close()
   }
 }
 const verifyLabel = async () => {

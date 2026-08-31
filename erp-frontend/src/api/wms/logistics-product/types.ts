@@ -7,7 +7,7 @@
 export interface LogisticsProductVO {
   id: number
   productName: string
-  productCode?: string
+  productCode: string
   // 特性词条（大件/小件/自提/自定义...）
   tags: string[]
   // 统一单价（每次使用）
@@ -16,6 +16,10 @@ export interface LogisticsProductVO {
   productDescription?: string
   // 1启用 / 0停用
   status: number
+  // 是否已经产生履约或历史出库订单
+  used?: boolean
+  shopReferenceCount?: number
+  orderReferenceCount?: number
   remark?: string
   createTime?: string
 }
@@ -24,7 +28,7 @@ export interface LogisticsProductVO {
 export interface LogisticsProductDTO {
   id?: number
   productName: string
-  productCode?: string
+  productCode: string
   tags?: string[]
   unitPrice: number
   currency: string

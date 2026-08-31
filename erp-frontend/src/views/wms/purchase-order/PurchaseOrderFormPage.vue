@@ -187,6 +187,7 @@
         :prepay-already-paid="originalPrepayPaid"
         :balance-already-paid="originalBalancePaid"
         @update:payment-info="handlePaymentInfoUpdate"
+        @update:terms="handlePaymentTermsUpdate"
       />
 
       <!-- 合同附件区块 -->
@@ -433,6 +434,15 @@ const paymentFormModel = formModel as {
   prepayRatio?: number
   balancePaymentDays?: number
   paymentInfo: PaymentInfoDTO
+}
+
+const handlePaymentTermsUpdate = (terms: {
+  prepayRatio?: number
+  balancePaymentDays?: number
+}) => {
+  formModel.prepayRatio = terms.prepayRatio
+  formModel.balancePaymentDays = terms.balancePaymentDays
+  hasUnsavedChanges.value = true
 }
 
 // 处理供应商选择变化

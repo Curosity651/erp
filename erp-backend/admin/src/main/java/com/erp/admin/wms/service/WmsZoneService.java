@@ -4,13 +4,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.erp.admin.wms.enums.WmsResultCode;
+import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
-import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
 import com.erp.admin.wms.mapper.WmsZoneMapper;
 import com.erp.admin.wms.model.entity.WmsLocation;
-import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.entity.WmsZone;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.core.exception.BusinessException;
 import org.ballcat.mybatisplus.service.impl.ExtendServiceImpl;
@@ -36,7 +34,7 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 
 	private final WmsLocationMapper wmsLocationMapper;
 
-	private final WmsPhysicalInventoryMapper wmsPhysicalInventoryMapper;
+	private final WmsLocationInventoryMapper locationInventoryMapper;
 
 	public List<WmsZone> listByWarehouse(Long warehouseId) {
 		return baseMapper.listByWarehouse(warehouseId);
@@ -66,14 +64,10 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 		if (targets.size() != distinctIds.size()) {
 			throw new BusinessException(400, "选中库位不存在、不属于该仓库或为虚拟库位");
 		}
-		List<String> codes = targets.stream().map(WmsLocation::getLocationCode).collect(Collectors.toList());
-
-		List<WmsPhysicalInventory> batches = wmsPhysicalInventoryMapper
-			.listByWarehouseAndLocationCodes(warehouseId, codes);
-		List<String> occupiedCodes = batches.stream()
-				.filter(b -> value(b.getQuantity()) > 0 || value(b.getReservedQty()) > 0)
-				.map(WmsPhysicalInventory::getLocationCode)
-				.distinct()
+		java.util.Set<String> targetCodes = targets.stream().map(WmsLocation::getLocationCode)
+				.collect(Collectors.toSet());
+		List<String> occupiedCodes = locationInventoryMapper.listOccupiedLocationCodes(warehouseId).stream()
+				.filter(targetCodes::contains)
 				.collect(Collectors.toList());
 		if (!occupiedCodes.isEmpty()) {
 			throw new BusinessException(WmsResultCode.LOCATION_ZONE_MOVE_OCCUPIED.getCode(),
@@ -85,21 +79,7 @@ public class WmsZoneService extends ExtendServiceImpl<WmsZoneMapper, WmsZone> {
 			throw new BusinessException(409, "库位分区更新数量不一致，请刷新后重试");
 		}
 
-		if (!batches.isEmpty()) {
-			WmsPhysicalInventory update = new WmsPhysicalInventory();
-			update.setZoneId(zoneId);
-			update.setAllocatable(zone.getAllocatable());
-			wmsPhysicalInventoryMapper.update(update,
-					Wrappers.<WmsPhysicalInventory>lambdaUpdate()
-						.eq(WmsPhysicalInventory::getWarehouseId, warehouseId)
-						.in(WmsPhysicalInventory::getLocationCode, codes));
-		}
-
 		return updated;
-	}
-
-	private int value(Integer value) {
-		return value == null ? 0 : value;
 	}
 
 	public Long findDefaultStandardZoneId(Long warehouseId) {

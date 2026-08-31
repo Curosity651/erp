@@ -5,7 +5,7 @@ import com.erp.admin.wms.model.qo.StockPostingQO;
 import com.erp.admin.wms.model.vo.StockPostingDetailVO;
 import com.erp.admin.wms.model.vo.StockPostingItemVO;
 import com.erp.admin.wms.model.vo.StockPostingPageVO;
-import com.erp.admin.wms.service.StockPostingQueryService;
+import com.erp.admin.wms.service.InventoryEventQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -31,27 +31,27 @@ import javax.validation.Valid;
 @RequiredArgsConstructor
 public class StockPostingQueryController {
 
-    private final StockPostingQueryService stockPostingQueryService;
+    private final InventoryEventQueryService inventoryEventQueryService;
 
     @Operation(summary = "过账单分页查询")
     @GetMapping("/page")
     @PreAuthorize("hasAuthority('wms:stock-flow:read')")
     public ApiResult<PageResult<StockPostingPageVO>> queryPage(PageParam pageParam, StockPostingQO qo) {
-        return ApiResult.ok(stockPostingQueryService.queryPage(pageParam, qo));
+        return ApiResult.ok(inventoryEventQueryService.queryEventPage(pageParam, qo));
     }
 
     @Operation(summary = "过账单详情（含明细）")
     @GetMapping("/detail")
     @PreAuthorize("hasAuthority('wms:stock-flow:read')")
     public ApiResult<StockPostingDetailVO> getDetail(@RequestParam Long id) {
-        return ApiResult.ok(stockPostingQueryService.getDetail(id));
+        return ApiResult.ok(inventoryEventQueryService.getEventDetail(id));
     }
 
     @Operation(summary = "过账单明细分页查询")
     @GetMapping("/item/page")
     @PreAuthorize("hasAuthority('wms:stock-flow:read')")
     public ApiResult<PageResult<StockPostingItemVO>> queryItemPage(PageParam pageParam, @Valid StockPostingItemQO qo) {
-        return ApiResult.ok(stockPostingQueryService.queryItemPage(pageParam, qo));
+        return ApiResult.ok(inventoryEventQueryService.queryEventItemPage(pageParam, qo));
     }
 
 }

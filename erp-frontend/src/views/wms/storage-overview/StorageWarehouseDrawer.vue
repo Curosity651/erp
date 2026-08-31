@@ -6,12 +6,12 @@
     placement="right"
   >
     <div v-if="wh" class="dh-meta">
-      {{ wh.regionName || '—' }} · 分配 {{ wh.rackCount }} 架 / {{ wh.allocatedLocations }} 位 · 占用
+      {{ wh.regionName || '—' }} · 分配 {{ wh.rackCount }} 排 / {{ wh.allocatedLocations }} 位 · 占用
       {{ wh.occupancyRate }}%
     </div>
 
     <a-tabs v-model:activeKey="activeTab">
-      <a-tab-pane key="racks" tab="货架维度">
+      <a-tab-pane key="racks" tab="分配排维度">
         <a-table
           :columns="rackColumns"
           :data-source="racks"
@@ -95,7 +95,7 @@ const loadingOwners = ref(false)
 const title = computed(() => (wh.value ? wh.value.warehouseName : '仓库明细'))
 
 const rackColumns = [
-  { title: '货架', key: 'rackNo', width: 90 },
+  { title: '排号', key: 'rackNo', width: 90 },
   { title: '库位数', dataIndex: 'locationCount', align: 'right', width: 80 },
   { title: '已占用', dataIndex: 'occupiedCount', align: 'right', width: 80 },
   { title: '占用率', key: 'occ', width: 190 },

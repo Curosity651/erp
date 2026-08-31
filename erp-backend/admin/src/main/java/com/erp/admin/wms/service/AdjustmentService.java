@@ -151,6 +151,7 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		assertPlatform();
 		Assert.notNull(erpTenantId, "货主不能为空");
 		Assert.notNull(warehouseId, "仓库不能为空");
+		warehouseService.validateOperableOwnWarehouse(warehouseId);
 		Map<Long, WmsLocation> locations = wmsLocationService.listByWarehouse(warehouseId).stream()
 				.collect(Collectors.toMap(WmsLocation::getId, Function.identity()));
 		Map<Long, String> zoneTypes = wmsZoneService.listByWarehouse(warehouseId).stream()
@@ -208,7 +209,7 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		Assert.notEmpty(dto.getItems(), "报废明细不能为空");
 		Assert.notNull(dto.getErpTenantId(), "货主不能为空");
 		Assert.notNull(dto.getWarehouseId(), "仓库不能为空");
-		Assert.notNull(warehouseService.getById(dto.getWarehouseId()), "仓库不存在");
+		warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
 
 		// 加载并校验批次（存在 / 属本仓本货主 / 可用充足），构建明细
 		List<AdjustmentOrderItem> items = new ArrayList<>();
@@ -256,7 +257,9 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 
 		// 冻结待报废批次（同事务；任一不足则整单回滚）
 		for (AdjustmentOrderItem item : items) {
-			locationInventoryService.reserveInventory(item.getSourceInventoryId(), item.getQuantity());
+			locationInventoryService.reserveInventory(item.getSourceInventoryId(), item.getQuantity(),
+					scrapContext(order, item, com.erp.admin.wms.model.enums.InventoryEventType.SCRAP_RESERVE,
+							"报废库存预留"));
 		}
 
 		log.info("平台发起报废, id={}, no={}, erpTenantId={}, items={}", order.getId(), order.getAdjustmentNo(),
@@ -322,7 +325,8 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 		List<AdjustmentOrderItem> items = adjustmentItemService.getByAdjustmentOrderId(id);
 		Assert.notEmpty(items, "报废明细为空");
 		for (AdjustmentOrderItem item : items) {
-			locationInventoryService.scrapReservedInventory(item.getSourceInventoryId(), item.getQuantity());
+			locationInventoryService.scrapReservedInventory(item.getSourceInventoryId(), item.getQuantity(),
+					scrapContext(order, item, com.erp.admin.wms.model.enums.InventoryEventType.SCRAP, "报废销毁"));
 		}
 		LocalDateTime now = LocalDateTime.now();
 		Long uid = currentUserId();
@@ -378,10 +382,21 @@ public class AdjustmentService extends ExtendServiceImpl<AdjustmentMapper, Adjus
 	// ==================== 内部 ====================
 
 	private void releaseAll(Long orderId) {
+		AdjustmentOrder order = requireOrder(orderId);
 		List<AdjustmentOrderItem> items = adjustmentItemService.getByAdjustmentOrderId(orderId);
 		for (AdjustmentOrderItem item : items) {
-			locationInventoryService.releaseInventory(item.getSourceInventoryId(), item.getQuantity());
+			locationInventoryService.releaseInventory(item.getSourceInventoryId(), item.getQuantity(),
+					scrapContext(order, item, com.erp.admin.wms.model.enums.InventoryEventType.SCRAP_RELEASE,
+							"取消报废预留"));
 		}
+	}
+
+	private com.erp.admin.wms.model.dto.InventoryMutationContext scrapContext(AdjustmentOrder order,
+			AdjustmentOrderItem item, com.erp.admin.wms.model.enums.InventoryEventType eventType, String reason) {
+		return com.erp.admin.wms.model.dto.InventoryMutationContext.builder().eventType(eventType)
+				.sourceType("SCRAP_ORDER").sourceId(order.getId()).sourceNo(order.getAdjustmentNo())
+				.operatorId(currentUserId()).reason(reason)
+				.idempotencyKey("scrap:" + eventType.name() + ":" + order.getId() + ":" + item.getId()).build();
 	}
 
 	public List<PalletSummaryVO> listPrintablePallets(Long orderId) {

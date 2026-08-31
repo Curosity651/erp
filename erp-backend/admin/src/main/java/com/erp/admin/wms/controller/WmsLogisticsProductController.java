@@ -45,11 +45,20 @@ public class WmsLogisticsProductController {
         return ApiResult.ok(logisticsProductService.page(pageParam, keyword, status));
     }
 
-    @Operation(summary = "新建/编辑产品(服务商)")
+    @Operation(summary = "新建产品(服务商)")
     @PostMapping
     @PreAuthorize("@per.hasPermission('wms:logistics-product:add')")
-    public ApiResult<Void> save(@Validated @RequestBody LogisticsProductDTO dto) {
-        logisticsProductService.saveProduct(dto);
+    public ApiResult<Void> create(@Validated @RequestBody LogisticsProductDTO dto) {
+        logisticsProductService.createProduct(dto);
+        return ApiResult.ok();
+    }
+
+    @Operation(summary = "编辑产品(服务商)")
+    @PutMapping("/{id}")
+    @PreAuthorize("@per.hasPermission('wms:logistics-product:edit')")
+    public ApiResult<Void> update(@PathVariable("id") Long id,
+            @Validated @RequestBody LogisticsProductDTO dto) {
+        logisticsProductService.updateProduct(id, dto);
         return ApiResult.ok();
     }
 

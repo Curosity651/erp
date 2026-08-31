@@ -76,7 +76,10 @@
               <a @click="handlePrimary(record)">{{ primaryText(record) }}</a>
               <a v-if="canRelease(record)" @click="handleRelease(record)">释放任务</a>
               <a v-if="isActive(record)" @click="openTransfer(record)">转交</a>
-              <a @click="printTask(record)">打印拣货单</a>
+              <a
+                :class="{ 'disabled-link': !canOpenSimple(record) }"
+                @click="canOpenSimple(record) && openSimplified(record)"
+              >整单作业</a>
             </operation-group>
           </template>
         </template>
@@ -95,19 +98,26 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <simplified-task-modal
+      v-model:open="simplifiedOpen"
+      :task="simplifiedTask"
+      :warehouse-name="simplifiedTask ? warehouseName(simplifiedTask.warehouseId) : '-'"
+      @success="load"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { isSuccess } from '@/api'
 import {
   claimFulfillmentPickTask,
-  getFulfillmentPickTask,
   listFulfillmentPickTasks,
   releaseFulfillmentPickTask,
+  startSimplifiedFulfillmentTask,
   transferFulfillmentPickTask
 } from '@/api/wms/fulfillment'
 import type {
@@ -125,6 +135,9 @@ import {
   primaryTaskAction,
   type PickingTaskStatus
 } from './picking-task-flow'
+import SimplifiedTaskModal from './SimplifiedTaskModal.vue'
+import { canOpenSimplifiedTask } from './simplified-task-flow'
+import { createReactivationRefresh } from './reactivation-refresh'
 
 defineOptions({ name: 'FulfillmentPickingPage' })
 const router = useRouter()
@@ -139,6 +152,8 @@ const query = reactive<FulfillmentPickTaskQuery>({})
 const transferOpen = ref(false)
 const transferTaskId = ref<number>()
 const targetOperatorId = ref<number>()
+const simplifiedOpen = ref(false)
+const simplifiedTask = ref<FulfillmentPickTask>()
 
 const statusText: Record<string, string> = {
   PENDING: '待领取',
@@ -184,6 +199,8 @@ const load = async () => {
     loading.value = false
   }
 }
+const refreshOnReactivation = createReactivationRefresh(load)
+onActivated(refreshOnReactivation)
 const reset = () => {
   Object.assign(query, {
     taskNo: undefined,
@@ -203,17 +220,32 @@ const progressText = (record: FulfillmentPickTask) => {
 const action = (record: FulfillmentPickTask) =>
   primaryTaskAction(record.taskStatus, record.operatorId, currentUserId.value)
 const primaryText = (record: FulfillmentPickTask) =>
-  ({ claim: '领取任务', work: '继续作业', view: '查看' })[action(record)]
+  record.operationMode === 'SIMPLE' && action(record) === 'work'
+    ? '整单作业'
+    : ({ claim: '领取任务', work: '继续作业', view: '查看' })[action(record)]
 const isActive = (record: FulfillmentPickTask) =>
   ['PENDING', 'PICKING', 'PARTIAL_EXCEPTION'].includes(record.taskStatus)
 const canRelease = (record: FulfillmentPickTask) =>
   canReleaseTask(record.taskStatus, record.operatorId, currentUserId.value)
+const canOpenSimple = (record: FulfillmentPickTask) =>
+  canOpenSimplifiedTask(record.taskStatus, record.operationMode, record.operatorId, currentUserId.value)
+const openSimplified = async (record: FulfillmentPickTask) => {
+  const result = await startSimplifiedFulfillmentTask(record.id)
+  if (!isSuccess(result)) return
+  record.operationMode = 'SIMPLE'
+  simplifiedTask.value = record
+  simplifiedOpen.value = true
+}
 
 const handlePrimary = async (record: FulfillmentPickTask) => {
   if (action(record) === 'claim') {
     const result = await claimFulfillmentPickTask(record.id)
     if (!isSuccess(result)) return
     message.success('任务领取成功')
+  }
+  if (record.operationMode === 'SIMPLE' && action(record) === 'work') {
+    openSimplified(record)
+    return
   }
   await router.push(`/ops/fulfillment-picking/work/${record.id}`)
 }
@@ -238,23 +270,6 @@ const handleTransfer = async () => {
     await load()
   }
 }
-const printTask = async (record: FulfillmentPickTask) => {
-  const result = await getFulfillmentPickTask(record.id)
-  if (!isSuccess(result)) return
-  const rows = (result.data.lines || [])
-    .map(line => `<tr><td>${line.locationCode}</td><td>${line.warehouseSkuCode}</td><td>${line.plannedQuantity}</td></tr>`)
-    .join('')
-  const page = window.open('', '_blank', 'width=900,height=720')
-  if (!page) return message.error('浏览器阻止了打印窗口')
-  page.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>${record.taskNo}</title>
-    <style>body{font-family:Arial,Microsoft YaHei;padding:24px}table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #333;padding:8px;text-align:left}</style></head><body>
-    <h2>拣货单 ${record.taskNo}</h2><p>仓库：${warehouseName(record.warehouseId)}</p>
-    <table><thead><tr><th>库位</th><th>内部 SKU</th><th>数量</th></tr></thead><tbody>${rows}</tbody></table>
-    <script>window.onload=()=>window.print()<\/script></body></html>`)
-  page.document.close()
-}
-
 onMounted(async () => {
   const warehouseResult = await getWarehouseOptions()
   if (isSuccess(warehouseResult)) warehouses.value = warehouseResult.data || []
@@ -271,4 +286,5 @@ onMounted(async () => {
 .search-actions-item { margin-left: auto !important; }
 .list-card, .list-card :deep(.ant-card-body) { min-width: 0; }
 .list-card :deep(.ant-card-body) { overflow: hidden; }
+.disabled-link { color: rgba(0, 0, 0, .25); cursor: not-allowed; }
 </style>

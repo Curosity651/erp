@@ -30,7 +30,7 @@
     row-key="id"
     :request="tableRequest"
     :columns="columns"
-    :scroll="{ x: 860 }"
+    :scroll="{ x: 1540 }"
     size="middle"
   >
     <template #toolBarRender>
@@ -56,16 +56,21 @@
           {{ record.status === 1 ? '启用' : '停用' }}
         </a-tag>
       </template>
+      <template v-else-if="column.key === 'usage'">
+        <div>
+          <a-tag :color="record.used ? 'blue' : 'default'">
+            {{ record.used ? '已使用' : '未使用' }}
+          </a-tag>
+        </div>
+        <div class="usage-detail">
+          店铺 {{ record.shopReferenceCount || 0 }} · 订单 {{ record.orderReferenceCount || 0 }}
+        </div>
+      </template>
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a @click="handleEdit(record)">编辑</a>
+          <a @click="handleCopy(record)">复制调价</a>
           <a @click="toggleStatus(record)">{{ record.status === 1 ? '停用' : '启用' }}</a>
-          <a-popconfirm
-            title="删除后货主将无法再选用该产品，确认删除？"
-            @confirm="handleDelete(record)"
-          >
-            <a style="color: #ff4d4f">删除</a>
-          </a-popconfirm>
         </operation-group>
       </template>
     </template>
@@ -86,8 +91,7 @@ import { mergePageParam } from '@/utils/page-utils'
 import { doRequest } from '@/utils/axios/request'
 import {
   pageLogisticsProducts,
-  updateLogisticsProductStatus,
-  deleteLogisticsProduct
+  updateLogisticsProductStatus
 } from '@/api/wms/logistics-product'
 import type { LogisticsProductVO } from '@/api/wms/logistics-product/types'
 import ProductFormModal from './ProductFormModal.vue'
@@ -119,9 +123,10 @@ const columns: ProColumns[] = [
   { title: '特性词条', key: 'tags', width: 220 },
   { title: '单价', key: 'unitPrice', width: 130, align: 'right' },
   { title: '产品说明', dataIndex: 'productDescription', key: 'productDescription', width: 260, ellipsis: true },
+  { title: '使用情况', key: 'usage', width: 160 },
   { title: '状态', key: 'status', width: 90, align: 'center' },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
-  { title: '操作', key: 'operate', width: 150, align: 'center', fixed: 'right' }
+  { title: '操作', key: 'operate', width: 210, align: 'center', fixed: 'right' }
 ]
 
 // 词条按内容稳定配色
@@ -139,16 +144,11 @@ const formatMoney = (v?: number) =>
 
 const handleNew = () => formModalRef.value?.open()
 const handleEdit = (record: LogisticsProductVO) => formModalRef.value?.open(record)
+const handleCopy = (record: LogisticsProductVO) => formModalRef.value?.openCopy(record)
 
 const toggleStatus = (record: LogisticsProductVO) => {
   doRequest(updateLogisticsProductStatus(record.id, record.status === 1 ? 0 : 1), {
     successMessage: record.status === 1 ? '已停用' : '已启用',
-    onSuccess: () => reloadTable()
-  })
-}
-const handleDelete = (record: LogisticsProductVO) => {
-  doRequest(deleteLogisticsProduct(record.id), {
-    successMessage: '删除成功',
     onSuccess: () => reloadTable()
   })
 }
@@ -165,6 +165,11 @@ export default {
   font-weight: 600;
 }
 .price-per {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+.usage-detail {
+  margin-top: 4px;
   color: rgba(0, 0, 0, 0.45);
   font-size: 12px;
 }

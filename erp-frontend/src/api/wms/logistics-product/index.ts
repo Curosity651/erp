@@ -11,9 +11,14 @@ export function pageLogisticsProducts(pageParam: PageParam, keyword?: string, st
   })
 }
 
-/** 新建/编辑产品（服务商） */
-export function saveLogisticsProduct(dto: LogisticsProductDTO) {
+/** 新建产品（服务商） */
+export function createLogisticsProduct(dto: LogisticsProductDTO) {
   return httpClient.post<ApiResult<void>>(BASE, dto)
+}
+
+/** 编辑产品（服务商） */
+export function updateLogisticsProduct(id: number, dto: LogisticsProductDTO) {
+  return httpClient.put<ApiResult<void>>(`${BASE}/${id}`, dto)
 }
 
 /** 启用/停用产品（服务商） */
@@ -21,11 +26,6 @@ export function updateLogisticsProductStatus(id: number, status: number) {
   return httpClient.put<ApiResult<void>>(`${BASE}/${id}/status`, undefined, {
     params: { status }
   })
-}
-
-/** 删除产品（服务商） */
-export function deleteLogisticsProduct(id: number) {
-  return httpClient.delete<ApiResult<void>>(`${BASE}/${id}`)
 }
 
 /** 货主可选产品（父服务商启用中，建单选择器用） */

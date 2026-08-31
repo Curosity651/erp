@@ -1,5 +1,6 @@
 package com.erp.admin.wms.controller;
 
+import com.erp.admin.wms.config.WmsCoreModeGuard;
 import com.erp.admin.wms.model.dto.PickDTO;
 import com.erp.admin.wms.model.qo.OutboundPickingQO;
 import com.erp.admin.wms.model.dto.BatchPickDTO;
@@ -49,6 +50,7 @@ public class OutboundPickingController {
 
     private final OutboundPickingService outboundPickingService;
     private final PrincipalAttributeAccessor principalAttributeAccessor;
+    private final WmsCoreModeGuard coreModeGuard;
 
     @Operation(summary = "分页待下架/拣货中订单")
     @GetMapping("/page")
@@ -75,6 +77,7 @@ public class OutboundPickingController {
     @PostMapping("/pick")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<Void> pick(@Validated @RequestBody PickDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧出库拣货");
         PickResult r = outboundPickingService.pick(dto);
         if (!r.isOk()) {
             // 状态已落 BACKORDER（事务已提交），此处仅向前端返回失败提示
@@ -87,6 +90,7 @@ public class OutboundPickingController {
     @PostMapping("/batch-preview")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<BatchPickPreviewVO> batchPreview(@Validated @RequestBody BatchPickPreviewDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧批量拣货预览");
         return ApiResult.ok(outboundPickingService.previewBatch(dto));
     }
 
@@ -94,6 +98,7 @@ public class OutboundPickingController {
     @PostMapping("/batch-create")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<BatchPickResultVO> batchCreate(@Validated @RequestBody BatchPickDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧批量拣货任务创建");
         return ApiResult.ok(outboundPickingService.createBatch(dto));
     }
 
@@ -101,6 +106,7 @@ public class OutboundPickingController {
     @PostMapping("/tasks/{taskId}/complete")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<Void> completeTask(@PathVariable("taskId") Long taskId) {
+        coreModeGuard.assertLegacyWriteAllowed("旧拣货任务完成");
         outboundPickingService.completeTask(taskId);
         return ApiResult.ok();
     }
@@ -109,6 +115,7 @@ public class OutboundPickingController {
     @PostMapping("/tasks/scan")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
     public ApiResult<Void> scanLine(@Validated @RequestBody PickLineScanDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧拣货扫描");
         outboundPickingService.scanPickLine(dto, principalAttributeAccessor.getUserId());
         return ApiResult.ok();
     }
@@ -117,6 +124,7 @@ public class OutboundPickingController {
     @PostMapping("/tasks/return/scan")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
     public ApiResult<Void> scanReturn(@Validated @RequestBody PickReturnScanDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧拣货返库");
         outboundPickingService.scanReturnLine(dto, principalAttributeAccessor.getUserId());
         return ApiResult.ok();
     }
@@ -125,6 +133,7 @@ public class OutboundPickingController {
     @PostMapping("/tasks/exception")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<Void> reportException(@Validated @RequestBody PickExceptionDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧拣货异常登记");
         outboundPickingService.reportPickException(dto, principalAttributeAccessor.getUserId());
         return ApiResult.ok();
     }
@@ -141,6 +150,7 @@ public class OutboundPickingController {
     @PostMapping("/tasks/exception/resolve")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<Void> resolveException(@Validated @RequestBody ResolvePickExceptionDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧拣货异常处理");
         outboundPickingService.resolvePickException(dto, principalAttributeAccessor.getUserId());
         return ApiResult.ok();
     }
@@ -150,6 +160,7 @@ public class OutboundPickingController {
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
     public ApiResult<Void> scanPackageSort(@PathVariable("taskId") Long taskId,
             @Validated @RequestBody PackageScanDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧包裹分货扫描");
         outboundPickingService.scanPackageSort(taskId, dto, principalAttributeAccessor.getUserId());
         return ApiResult.ok();
     }
@@ -159,6 +170,7 @@ public class OutboundPickingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> confirmPackageSort(@PathVariable("taskId") Long taskId,
 			@PathVariable("packageId") Long packageId) {
+		coreModeGuard.assertLegacyWriteAllowed("旧包裹分货完成");
 		outboundPickingService.confirmPackageSort(taskId, packageId, principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
@@ -167,6 +179,7 @@ public class OutboundPickingController {
 	@PostMapping("/tasks/{taskId}/skip-sorting")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> skipSorting(@PathVariable("taskId") Long taskId) {
+		coreModeGuard.assertLegacyWriteAllowed("旧包裹跳过分货");
 		outboundPickingService.skipSorting(taskId);
 		return ApiResult.ok();
 	}

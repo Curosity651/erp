@@ -20,13 +20,14 @@
         SELECT
             r.logistics_product_id AS productId,
             r.bill_month AS billMonth,
+            r.currency AS currency,
             COUNT(*) AS usageCount,
             COALESCE(SUM(r.amount), 0) AS subtotal
         FROM wms_client_billing_record r
         <where>
             <include refid="incomeWhere"/>
         </where>
-        GROUP BY r.logistics_product_id, r.bill_month
+        GROUP BY r.logistics_product_id, r.bill_month, r.currency
         ORDER BY r.bill_month DESC, subtotal DESC
     </select>
 
@@ -35,13 +36,20 @@
             r.id,
             r.bill_month AS billMonth,
             r.logistics_product_id AS productId,
+            COALESCE(NULLIF(r.product_name_snapshot, ''), p.product_name, '已删除产品') AS productName,
+            r.product_name_snapshot AS productNameSnapshot,
+            r.product_description_snapshot AS productDescriptionSnapshot,
             t.tenant_name AS ownerName,
-            o.outbound_no AS outboundNo,
+            COALESCE(f.fulfillment_no, o.outbound_no, f.source_order_no, r.biz_id) AS businessNo,
+            f.source_order_no AS platformOrderId,
             r.tracking_no AS trackingNo,
             r.amount,
+            r.currency AS currency,
             DATE_FORMAT(r.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
         FROM wms_client_billing_record r
         LEFT JOIN sys_tenant t ON t.id = r.erp_tenant_id
+        LEFT JOIN wms_logistics_product p ON p.id = r.logistics_product_id
+        LEFT JOIN wms_fulfillment_order f ON f.id = r.fulfillment_order_id
         LEFT JOIN wms_sales_outbound_order o ON o.id = r.outbound_order_id
         <where>
             <include refid="incomeWhere"/>

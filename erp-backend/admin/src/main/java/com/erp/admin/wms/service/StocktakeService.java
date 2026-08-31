@@ -267,12 +267,9 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 	public Long create(StocktakeDTO dto) {
 		assertPlatform();
 		StocktakeMode mode = StocktakeMode.valueOf(dto.getStocktakeMode());
-		if (Boolean.TRUE.equals(dto.getVirtualLocationOnly())) {
-			Assert.isTrue(mode == StocktakeMode.SPECIAL, "虚拟库位只能使用专项盘点模式");
-			Assert.notEmpty(dto.getLocationIds(), "虚拟库位专项盘点必须选择库位");
-		}
+		validateCreatableMode(mode);
 		// 校验仓库
-		Assert.notNull(warehouseService.getById(dto.getWarehouseId()), "仓库不存在");
+		warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
 		Assert.notNull(baseMapper.lockWarehouse(dto.getWarehouseId()), "仓库不存在");
 
 		// 检查仓库是否有进行中的盘点单
@@ -301,6 +298,20 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 		generateLocationTasks(order, dto, mode);
 
 		return order.getId();
+	}
+
+	public static void validateCreatableMode(StocktakeMode mode) {
+		Assert.isTrue(mode == StocktakeMode.FULL || mode == StocktakeMode.CYCLE,
+				"专项盘点已停止新建，请使用全仓盘点或循环盘点");
+	}
+
+	public static void validateNoDuplicateInventoryLine(List<StocktakeOrderItem> items,
+			Long erpTenantId, String skuCode, String quality) {
+		boolean duplicate = items != null && items.stream()
+				.anyMatch(item -> Objects.equals(item.getErpTenantId(), erpTenantId)
+						&& Objects.equals(item.getSkuCode(), skuCode)
+						&& Objects.equals(item.getQuality(), quality));
+		Assert.isTrue(!duplicate, "该货主、SKU和品质在当前库位已存在盘点明细");
 	}
 
 	private String toScopeConfig(StocktakeDTO dto) {
@@ -615,12 +626,8 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 
 		String normalizedQuality = ("DAMAGED".equalsIgnoreCase(dto.getQuality())
 				|| "DEFECTIVE".equalsIgnoreCase(dto.getQuality())) ? "DEFECTIVE" : "GOOD";
-		boolean duplicate = stocktakeItemService.getByTaskId(task.getId()).stream()
-				.anyMatch(item -> Objects.equals(item.getErpTenantId(), dto.getErpTenantId())
-						&& Objects.equals(item.getSkuCode(), skuCode)
-						&& Objects.equals(item.getQuality(), normalizedQuality)
-						&& item.getSourceInventoryId() == null);
-		Assert.isTrue(!duplicate, "该账外商品已添加到当前库位");
+		validateNoDuplicateInventoryLine(stocktakeItemService.getByTaskId(task.getId()),
+				dto.getErpTenantId(), skuCode, normalizedQuality);
 
 		StocktakeOrderItem item = new StocktakeOrderItem();
 		item.setStocktakeOrderId(order.getId());
@@ -826,7 +833,14 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 				continue;
 			}
 			if (item.getSourceInventoryId() != null) {
-				locationInventoryService.adjustCountedQuantity(item.getSourceInventoryId(), item.getActualQuantity());
+				locationInventoryService.adjustCountedQuantity(item.getSourceInventoryId(), item.getActualQuantity(),
+						com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+								.eventType(item.getDiffQuantity() > 0
+										? com.erp.admin.wms.model.enums.InventoryEventType.STOCKTAKE_GAIN
+										: com.erp.admin.wms.model.enums.InventoryEventType.STOCKTAKE_LOSS)
+								.sourceType("STOCKTAKE").sourceId(order.getId()).sourceNo(order.getStocktakeNo())
+								.operatorId(principalAttributeAccessor.getUserId()).reason("盘点差异确认")
+								.idempotencyKey("stocktake:" + order.getId() + ":" + item.getId()).build());
 				continue;
 			}
 			Assert.isTrue(item.getActualQuantity() != null && item.getActualQuantity() > 0,
@@ -841,7 +855,12 @@ public class StocktakeService extends ExtendServiceImpl<StocktakeMapper, Stockta
 			key.setLocationId(task.getLocationId());
 			key.setSkuCode(item.getSkuCode());
 			key.setQuality(item.getQuality() == null ? "GOOD" : item.getQuality());
-			locationInventoryService.increase(key, item.getActualQuantity());
+			locationInventoryService.increase(key, item.getActualQuantity(),
+					com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+							.eventType(com.erp.admin.wms.model.enums.InventoryEventType.STOCKTAKE_GAIN)
+							.sourceType("STOCKTAKE").sourceId(order.getId()).sourceNo(order.getStocktakeNo())
+							.operatorId(principalAttributeAccessor.getUserId()).reason("盘点账外库存登记")
+							.idempotencyKey("stocktake:" + order.getId() + ":" + item.getId()).build());
 			WmsLocationInventory created = locationInventoryMapper.selectByKeyForUpdate(key);
 			Assert.notNull(created, "账外库存登记失败");
 			item.setSourceInventoryId(created.getId());

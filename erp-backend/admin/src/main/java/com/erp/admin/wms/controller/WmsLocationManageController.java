@@ -19,8 +19,8 @@ import com.erp.admin.wms.model.vo.LocationSlotSummaryVO;
 import com.erp.admin.wms.service.WarehouseService;
 import com.erp.admin.wms.service.WmsLocationGenerator;
 import com.erp.admin.wms.service.WmsLocationService;
+import com.erp.admin.wms.service.LocationInventoryService;
 import com.erp.admin.wms.service.VirtualLocationService;
-import com.erp.admin.wms.service.WmsPhysicalInventoryService;
 import com.erp.admin.wms.service.WmsStructureLockService;
 import com.erp.admin.wms.service.WmsZoneService;
 import com.erp.admin.wms.service.WmsPalletService;
@@ -64,7 +64,7 @@ public class WmsLocationManageController {
 
 	private final WmsStructureLockService wmsStructureLockService;
 
-	private final WmsPhysicalInventoryService wmsPhysicalInventoryService;
+	private final LocationInventoryService locationInventoryService;
 
 	private final VirtualLocationService virtualLocationService;
 
@@ -205,7 +205,7 @@ public class WmsLocationManageController {
 	@PreAuthorize("@per.hasPermission('wms:warehouse:edit')")
 	public ApiResult<List<String>> occupiedLocations(@RequestParam("warehouseId") Long warehouseId) {
 		warehouseService.validateOperableOwnWarehouse(warehouseId);
-		return ApiResult.ok(wmsPhysicalInventoryService.occupiedLocationCodes(warehouseId));
+		return ApiResult.ok(locationInventoryService.occupiedLocationCodes(warehouseId));
 	}
 
 	@Operation(summary = "库位改分区（联动更新现有批次可分配性并重算可用库存）")

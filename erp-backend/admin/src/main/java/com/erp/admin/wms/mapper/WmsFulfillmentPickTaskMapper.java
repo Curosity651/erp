@@ -25,4 +25,8 @@ public interface WmsFulfillmentPickTaskMapper extends BaseMapper<WmsFulfillmentP
 			+ "WHERE id = #{id} AND task_status IN ('PENDING', 'PICKING', 'PARTIAL_EXCEPTION')")
 	int transfer(@Param("id") Long id, @Param("targetUserId") Long targetUserId,
 			@Param("claimedTime") LocalDateTime claimedTime);
+
+	@Update("UPDATE wms_fulfillment_pick_task SET operation_mode = #{mode}, update_time = NOW() "
+			+ "WHERE id = #{id} AND (operation_mode IS NULL OR operation_mode = #{mode})")
+	int claimOperationMode(@Param("id") Long id, @Param("mode") String mode);
 }

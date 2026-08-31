@@ -28,6 +28,10 @@ public class InventoryDetailVO {
 	@Schema(title = "SKU编码")
 	private String skuCode;
 
+	private Integer physicalQuantity;
+
+	private Integer damagedQuantity;
+
 	@Schema(title = "SKU简要信息")
 	private SkuBriefVO skuBrief;
 

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.erp.admin.wms.mapper.WmsFulfillmentItemMapper;
@@ -190,6 +191,12 @@ public class FulfillmentPickingService {
 
 	public List<WmsFulfillmentPickTask> listTasks() {
 		return listTasks(new FulfillmentPickTaskQueryDTO());
+	}
+
+	public boolean hasTaskAssociation(Long fulfillmentOrderId) {
+		requireTaskDependencies();
+		return taskOrderMapper.selectCount(Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+				.eq(WmsFulfillmentPickTaskOrder::getFulfillmentOrderId, fulfillmentOrderId)) > 0;
 	}
 
 	public List<WmsFulfillmentPickTask> listTasks(FulfillmentPickTaskQueryDTO query) {
@@ -496,6 +503,9 @@ public class FulfillmentPickingService {
 		Assert.isTrue("PICKING".equals(task.getTaskStatus())
 						|| "PARTIAL_EXCEPTION".equals(task.getTaskStatus()), "拣货任务已结束");
 		requireOperator(task, userId);
+		Assert.isTrue(!"SIMPLE".equals(task.getOperationMode()), "任务已进入整单作业模式");
+		Assert.isTrue(taskMapper.claimOperationMode(task.getId(), "SCAN") == 1,
+				"任务作业模式已变化，请刷新后重试");
 		List<WmsFulfillmentPickTaskOrder> taskOrders = taskOrderMapper.selectList(
 				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
 						.eq(WmsFulfillmentPickTaskOrder::getTaskId, dto.getTaskId())
@@ -532,6 +542,95 @@ public class FulfillmentPickingService {
 		Assert.isTrue(taskLineMapper.addPicked(line.getId(), dto.getQuantity(), line.getVersion()) == 1,
 				"扫描数量超出计划或数据已变化，请刷新后重试");
 		completeOrderIfReady(task, current, order);
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void startSimplifiedPicking(Long taskId, Long userId) {
+		requireTaskDependencies();
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		Assert.isTrue("PICKING".equals(task.getTaskStatus()), "当前任务状态不能进入整单作业");
+		requireOperator(task, userId);
+		Assert.isTrue(!"SCAN".equals(task.getOperationMode()),
+				"任务已经开始逐单扫码，请继续使用逐单作业流程");
+		Assert.isTrue(taskMapper.claimOperationMode(taskId, "SIMPLE") == 1,
+				"任务作业模式已变化，请刷新后重试");
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public List<Long> completeSimplifiedPicking(Long taskId, List<Long> evidenceFileIds,
+			Long userId) {
+		requireTaskDependencies();
+		Assert.notEmpty(evidenceFileIds, "请至少上传一张作业凭证");
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		Assert.isTrue("PICKING".equals(task.getTaskStatus()), "当前任务状态不能整单完成");
+		requireOperator(task, userId);
+		startSimplifiedPicking(taskId, userId);
+
+		List<WmsFulfillmentPickTaskOrder> taskOrders = taskOrderMapper.selectList(
+				Wrappers.<WmsFulfillmentPickTaskOrder>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskOrder::getTaskId, taskId)
+						.orderByAsc(WmsFulfillmentPickTaskOrder::getSequenceNo));
+		Assert.notEmpty(taskOrders, "拣货任务没有订单");
+		List<WmsFulfillmentPickTaskOrder> activeOrders = taskOrders.stream()
+				.filter(item -> !"CANCELLED".equals(item.getOrderStatus()))
+				.collect(Collectors.toList());
+		Assert.notEmpty(activeOrders, "拣货任务没有可完成订单");
+
+		List<WmsFulfillmentPickTaskLine> lines = taskLineMapper.selectList(
+				Wrappers.<WmsFulfillmentPickTaskLine>lambdaQuery()
+						.eq(WmsFulfillmentPickTaskLine::getTaskId, taskId)
+						.orderByAsc(WmsFulfillmentPickTaskLine::getSequenceNo));
+		Assert.notEmpty(lines, "拣货任务没有取货明细");
+		for (WmsFulfillmentPickTaskOrder taskOrder : activeOrders) {
+			Assert.isTrue("PENDING".equals(taskOrder.getOrderStatus()),
+					"任务包含已开始或异常订单，不能使用整单作业");
+			WmsFulfillmentOrder order = orderMapper.selectForUpdate(
+					taskOrder.getFulfillmentOrderId());
+			Assert.notNull(order, "履约订单不存在");
+			Assert.isTrue(order.getFulfillmentStatus() == FulfillmentStatus.PICKING,
+					"订单状态不允许整单完成：" + order.getFulfillmentNo());
+			Assert.hasText(order.getLabelFileUrl(), "订单面单尚未生成：" + order.getFulfillmentNo());
+			Assert.hasText(order.getLabelBarcode(), "订单跟踪号尚未生成：" + order.getFulfillmentNo());
+		}
+		for (WmsFulfillmentPickTaskLine line : lines) {
+			Assert.isTrue((line.getPickedQuantity() == null || line.getPickedQuantity() == 0)
+					&& "PENDING".equals(line.getLineStatus()),
+					"任务已经开始逐单扫码，请继续使用逐单作业流程");
+		}
+
+		for (WmsFulfillmentPickTaskLine line : lines) {
+			Assert.isTrue(taskLineMapper.completeForSimplifiedTask(line.getId(), line.getVersion()) == 1,
+					"拣货明细已变化，请刷新后重试");
+		}
+		List<Long> orderIds = new ArrayList<>();
+		for (WmsFulfillmentPickTaskOrder taskOrder : activeOrders) {
+			WmsFulfillmentOrder order = orderMapper.selectForUpdate(taskOrder.getFulfillmentOrderId());
+			taskOrder.setOrderStatus("WAITING_LABEL");
+			taskOrder.setStartedTime(LocalDateTime.now());
+			taskOrderMapper.updateById(taskOrder);
+			Assert.isTrue(orderMapper.transit(order.getId(), FulfillmentStatus.PICKING,
+					FulfillmentStatus.WAITING_PACK) == 1, "订单拣货状态更新失败");
+			syncProgress(order, FulfillmentStatus.WAITING_PACK);
+			orderIds.add(order.getId());
+		}
+		task.setOperationMode("SIMPLE");
+		task.setEvidenceFileIds(evidenceFileIds.stream().map(String::valueOf)
+				.collect(Collectors.joining(",")));
+		taskMapper.updateById(task);
+		return orderIds;
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void markSimplifiedCompleted(Long taskId, Long userId) {
+		WmsFulfillmentPickTask task = taskMapper.selectById(taskId);
+		Assert.notNull(task, "拣货任务不存在");
+		requireOperator(task, userId);
+		Assert.isTrue("SIMPLE".equals(task.getOperationMode()), "任务不是整单作业模式");
+		Assert.isTrue("COMPLETED".equals(task.getTaskStatus()), "任务订单尚未全部完成");
+		task.setSimplifiedCompletedTime(LocalDateTime.now());
+		taskMapper.updateById(task);
 	}
 
 	private void completeOrderIfReady(WmsFulfillmentPickTask task,

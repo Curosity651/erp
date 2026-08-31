@@ -20,6 +20,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -60,49 +62,69 @@ public class OperatorDashboardService {
 
         OperatorDashboardVO vo = new OperatorDashboardVO();
 
-        // B 收支趋势（按月填轴）
-        Map<String, BigDecimal> incomeByMonth = new HashMap<>();
+        // B 收支趋势：收入按币种，支出按币种和状态，禁止跨币种合计。
+        Map<String, Map<String, BigDecimal>> incomeByCurrencyMonth = new TreeMap<>();
         Map<String, Long> countByMonth = new HashMap<>();
         for (Map<String, Object> row : dashboardMapper.sumIncomeByMonth(wmsTenantId, ms, me, owners)) {
-            incomeByMonth.put(str(row.get("billMonth")), dec(row.get("amount")));
-            countByMonth.put(str(row.get("billMonth")), num(row.get("cnt")));
+            String currency = currency(row.get("currency"));
+            String month = str(row.get("billMonth"));
+            incomeByCurrencyMonth.computeIfAbsent(currency, key -> new HashMap<>())
+                .merge(month, dec(row.get("amount")), BigDecimal::add);
+            countByMonth.merge(month, num(row.get("cnt")), Long::sum);
         }
-        Map<String, BigDecimal> expenseByMonth = new HashMap<>();
+        Map<String, Map<String, Map<String, BigDecimal>>> expenseByCurrencyStatusMonth = new TreeMap<>();
         for (Map<String, Object> row : dashboardMapper.sumExpenseByMonth(wmsTenantId, ms, me)) {
-            expenseByMonth.put(str(row.get("billMonth")), dec(row.get("amount")));
+            String currency = currency(row.get("currency"));
+            String status = str(row.get("status"));
+            String month = str(row.get("billMonth"));
+            expenseByCurrencyStatusMonth.computeIfAbsent(currency, key -> new HashMap<>())
+                .computeIfAbsent(status, key -> new HashMap<>())
+                .merge(month, dec(row.get("amount")), BigDecimal::add);
         }
         OperatorDashboardVO.Trend trend = new OperatorDashboardVO.Trend();
         List<String> months = new ArrayList<>();
-        List<BigDecimal> incomeArr = new ArrayList<>();
-        List<BigDecimal> expenseArr = new ArrayList<>();
-        List<BigDecimal> netArr = new ArrayList<>();
-        BigDecimal totalIncome = BigDecimal.ZERO;
-        BigDecimal totalExpense = BigDecimal.ZERO;
         long totalCount = 0;
         for (YearMonth m = start; !m.isAfter(end); m = m.plusMonths(1)) {
             String key = m.format(MONTH);
-            BigDecimal in = incomeByMonth.getOrDefault(key, BigDecimal.ZERO);
-            BigDecimal out = expenseByMonth.getOrDefault(key, BigDecimal.ZERO);
             months.add(key);
-            incomeArr.add(in);
-            expenseArr.add(out);
-            netArr.add(in.subtract(out));
-            totalIncome = totalIncome.add(in);
-            totalExpense = totalExpense.add(out);
             totalCount += countByMonth.getOrDefault(key, 0L);
         }
         trend.setMonths(months);
-        trend.setIncome(incomeArr);
-        trend.setExpense(expenseArr);
-        trend.setNet(netArr);
+        trend.setIncomeSeries(toSeries(incomeByCurrencyMonth, months));
+        trend.setConfirmedExpenseSeries(toExpenseSeries(expenseByCurrencyStatusMonth, months,
+                "CONFIRMED", "PAID"));
+        trend.setPaidExpenseSeries(toExpenseSeries(expenseByCurrencyStatusMonth, months, "PAID"));
         vo.setTrend(trend);
 
         // A 经营总览
         OperatorDashboardVO.Overview overview = new OperatorDashboardVO.Overview();
-        overview.setIncome(totalIncome);
         overview.setIncomeCount(totalCount);
-        overview.setExpense(totalExpense);
-        overview.setNetProfit(totalIncome.subtract(totalExpense));
+        Map<String, BigDecimal> incomeTotals = totals(incomeByCurrencyMonth);
+        overview.setIncomeByCurrency(toAmounts(incomeTotals));
+        List<OperatorDashboardVO.ExpenseSummary> expenses = new ArrayList<>();
+        Map<String, BigDecimal> confirmedExpenseTotals = new TreeMap<>();
+        for (String currency : expenseByCurrencyStatusMonth.keySet()) {
+            OperatorDashboardVO.ExpenseSummary item = new OperatorDashboardVO.ExpenseSummary();
+            item.setCurrency(currency);
+            item.setDraftEstimate(sumStatus(expenseByCurrencyStatusMonth, currency, "DRAFT"));
+            BigDecimal paid = sumStatus(expenseByCurrencyStatusMonth, currency, "PAID");
+            BigDecimal confirmed = sumStatus(expenseByCurrencyStatusMonth, currency, "CONFIRMED").add(paid);
+            item.setConfirmedPayable(confirmed);
+            item.setDisputedAmount(sumStatus(expenseByCurrencyStatusMonth, currency, "DISPUTED"));
+            item.setPaidAmount(paid);
+            confirmedExpenseTotals.put(currency, confirmed);
+            expenses.add(item);
+        }
+        overview.setExpenseByCurrency(expenses);
+        Set<String> balanceCurrencies = new TreeSet<>();
+        balanceCurrencies.addAll(incomeTotals.keySet());
+        balanceCurrencies.addAll(confirmedExpenseTotals.keySet());
+        List<OperatorDashboardVO.CurrencyAmount> balances = balanceCurrencies.stream()
+            .map(currency -> new OperatorDashboardVO.CurrencyAmount(currency,
+                    incomeTotals.getOrDefault(currency, BigDecimal.ZERO)
+                        .subtract(confirmedExpenseTotals.getOrDefault(currency, BigDecimal.ZERO))))
+            .collect(Collectors.toList());
+        overview.setBalanceByCurrency(balances);
         Map<String, Object> ownerCnt = dashboardMapper.countOwners(wmsTenantId);
         overview.setOwnerTotal(num(ownerCnt == null ? null : ownerCnt.get("total")));
         overview.setOwnerEnabled(num(ownerCnt == null ? null : ownerCnt.get("enabled")));
@@ -135,6 +157,7 @@ public class OperatorDashboardService {
         Map<String, Object> racks = dashboardMapper.sumRacks(wmsTenantId, LocalDate.now());
         scale.setRackCount(num(racks == null ? null : racks.get("cnt")));
         scale.setRackMonthlyFee(dec(racks == null ? null : racks.get("fee")));
+        scale.setRackMonthlyFeeCurrency("CNY");
         vo.setScale(scale);
 
         return vo;
@@ -144,6 +167,58 @@ public class OperatorDashboardService {
 
     private static String str(Object v) {
         return v == null ? "" : String.valueOf(v);
+    }
+
+    private static String currency(Object value) {
+        String result = str(value).trim().toUpperCase(java.util.Locale.ROOT);
+        return result.isEmpty() ? "UNKNOWN" : result;
+    }
+
+    private static List<OperatorDashboardVO.CurrencySeries> toSeries(
+            Map<String, Map<String, BigDecimal>> source, List<String> months) {
+        return source.entrySet().stream()
+            .map(entry -> new OperatorDashboardVO.CurrencySeries(entry.getKey(), months.stream()
+                .map(month -> entry.getValue().getOrDefault(month, BigDecimal.ZERO))
+                .collect(Collectors.toList())))
+            .collect(Collectors.toList());
+    }
+
+    private static List<OperatorDashboardVO.CurrencySeries> toExpenseSeries(
+            Map<String, Map<String, Map<String, BigDecimal>>> source, List<String> months, String... statuses) {
+        List<OperatorDashboardVO.CurrencySeries> result = new ArrayList<>();
+        for (String currency : source.keySet()) {
+            List<BigDecimal> amounts = months.stream().map(month -> {
+                BigDecimal total = BigDecimal.ZERO;
+                for (String status : statuses) {
+                    total = total.add(source.getOrDefault(currency, java.util.Collections.emptyMap())
+                        .getOrDefault(status, java.util.Collections.emptyMap())
+                        .getOrDefault(month, BigDecimal.ZERO));
+                }
+                return total;
+            }).collect(Collectors.toList());
+            result.add(new OperatorDashboardVO.CurrencySeries(currency, amounts));
+        }
+        return result;
+    }
+
+    private static Map<String, BigDecimal> totals(Map<String, Map<String, BigDecimal>> source) {
+        Map<String, BigDecimal> result = new TreeMap<>();
+        source.forEach((currency, months) -> result.put(currency,
+                months.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add)));
+        return result;
+    }
+
+    private static List<OperatorDashboardVO.CurrencyAmount> toAmounts(Map<String, BigDecimal> source) {
+        return source.entrySet().stream()
+            .map(entry -> new OperatorDashboardVO.CurrencyAmount(entry.getKey(), entry.getValue()))
+            .collect(Collectors.toList());
+    }
+
+    private static BigDecimal sumStatus(Map<String, Map<String, Map<String, BigDecimal>>> source,
+            String currency, String status) {
+        return source.getOrDefault(currency, java.util.Collections.emptyMap())
+            .getOrDefault(status, java.util.Collections.emptyMap())
+            .values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static BigDecimal dec(Object v) {

@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import com.erp.admin.product.model.vo.SkuBriefVO;
 import com.erp.admin.product.service.SkuBriefService;
+import com.erp.admin.common.tenant.TenantContext;
 import com.erp.admin.wms.calc.CalcBatch;
 import com.erp.admin.wms.calc.ProductionResult;
 import com.erp.admin.wms.calc.SalesMetrics;
@@ -33,6 +34,7 @@ import com.erp.admin.wms.model.vo.ShipProdCalcSummaryVO;
 import com.erp.admin.wms.service.RegionService;
 import com.erp.admin.wms.service.RegionStockDataProvider;
 import com.erp.admin.wms.service.ShippingOrderService;
+import com.erp.admin.wms.service.FboInventorySnapshotService;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.model.domain.PageParam;
 import org.springframework.stereotype.Component;
@@ -57,6 +59,7 @@ public class ShipProdCalcFacade {
     private final ShippingOrderService shippingOrderService;
     private final SkuBriefService skuBriefService;
     private final ShipProdCalcMapper shipProdCalcMapper;
+    private final FboInventorySnapshotService fboInventorySnapshotService;
 
     // ============================================================ 汇总
 
@@ -74,6 +77,10 @@ public class ShipProdCalcFacade {
             }
         }
 
+        // B FBO 平台快照，与海外仓仓内可用量分开输入模型。
+        Map<String, Integer> fboBySku = fboInventorySnapshotService
+                .sumQuantityBySku(TenantContext.getCurrentTenant(), null);
+
         // E 采购未发货批次
         Map<String, List<CalcBatch>> eBySku = new HashMap<>();
         for (PurchaseUnshippedBatchDTO b : shipProdCalcMapper.selectPurchaseUnshippedBatches(null)) {
@@ -87,6 +94,7 @@ public class ShipProdCalcFacade {
         // SKU 全集 = 现货 ∪ 在制 ∪ 有销量
         Set<String> skus = new TreeSet<>();
         skus.addAll(availableBySku.keySet());
+        skus.addAll(fboBySku.keySet());
         skus.addAll(eBySku.keySet());
         skus.addAll(salesBySku.keySet());
 
@@ -99,7 +107,7 @@ public class ShipProdCalcFacade {
             SkuCalcInput input = SkuCalcInput.builder()
                     .sku(sku)
                     .overseas(availableBySku.getOrDefault(sku, 0))
-                    .fbo(0)
+                    .fbo(fboBySku.getOrDefault(sku, 0))
                     .transit(cBySku.getOrDefault(sku, Collections.emptyList()))
                     .factoryDone(0)
                     .producing(eBySku.getOrDefault(sku, Collections.emptyList()))
@@ -156,6 +164,9 @@ public class ShipProdCalcFacade {
                 }
             }
         }
+        int fboQuantity = fboInventorySnapshotService
+                .sumQuantityBySku(TenantContext.getCurrentTenant(), one)
+                .getOrDefault(skuCode, 0);
         // C 在途
         List<CalcBatch> cBatches = loadTransitBatches(regionIds, one).getOrDefault(skuCode, Collections.emptyList());
         // E 在制
@@ -167,7 +178,7 @@ public class ShipProdCalcFacade {
         Map<LocalDate, Integer> daily = loadDailySales(one, today).getOrDefault(skuCode, Collections.emptyMap());
 
         SkuCalcInput input = SkuCalcInput.builder()
-                .sku(skuCode).overseas(available).fbo(0)
+                .sku(skuCode).overseas(available).fbo(fboQuantity)
                 .transit(cBatches).factoryDone(0).producing(eBatches)
                 .build();
         SkuCalcResult r = ShipProdCalcModel.evaluateSku(input, daily, today);
@@ -181,7 +192,7 @@ public class ShipProdCalcFacade {
                 .skuCode(skuCode)
                 .skuBrief(briefMap.get(skuCode))
                 .baseDate(today)
-                .overseas(available).fbo(0)
+                .overseas(available).fbo(fboQuantity)
                 .inTransit(totalQty(cBatches)).factoryDone(0).producing(totalQty(eBatches))
                 .xt(round1(m.getXt())).yt(round1(m.getYt())).zt(round1(m.getZt()))
                 .zt1(round1(m.getZt1())).zt2(round1(m.getZt2())).zt3(round1(m.getZt3()))

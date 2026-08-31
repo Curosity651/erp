@@ -16,6 +16,8 @@ export interface BillingRecordVO {
   sourceType?: string
   sourceRef?: string
   remark?: string
+  operatorId?: number
+  operatorName?: string
   createTime?: string
 }
 
@@ -32,8 +34,11 @@ export interface MonthlyBillVO {
   inspectionFee: number
   driverFee: number
   totalAmount: number
+  currency: string
   status: BillStatus
   confirmedTime?: string
+  reviewerId?: number
+  reviewerName?: string
   paidTime?: string
   paymentVoucherFileId?: number
   remark?: string
@@ -78,6 +83,16 @@ export interface ManualBillingDTO {
   feeCode: string
   quantity: number
   actualAmount?: number
+  sourceRef: string
+  remark: string
+}
+
+export type BillAdjustmentType = 'SUPPLEMENT' | 'DEDUCTION'
+
+export interface BillAdjustmentDTO {
+  adjustmentType: BillAdjustmentType
+  feeCode: string
+  amount: number
   sourceRef: string
   remark: string
 }

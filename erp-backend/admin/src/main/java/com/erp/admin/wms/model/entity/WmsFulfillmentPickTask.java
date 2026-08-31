@@ -20,6 +20,9 @@ public class WmsFulfillmentPickTask {
 	private Integer orderCount;
 	private Integer totalQuantity;
 	private Long operatorId;
+	private String operationMode;
+	private String evidenceFileIds;
+	private LocalDateTime simplifiedCompletedTime;
 	private LocalDateTime claimedTime;
 	private LocalDateTime createTime;
 	private LocalDateTime updateTime;

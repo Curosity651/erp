@@ -2,9 +2,6 @@ package com.erp.admin.wms.controller;
 
 import java.util.List;
 
-import com.erp.admin.wms.model.dto.LocationTransferBatchCreateDTO;
-import com.erp.admin.wms.model.dto.LocationTransferCreateDTO;
-import com.erp.admin.wms.model.dto.LocationTransferPlanDTO;
 import com.erp.admin.wms.model.dto.LogicalLocationTransferCreateDTO;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.qo.LocationTransferQO;
@@ -14,7 +11,6 @@ import com.erp.admin.wms.model.vo.LocationTransferPageVO;
 import com.erp.admin.wms.model.vo.LocationTransferSourceBatchVO;
 import com.erp.admin.wms.model.vo.LogicalTransferLocationVO;
 import com.erp.admin.wms.model.vo.LogicalTransferSourceVO;
-import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.service.LocationTransferOrderService;
 import com.erp.admin.wms.service.LocationTransferService;
 import com.erp.admin.wms.service.LogicalLocationTransferService;
@@ -67,45 +63,12 @@ public class LocationTransferController {
 		return ApiResult.ok(orderService.getDetail(id));
 	}
 
-	@Operation(summary = "新建库位调整单")
-	@OperationLog(bizType = "库位调整", successMessage = "新建库位调整单成功")
-	@PostMapping
-	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
-	public ApiResult<Long> create(@Validated @RequestBody LocationTransferCreateDTO dto) {
-		return ApiResult.ok(orderService.create(dto));
-	}
-
 	@Operation(summary = "新建逻辑库位调整单")
 	@OperationLog(bizType = "库位调整", successMessage = "新建库位调整单成功")
 	@PostMapping("/logical")
 	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
 	public ApiResult<Long> createLogical(@Validated @RequestBody LogicalLocationTransferCreateDTO dto) {
 		return ApiResult.ok(logicalTransferService.create(dto));
-	}
-
-	@Operation(summary = "按库位批量新建调整单（自动按货主拆单）")
-	@OperationLog(bizType = "库位调整", successMessage = "批量新建库位调整单成功")
-	@PostMapping("/batch")
-	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
-	public ApiResult<List<Long>> createBatch(@Validated @RequestBody LocationTransferBatchCreateDTO dto) {
-		return ApiResult.ok(orderService.createBatch(dto));
-	}
-
-	@Operation(summary = "完善系统生成的库位调整计划")
-	@PatchMapping("/plan")
-	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
-	public ApiResult<Void> completePlan(@RequestParam("id") Long id,
-			@Validated @RequestBody LocationTransferPlanDTO dto) {
-		orderService.completePlan(id, dto);
-		return ApiResult.ok();
-	}
-
-	@Operation(summary = "调整完成（执行移库）")
-	@OperationLog(bizType = "库位调整", successMessage = "库位调整完成")
-	@PatchMapping("/complete")
-	@PreAuthorize("@per.hasPermission('wms:location:transfer')")
-	public ApiResult<List<PalletSummaryVO>> complete(@RequestParam("id") Long id) {
-		return ApiResult.ok(orderService.complete(id));
 	}
 
 	@Operation(summary = "完成逻辑库位调整")

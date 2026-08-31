@@ -38,6 +38,15 @@ public class ForecastDetailVO {
     @Schema(title = "预警阈值天数")
     private Integer thresholdDays;
 
+	@Schema(title = "是否启用通知")
+	private Boolean notifyEnabled;
+
+	@Schema(title = "通知阈值天数")
+	private Integer notifyThresholdDays;
+
+	@Schema(title = "配置来源", description = "GLOBAL 或 SKU")
+	private String configSource;
+
     @Schema(title = "每日预测列表")
     private List<ForecastDayVO> forecastList;
 

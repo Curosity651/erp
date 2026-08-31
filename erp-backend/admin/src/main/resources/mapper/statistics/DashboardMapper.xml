@@ -157,9 +157,21 @@
 			COALESCE(sm.sku_code, oi.platform_item_id) AS article,
 			MAX(CASE WHEN sm.sku_code IS NOT NULL THEN TRUE ELSE FALSE END) AS isMapped,
 			SUM(oi.quantity) AS quantity,
-			COALESCE(SUM(oi.item_amount_rub), 0) AS totalAmount
+			COALESCE(SUM(CASE
+				WHEN item_totals.amount_sum > 0 AND o.total_amount_rub IS NOT NULL
+					THEN o.total_amount_rub * oi.item_amount_rub / item_totals.amount_sum
+				WHEN item_totals.quantity_sum > 0 AND o.total_amount_rub IS NOT NULL
+					THEN o.total_amount_rub * oi.quantity / item_totals.quantity_sum
+				ELSE 0 END), 0) AS totalAmount
 		FROM erp_order o
 		INNER JOIN erp_order_item oi ON o.id = oi.order_id
+		INNER JOIN (
+			SELECT order_id,
+				SUM(COALESCE(item_amount_rub, 0)) AS amount_sum,
+				SUM(quantity) AS quantity_sum
+			FROM erp_order_item
+			GROUP BY order_id
+		) item_totals ON item_totals.order_id = o.id
 		LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
 		LEFT JOIN sku s ON sm.sku_code = s.sku_code
 		WHERE DATE(o.platform_created_at_moscow) BETWEEN #{qo.startDate} AND #{qo.endDate}
@@ -176,13 +188,25 @@
 			COALESCE(sm.sku_code, oi.platform_item_id) AS sku,
 			MAX(CASE WHEN sm.sku_code IS NOT NULL THEN TRUE ELSE FALSE END) AS isMapped,
 			SUM(oi.quantity) AS quantity,
-			COALESCE(SUM(oi.item_amount_rub), 0) / 100 AS amount,
+			COALESCE(SUM(CASE
+				WHEN item_totals.amount_sum > 0 AND o.total_amount_rub IS NOT NULL
+					THEN o.total_amount_rub * oi.item_amount_rub / item_totals.amount_sum
+				WHEN item_totals.quantity_sum > 0 AND o.total_amount_rub IS NOT NULL
+					THEN o.total_amount_rub * oi.quantity / item_totals.quantity_sum
+				ELSE 0 END), 0) / 100 AS amount,
 			MAX(s.id) AS skuId,
 			MAX(s.chinese_name) AS skuNameCn,
 			MAX(s.category_id) AS categoryId,
 			MAX(c.name) AS categoryName
 		FROM erp_order o
 		INNER JOIN erp_order_item oi ON o.id = oi.order_id
+		INNER JOIN (
+			SELECT order_id,
+				SUM(COALESCE(item_amount_rub, 0)) AS amount_sum,
+				SUM(quantity) AS quantity_sum
+			FROM erp_order_item
+			GROUP BY order_id
+		) item_totals ON item_totals.order_id = o.id
 		LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
 		LEFT JOIN sku s ON sm.sku_code = s.sku_code
 		LEFT JOIN category c ON s.category_id = c.id
@@ -213,13 +237,25 @@
 			COALESCE(sm.sku_code, oi.platform_item_id) AS sku,
 			MAX(CASE WHEN sm.sku_code IS NOT NULL THEN TRUE ELSE FALSE END) AS isMapped,
 			SUM(oi.quantity) AS quantity,
-			COALESCE(SUM(oi.item_amount_rub), 0) / 100 AS amount,
+			COALESCE(SUM(CASE
+				WHEN item_totals.amount_sum > 0 AND o.total_amount_rub IS NOT NULL
+					THEN o.total_amount_rub * oi.item_amount_rub / item_totals.amount_sum
+				WHEN item_totals.quantity_sum > 0 AND o.total_amount_rub IS NOT NULL
+					THEN o.total_amount_rub * oi.quantity / item_totals.quantity_sum
+				ELSE 0 END), 0) / 100 AS amount,
 			MAX(s.id) AS skuId,
 			MAX(s.chinese_name) AS skuNameCn,
 			MAX(s.category_id) AS categoryId,
 			MAX(c.name) AS categoryName
 		FROM erp_order o
 		INNER JOIN erp_order_item oi ON o.id = oi.order_id
+		INNER JOIN (
+			SELECT order_id,
+				SUM(COALESCE(item_amount_rub, 0)) AS amount_sum,
+				SUM(quantity) AS quantity_sum
+			FROM erp_order_item
+			GROUP BY order_id
+		) item_totals ON item_totals.order_id = o.id
 		LEFT JOIN sku_mapping sm ON oi.platform_item_id = sm.platform_item_id
 		LEFT JOIN sku s ON sm.sku_code = s.sku_code
 		LEFT JOIN category c ON s.category_id = c.id

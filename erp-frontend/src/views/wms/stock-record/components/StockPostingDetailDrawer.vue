@@ -1,5 +1,5 @@
 <template>
-  <a-drawer v-model:open="visible" title="操作单详情" :width="560" :destroy-on-close="true">
+  <a-drawer v-model:open="visible" title="库存操作详情" :width="820" :destroy-on-close="true">
     <!-- 概况信息区 -->
     <a-spin :spinning="detailLoading">
       <a-descriptions :column="2" bordered size="small" class="detail-descriptions">
@@ -81,11 +81,23 @@
             {{ BucketMap[record.bucket] || record.bucket }}
           </span>
         </template>
+		<template v-else-if="column.key === 'locationCode'">
+		  <span>{{ record.locationCode || '-' }}</span>
+		  <span v-if="record.counterpartLocationCode"> → {{ record.counterpartLocationCode }}</span>
+		</template>
+		<template v-else-if="column.key === 'quality'">
+		  <a-tag :color="record.quality === 'DEFECTIVE' ? 'red' : 'green'">
+			{{ record.quality === 'DEFECTIVE' ? '不良品' : '良品' }}
+		  </a-tag>
+		</template>
         <!-- 变动 -->
         <template v-else-if="column.key === 'change'">
-          <span :class="record.direction === 'IN' ? 'delta-positive' : 'delta-negative'">
-            {{ record.direction === 'IN' ? '+' : '-' }}{{ record.quantity }}
-          </span>
+		  <div :class="record.quantityDelta >= 0 ? 'delta-positive' : 'delta-negative'">
+			实物 {{ signed(record.quantityDelta) }}
+		  </div>
+		  <div v-if="record.reservedDelta" :class="record.reservedDelta >= 0 ? 'delta-positive' : 'delta-negative'">
+			预占 {{ signed(record.reservedDelta) }}
+		  </div>
         </template>
       </template>
     </a-table>
@@ -139,10 +151,11 @@ const pagination = reactive({
 
 // 表格列
 const itemColumns = [
-  { title: '仓库/区域', key: 'location', width: '25%' },
-  { title: 'SKU 信息', key: 'skuInfo', width: '35%' },
-  { title: '库存桶', key: 'bucket', width: '20%' },
-  { title: '变动', key: 'change', width: '20%', align: 'right' as const }
+  { title: '仓库', key: 'location', width: 110 },
+  { title: '库位', key: 'locationCode', width: 150 },
+  { title: 'SKU 信息', key: 'skuInfo', width: 220 },
+  { title: '品质', key: 'quality', width: 80 },
+  { title: '变动', key: 'change', width: 110, align: 'right' as const }
 ]
 
 // 监听 visible 变化
@@ -221,6 +234,10 @@ function handleTableChange(pag: any) {
 // 格式化时间
 function formatTime(time: string) {
   return dayjs(time).format('YYYY-MM-DD HH:mm')
+}
+
+function signed(value: number) {
+  return value > 0 ? `+${value}` : String(value)
 }
 
 // 查看来源单据

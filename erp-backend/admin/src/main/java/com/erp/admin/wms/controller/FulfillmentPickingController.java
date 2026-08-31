@@ -7,12 +7,14 @@ import com.erp.admin.wms.model.dto.FulfillmentPickScanDTO;
 import com.erp.admin.wms.model.dto.FulfillmentPickTaskCreateDTO;
 import com.erp.admin.wms.model.dto.FulfillmentPickTaskQueryDTO;
 import com.erp.admin.wms.model.dto.FulfillmentPickExceptionDTO;
+import com.erp.admin.wms.model.dto.FulfillmentSimplifiedCompleteDTO;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
 import com.erp.admin.wms.model.entity.WmsFulfillmentPickTask;
 import com.erp.admin.wms.model.vo.FulfillmentDispatchResultVO;
 import com.erp.admin.wms.model.vo.FulfillmentPickTaskDetailVO;
 import com.erp.admin.wms.service.FulfillmentDispatchService;
 import com.erp.admin.wms.service.FulfillmentPickingService;
+import com.erp.admin.wms.service.FulfillmentShippingService;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.model.result.ApiResult;
 import org.ballcat.security.core.PrincipalAttributeAccessor;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class FulfillmentPickingController {
 	private final FulfillmentPickingService service;
+	private final FulfillmentShippingService shippingService;
 	private final FulfillmentDispatchService dispatchService;
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
 
@@ -53,6 +56,13 @@ public class FulfillmentPickingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<FulfillmentDispatchResultVO> accept(@RequestBody List<Long> orderIds) {
 		return ApiResult.ok(dispatchService.dispatch(orderIds,
+				principalAttributeAccessor.getUserId()));
+	}
+
+	@PostMapping("/redispatch")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<FulfillmentDispatchResultVO> redispatch(@RequestBody List<Long> orderIds) {
+		return ApiResult.ok(dispatchService.redispatch(orderIds,
 				principalAttributeAccessor.getUserId()));
 	}
 
@@ -104,6 +114,22 @@ public class FulfillmentPickingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> scan(@Validated @RequestBody FulfillmentPickScanDTO dto) {
 		service.scan(dto, principalAttributeAccessor.getUserId());
+		return ApiResult.ok();
+	}
+
+	@PostMapping("/tasks/{id}/simplified-start")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> startSimplified(@PathVariable("id") Long id) {
+		service.startSimplifiedPicking(id, principalAttributeAccessor.getUserId());
+		return ApiResult.ok();
+	}
+
+	@PostMapping("/tasks/{id}/simplified-complete")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<Void> completeSimplified(@PathVariable("id") Long id,
+			@Validated @RequestBody FulfillmentSimplifiedCompleteDTO dto) {
+		shippingService.completeSimplifiedTask(id, dto.getEvidenceFileIds(),
+				principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
 

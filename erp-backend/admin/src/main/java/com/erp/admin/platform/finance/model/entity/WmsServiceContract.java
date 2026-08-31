@@ -21,6 +21,7 @@ public class WmsServiceContract {
     private LocalDate endDate;
     private Integer rackUnitCount;
     private BigDecimal monthlyRentPerUnit;
+    private BigDecimal rackRentTotal;
     private BigDecimal warehouseDeposit;
     private BigDecimal subscriptionTotal;
     private BigDecimal refundableRate;

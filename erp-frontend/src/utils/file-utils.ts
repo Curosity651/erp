@@ -172,6 +172,7 @@ export function sanitizeFileName(fileName: string): string {
  */
 export function isFileNameSafe(fileName: string): boolean {
   // 检查是否包含危险字符
+  // eslint-disable-next-line no-control-regex
   const dangerousChars = /[<>:"/\\|?*\x00-\x1f\x80-\x9f]/
   if (dangerousChars.test(fileName)) {
     return false

@@ -1,8 +1,10 @@
 package com.erp.admin.wms.service;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.erp.admin.platform.finance.service.WarehouseBillingService;
 import com.erp.admin.wms.mapper.WmsFulfillmentItemMapper;
@@ -12,11 +14,16 @@ import com.erp.admin.wms.model.dto.FulfillmentLogisticsFeeDTO;
 import com.erp.admin.wms.model.entity.WmsFulfillmentItem;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
 import com.erp.admin.wms.model.enums.FulfillmentStatus;
+import com.erp.admin.wms.model.qo.FulfillmentShippingQuery;
 import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
+import com.erp.admin.wms.model.vo.FulfillmentShippingOrderVO;
 import com.erp.admin.wms.service.platform.PlatformLabelResult;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import lombok.RequiredArgsConstructor;
+import org.ballcat.common.model.domain.PageParam;
+import org.ballcat.common.model.domain.PageResult;
+import org.ballcat.mybatisplus.toolkit.PageUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,8 +54,15 @@ public class FulfillmentShippingService {
 	public List<WmsFulfillmentOrder> listWorkOrders() {
 		return orderMapper.selectList(Wrappers.<WmsFulfillmentOrder>lambdaQuery()
 				.in(WmsFulfillmentOrder::getFulfillmentStatus, FulfillmentStatus.WAITING_PACK,
-						FulfillmentStatus.PACKED)
+						FulfillmentStatus.PACKED, FulfillmentStatus.SHIPPED)
 				.orderByAsc(WmsFulfillmentOrder::getCreateTime));
+	}
+
+	public PageResult<FulfillmentShippingOrderVO> pageWorkOrders(PageParam pageParam,
+			FulfillmentShippingQuery query) {
+		IPage<FulfillmentShippingOrderVO> page = PageUtil.prodPage(pageParam);
+		orderMapper.selectShippingPage(page, query == null ? new FulfillmentShippingQuery() : query);
+		return new PageResult<>(page.getRecords(), page.getTotal());
 	}
 
 	@Transactional
@@ -78,7 +92,8 @@ public class FulfillmentShippingService {
 
 	public PlatformLabelResult printLabel(Long fulfillmentId, Long userId) {
 		requireTaskOperator(fulfillmentId, userId);
-		WmsFulfillmentOrder order = requireStatus(fulfillmentId, FulfillmentStatus.WAITING_PACK,
+		WmsFulfillmentOrder order = requireStatus(fulfillmentId, FulfillmentStatus.PICKING,
+				FulfillmentStatus.WAITING_PACK,
 				FulfillmentStatus.PACKED);
 		PlatformLabelResult result = platformActions.fetchLabel(fulfillmentId);
 		Assert.isTrue(result != null && result.isSuccess(), "面单获取失败");
@@ -87,6 +102,38 @@ public class FulfillmentShippingService {
 		order.setLabelFetchedTime(LocalDateTime.now());
 		orderMapper.updateById(order);
 		return result;
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	public void completeSimplifiedTask(Long taskId, List<Long> evidenceFileIds, Long userId) {
+		Assert.notNull(pickingService, "拣货任务服务未初始化");
+		List<Long> orderIds = pickingService.completeSimplifiedPicking(taskId,
+				evidenceFileIds, userId);
+		for (Long orderId : orderIds) {
+			WmsFulfillmentOrder order = requireStatus(orderId, FulfillmentStatus.WAITING_PACK);
+			Assert.hasText(order.getLabelBarcode(), "订单跟踪号尚未生成：" + order.getFulfillmentNo());
+			platformActions.markReady(orderId);
+			order.setLabelVerifiedTime(LocalDateTime.now());
+			orderMapper.updateById(order);
+
+			FulfillmentPackDTO pack = new FulfillmentPackDTO();
+			pack.setCarrierCode(order.getCarrierCode());
+			pack.setCarrierName(hasText(order.getCarrierName()) ? order.getCarrierName()
+					: order.getSourceType());
+			pack.setShippingMethod(hasText(order.getShippingMethod()) ? order.getShippingMethod()
+					: hasText(order.getLogisticsProductName()) ? order.getLogisticsProductName()
+					: "平台物流");
+			pack.setTrackingNo(order.getLabelBarcode());
+			pack.setPackageWeightKg(order.getPackageWeightKg() != null
+					&& order.getPackageWeightKg().signum() > 0
+					? order.getPackageWeightKg() : BigDecimal.ONE);
+			pack(orderId, pack, userId);
+		}
+		pickingService.markSimplifiedCompleted(taskId, userId);
+	}
+
+	private boolean hasText(String value) {
+		return value != null && !value.trim().isEmpty();
 	}
 
 	public void verifyLabel(Long fulfillmentId, String barcode, Long userId) {
@@ -129,11 +176,15 @@ public class FulfillmentShippingService {
 	}
 
 	public FulfillmentBatchResultVO ship(List<Long> fulfillmentIds) {
+		return ship(fulfillmentIds, null);
+	}
+
+	public FulfillmentBatchResultVO ship(List<Long> fulfillmentIds, Long userId) {
 		Assert.notEmpty(fulfillmentIds, "请选择待签出订单");
 		FulfillmentBatchResultVO result = new FulfillmentBatchResultVO();
 		for (Long id : fulfillmentIds) {
 			try {
-				shipOne(id);
+				shipOne(id, userId);
 				result.addSuccess(id);
 			}
 			catch (RuntimeException ex) {
@@ -143,21 +194,25 @@ public class FulfillmentShippingService {
 		return result;
 	}
 
-	private void shipOne(Long fulfillmentId) {
+	private void shipOne(Long fulfillmentId, Long userId) {
 		WmsFulfillmentOrder current = orderMapper.selectById(fulfillmentId);
 		Assert.notNull(current, "履约订单不存在");
 		if (current.getFulfillmentStatus() == FulfillmentStatus.SHIPPED) return;
 		Assert.isTrue(current.getFulfillmentStatus() == FulfillmentStatus.PACKED, "订单尚未完成打包");
 		platformActions.finalizeShipment(fulfillmentId);
-		transactionTemplate.executeWithoutResult(status -> completeLocalShipment(fulfillmentId));
+		transactionTemplate.executeWithoutResult(status -> completeLocalShipment(fulfillmentId, userId));
 	}
 
-	private void completeLocalShipment(Long fulfillmentId) {
+	private void completeLocalShipment(Long fulfillmentId, Long userId) {
 		WmsFulfillmentOrder order = orderMapper.selectForUpdate(fulfillmentId);
 		Assert.notNull(order, "履约订单不存在");
 		if (order.getFulfillmentStatus() == FulfillmentStatus.SHIPPED) return;
 		Assert.isTrue(order.getFulfillmentStatus() == FulfillmentStatus.PACKED, "订单状态已变化");
-		inventoryService.ship(fulfillmentId);
+		inventoryService.ship(fulfillmentId, com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+				.eventType(com.erp.admin.wms.model.enums.InventoryEventType.SHIP)
+				.sourceType("FULFILLMENT").sourceId(order.getId()).sourceNo(order.getSourceOrderNo())
+				.operatorId(userId).reason("订单签出")
+				.idempotencyKey("fulfillment-ship:" + fulfillmentId).build());
 		int quantity = itemMapper.selectList(Wrappers.<WmsFulfillmentItem>lambdaQuery()
 				.eq(WmsFulfillmentItem::getFulfillmentOrderId, fulfillmentId))
 				.stream().mapToInt(item -> item.getQuantity() == null ? 0 : item.getQuantity()).sum();
@@ -165,6 +220,7 @@ public class FulfillmentShippingService {
 		Assert.notNull(logisticsFeeService, "物流产品计费服务未初始化");
 		logisticsFeeService.record(order);
 		order.setShippedTime(LocalDateTime.now());
+		order.setShippedBy(userId);
 		orderMapper.updateById(order);
 		Assert.isTrue(orderMapper.transit(fulfillmentId, FulfillmentStatus.PACKED,
 				FulfillmentStatus.SHIPPED) == 1, "签出状态更新失败");

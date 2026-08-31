@@ -1,7 +1,9 @@
 package com.erp.admin.wms.model.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -34,17 +36,17 @@ public class OperatorDashboardVO {
     /** A 经营总览 */
     @Data
     public static class Overview {
-        @Schema(title = "本期收入")
-        private BigDecimal income;
+        @Schema(title = "本期收入（按币种）")
+        private List<CurrencyAmount> incomeByCurrency;
 
         @Schema(title = "本期产品使用次数")
         private long incomeCount;
 
-        @Schema(title = "本期支出(应付平台)")
-        private BigDecimal expense;
+        @Schema(title = "平台费用（按币种和状态）")
+        private List<ExpenseSummary> expenseByCurrency;
 
-        @Schema(title = "净收益(收入-支出)")
-        private BigDecimal netProfit;
+        @Schema(title = "同币种经营余额")
+        private List<CurrencyAmount> balanceByCurrency;
 
         private long ownerTotal;
 
@@ -60,11 +62,43 @@ public class OperatorDashboardVO {
     public static class Trend {
         private List<String> months;
 
-        private List<BigDecimal> income;
+        private List<CurrencySeries> incomeSeries;
 
-        private List<BigDecimal> expense;
+        private List<CurrencySeries> confirmedExpenseSeries;
 
-        private List<BigDecimal> net;
+        private List<CurrencySeries> paidExpenseSeries;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CurrencyAmount {
+        private String currency;
+
+        private BigDecimal amount;
+    }
+
+    @Data
+    public static class ExpenseSummary {
+        private String currency;
+
+        private BigDecimal draftEstimate;
+
+        @Schema(title = "确认成本，包含 CONFIRMED 和 PAID")
+        private BigDecimal confirmedPayable;
+
+        private BigDecimal disputedAmount;
+
+        private BigDecimal paidAmount;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CurrencySeries {
+        private String currency;
+
+        private List<BigDecimal> amounts;
     }
 
     /** C 产品统计行 */
@@ -73,6 +107,8 @@ public class OperatorDashboardVO {
         private Long productId;
 
         private String productName;
+
+        private String currency;
 
         private long usageCount;
 
@@ -85,6 +121,8 @@ public class OperatorDashboardVO {
         private Long erpTenantId;
 
         private String ownerName;
+
+        private String currency;
 
         private BigDecimal amount;
 
@@ -112,6 +150,8 @@ public class OperatorDashboardVO {
 
         @Schema(title = "货架月租成本合计")
         private BigDecimal rackMonthlyFee;
+
+        private String rackMonthlyFeeCurrency;
     }
 
 }

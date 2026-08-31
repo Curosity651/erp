@@ -18,16 +18,18 @@
     </sql>
 
     <select id="sumIncomeByMonth" resultType="map">
-        SELECT r.bill_month AS billMonth, COALESCE(SUM(r.amount), 0) AS amount, COUNT(*) AS cnt
+        SELECT r.bill_month AS billMonth, r.currency AS currency,
+               COALESCE(SUM(r.amount), 0) AS amount, COUNT(*) AS cnt
         FROM wms_client_billing_record r
         <where>
             <include refid="incomeWhere"/>
         </where>
-        GROUP BY r.bill_month
+        GROUP BY r.bill_month, r.currency
     </select>
 
     <select id="sumExpenseByMonth" resultType="map">
-        SELECT b.bill_month AS billMonth, COALESCE(SUM(b.total_amount), 0) AS amount
+        SELECT b.bill_month AS billMonth, b.currency AS currency, b.status AS status,
+               COALESCE(SUM(b.total_amount), 0) AS amount
         FROM wms_monthly_bill b
         <where>
             b.deleted = 0
@@ -39,24 +41,26 @@
                 AND b.bill_month &lt;= #{monthEnd}
             </if>
         </where>
-        GROUP BY b.bill_month
+        GROUP BY b.bill_month, b.currency, b.status
     </select>
 
     <select id="sumByProduct" resultType="com.erp.admin.wms.model.vo.OperatorDashboardVO$ProductStat">
         SELECT r.logistics_product_id AS productId,
+               r.currency AS currency,
                COUNT(*) AS usageCount,
                COALESCE(SUM(r.amount), 0) AS amount
         FROM wms_client_billing_record r
         <where>
             <include refid="incomeWhere"/>
         </where>
-        GROUP BY r.logistics_product_id
+        GROUP BY r.logistics_product_id, r.currency
         ORDER BY amount DESC
     </select>
 
     <select id="sumIncomeByOwner" resultType="com.erp.admin.wms.model.vo.OperatorDashboardVO$OwnerStat">
         SELECT r.erp_tenant_id AS erpTenantId,
                t.tenant_name AS ownerName,
+               r.currency AS currency,
                COALESCE(SUM(r.amount), 0) AS amount,
                COUNT(*) AS usageCount
         FROM wms_client_billing_record r
@@ -64,24 +68,26 @@
         <where>
             <include refid="incomeWhere"/>
         </where>
-        GROUP BY r.erp_tenant_id, t.tenant_name
+        GROUP BY r.erp_tenant_id, t.tenant_name, r.currency
         ORDER BY amount DESC
-        LIMIT 10
     </select>
 
     <select id="countOutboundByOwner" resultType="com.erp.admin.wms.model.vo.OperatorDashboardVO$OwnerOrderStat">
         SELECT o.erp_tenant_id AS erpTenantId,
                t.tenant_name AS ownerName,
                COUNT(*) AS orders
-        FROM wms_sales_outbound_order o
+        FROM wms_fulfillment_order o
         INNER JOIN sys_tenant t ON t.id = o.erp_tenant_id AND t.parent_wms_tenant_id = #{wmsTenantId}
         <where>
-            o.order_status &lt;&gt; 'CANCELLED'
+            o.deleted = 0
+            AND o.wms_tenant_id = #{wmsTenantId}
+            AND o.fulfillment_status = 'SHIPPED'
+            AND o.shipped_time IS NOT NULL
             <if test="dateStart != null">
-                AND o.outbound_date &gt;= #{dateStart}
+                AND DATE(CONVERT_TZ(o.shipped_time, '+08:00', '+03:00')) &gt;= #{dateStart}
             </if>
             <if test="dateEnd != null">
-                AND o.outbound_date &lt;= #{dateEnd}
+                AND DATE(CONVERT_TZ(o.shipped_time, '+08:00', '+03:00')) &lt;= #{dateEnd}
             </if>
             <if test="erpTenantIds != null and erpTenantIds.size() > 0">
                 AND o.erp_tenant_id IN
@@ -106,12 +112,15 @@
     </select>
 
     <select id="sumOwnerOnHand" resultType="long">
-        SELECT COALESCE(SUM(i.available_quantity + i.reserved_quantity + i.damaged_quantity), 0)
-        FROM wms_inventory i
+        SELECT COALESCE(SUM(i.quantity), 0)
+        FROM wms_location_inventory i
         INNER JOIN wms_warehouse w ON w.id = i.warehouse_id
             AND w.warehouse_type = 'OWN' AND w.deleted = 0
         INNER JOIN sys_tenant t ON t.id = i.erp_tenant_id AND t.parent_wms_tenant_id = #{wmsTenantId}
         <where>
+            i.wms_tenant_id = #{wmsTenantId}
+            AND i.deleted = 0
+            AND i.quantity > 0
             <if test="erpTenantIds != null and erpTenantIds.size() > 0">
                 AND i.erp_tenant_id IN
                 <foreach collection="erpTenantIds" item="e" open="(" separator="," close=")">#{e}</foreach>

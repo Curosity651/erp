@@ -1,5 +1,6 @@
 package com.erp.admin.wms.controller;
 
+import com.erp.admin.wms.config.WmsCoreModeGuard;
 import com.erp.admin.wms.model.dto.PackDTO;
 import com.erp.admin.wms.model.dto.PackPackageDTO;
 import com.erp.admin.wms.model.dto.PackageScanDTO;
@@ -50,6 +51,7 @@ public class OutboundShippingController {
     private final OutboundShippingService outboundShippingService;
 	private final WarehouseOutboundDocumentService outboundDocumentService;
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
+	private final WmsCoreModeGuard coreModeGuard;
 
     @Operation(summary = "分页 拣货中/已打包/已发货 订单")
     @GetMapping("/page")
@@ -84,6 +86,7 @@ public class OutboundShippingController {
     @PostMapping("/pack")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<Void> pack(@Validated @RequestBody PackDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧出库打包");
         outboundShippingService.pack(dto);
         return ApiResult.ok();
     }
@@ -92,6 +95,7 @@ public class OutboundShippingController {
 	@PostMapping("/pack-package")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> packPackage(@Validated @RequestBody PackPackageDTO dto) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库包裹打包");
 		outboundShippingService.packPackage(dto, principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
@@ -100,6 +104,7 @@ public class OutboundShippingController {
 	@PostMapping("/pack-package/scan")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper') and (#dto.manual != true or hasAuthority('wms:outbound-exec:supervise'))")
 	public ApiResult<Void> scanPackPackage(@Validated @RequestBody PackageScanDTO dto) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库包裹复核");
 		outboundShippingService.scanPackPackage(dto, principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
@@ -108,6 +113,7 @@ public class OutboundShippingController {
 	@PostMapping("/pack-package/label-scan")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> confirmPackageLabel(@Validated @RequestBody PackageLabelScanDTO dto) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库面单确认");
 		outboundShippingService.confirmPackageLabel(dto, principalAttributeAccessor.getUserId());
 		return ApiResult.ok();
 	}
@@ -117,6 +123,7 @@ public class OutboundShippingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> confirmExternalDocument(@RequestParam Long outboundOrderId,
 			@RequestParam Long packageId) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库外部面单确认");
 		outboundShippingService.confirmExternalDocument(outboundOrderId, packageId);
 		return ApiResult.ok();
 	}
@@ -126,6 +133,7 @@ public class OutboundShippingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> confirmExternalHandover(@RequestParam Long outboundOrderId,
 			@RequestParam Long packageId) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库交接单确认");
 		outboundShippingService.confirmExternalHandover(outboundOrderId, packageId);
 		return ApiResult.ok();
 	}
@@ -134,6 +142,7 @@ public class OutboundShippingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	@Operation(summary = "按销售出库单生成平台面单")
 	public ApiResult<LabelBatchVO> prepareLabels(@RequestParam Long outboundOrderId) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库面单生成");
 		return ApiResult.ok(outboundDocumentService.prepareLabels(
 				outboundOrderId, principalAttributeAccessor.getUserId()));
 	}
@@ -150,6 +159,7 @@ public class OutboundShippingController {
 	@Operation(summary = "生成销售出库单所需的 Ozon 交接单")
 	public ApiResult<OzonActBatchVO> prepareOzonAct(@RequestParam Long outboundOrderId,
 			@RequestParam LocalDate departureDate) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库Ozon交接单生成");
 		return ApiResult.ok(outboundDocumentService.prepareOzonActs(
 				outboundOrderId, departureDate, principalAttributeAccessor.getUserId()));
 	}
@@ -166,6 +176,7 @@ public class OutboundShippingController {
     @PostMapping("/ship")
     @PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
     public ApiResult<ShipResultVO> ship(@Validated @RequestBody ShipDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧出库签出");
         return ApiResult.ok(outboundShippingService.ship(dto, principalAttributeAccessor.getUserId()));
     }
 
@@ -173,6 +184,7 @@ public class OutboundShippingController {
 	@PostMapping("/ship-package")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<ShipResultVO> shipPackage(@Validated @RequestBody ShipPackageDTO dto) {
+		coreModeGuard.assertLegacyWriteAllowed("旧出库包裹签出");
 		return ApiResult.ok(outboundShippingService.shipPackage(dto, principalAttributeAccessor.getUserId()));
 	}
 

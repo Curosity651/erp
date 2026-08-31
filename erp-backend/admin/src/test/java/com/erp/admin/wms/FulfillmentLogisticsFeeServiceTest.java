@@ -1,6 +1,7 @@
 package com.erp.admin.wms;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import com.erp.admin.wms.mapper.WmsClientBillingRecordMapper;
 import com.erp.admin.wms.model.entity.WmsClientBillingRecord;
@@ -37,5 +38,12 @@ class FulfillmentLogisticsFeeServiceTest {
 		assertThat(created.getWmsTenantId()).isEqualTo(2L);
 		assertThat(repeated).isSameAs(created);
 		verify(mapper).insert(any(WmsClientBillingRecord.class));
+	}
+
+	@Test
+	void bill_month_uses_moscow_date_at_beijing_month_boundary() {
+		LocalDateTime beijingShippedTime = LocalDateTime.of(2026, 9, 1, 1, 30);
+
+		assertThat(FulfillmentLogisticsFeeService.resolveBillMonth(beijingShippedTime)).isEqualTo("2026-08");
 	}
 }

@@ -34,6 +34,8 @@ public class WmsFulfillmentOrder {
 	private String sourceOrderNo;
 	private String platformStatus;
 	private FulfillmentStatus fulfillmentStatus;
+	private String dispatchStatus;
+	private String dispatchError;
 	private String recipientName;
 	private String recipientPhone;
 	private String recipientAddress;
@@ -48,6 +50,7 @@ public class WmsFulfillmentOrder {
 	private LocalDateTime labelVerifiedTime;
 	private LocalDateTime packedTime;
 	private LocalDateTime shippedTime;
+	private Long shippedBy;
 	private String cancelReason;
 	private Integer version;
 	private Long createBy;

@@ -5,10 +5,14 @@ import java.util.Collections;
 
 import com.erp.admin.wms.mapper.WmsInventoryReservationMapper;
 import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
+import com.erp.admin.wms.mapper.WmsLocationMapper;
 import com.erp.admin.wms.model.dto.InventoryReservationRequest;
 import com.erp.admin.wms.model.dto.LocationInventoryKey;
 import com.erp.admin.wms.model.entity.WmsLocationInventory;
+import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.service.LocationInventoryService;
+import com.erp.admin.wms.service.InventoryEventService;
+import com.erp.admin.wms.service.StocktakeFreezeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,6 +32,9 @@ class LocationInventoryServiceTest {
 	private WmsLocationInventoryMapper inventoryMapper;
 
 	private WmsInventoryReservationMapper reservationMapper;
+	private WmsLocationMapper locationMapper;
+	private StocktakeFreezeService freezeService;
+	private InventoryEventService eventService;
 
 	private LocationInventoryService service;
 
@@ -35,7 +42,18 @@ class LocationInventoryServiceTest {
 	void setUp() {
 		inventoryMapper = mock(WmsLocationInventoryMapper.class);
 		reservationMapper = mock(WmsInventoryReservationMapper.class);
-		service = new LocationInventoryService(inventoryMapper, reservationMapper);
+		locationMapper = mock(WmsLocationMapper.class);
+		freezeService = mock(StocktakeFreezeService.class);
+		eventService = mock(InventoryEventService.class);
+		service = new LocationInventoryService(inventoryMapper, reservationMapper, locationMapper, freezeService,
+				eventService);
+		when(locationMapper.selectById(anyLong())).thenAnswer(invocation -> {
+			WmsLocation location = new WmsLocation();
+			location.setId(invocation.getArgument(0));
+			location.setWarehouseId(9L);
+			location.setLocationCode("L-" + invocation.getArgument(0));
+			return location;
+		});
 	}
 
 	@Test
@@ -117,6 +135,20 @@ class LocationInventoryServiceTest {
 		assertThatThrownBy(() -> service.move(10L, 3L, 7))
 				.hasMessageContaining("可移动数量不足");
 		verify(inventoryMapper, never()).decreaseAvailableQuantity(anyLong(), anyInt(), anyInt());
+	}
+
+	@Test
+	void move_checks_stocktake_freeze_for_source_and_target_locations() {
+		WmsLocationInventory source = inventory(10L, 6L, 2L, 10, 0, 1);
+		when(inventoryMapper.selectForUpdate(10L)).thenReturn(source);
+		when(inventoryMapper.selectByKeyForUpdate(any(LocationInventoryKey.class))).thenReturn(null);
+		when(inventoryMapper.decreaseAvailableQuantity(10L, 3, 1)).thenReturn(1);
+		when(inventoryMapper.insert(any(WmsLocationInventory.class))).thenReturn(1);
+
+		service.move(10L, 3L, 3);
+
+		verify(freezeService).assertLocationMutable(9L, "L-2");
+		verify(freezeService).assertLocationMutable(9L, "L-3");
 	}
 
 	private LocationInventoryKey key(Long ownerId, Long locationId) {

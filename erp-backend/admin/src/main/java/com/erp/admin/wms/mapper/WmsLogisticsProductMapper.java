@@ -6,6 +6,8 @@ import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.mybatisplus.conditions.query.LambdaQueryWrapperX;
 import org.ballcat.mybatisplus.mapper.ExtendMapper;
 import org.ballcat.mybatisplus.toolkit.WrappersX;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.util.Collection;
 import java.util.List;
@@ -16,6 +18,28 @@ import java.util.List;
  * @author erp
  */
 public interface WmsLogisticsProductMapper extends ExtendMapper<WmsLogisticsProduct> {
+
+    @Select("SELECT COUNT(*) FROM wms_logistics_product "
+            + "WHERE wms_tenant_id = #{wmsTenantId} AND product_code = #{productCode} AND deleted = 0 "
+            + "AND (#{excludeId} IS NULL OR id <> #{excludeId})")
+    Long countByCode(@Param("wmsTenantId") Long wmsTenantId, @Param("productCode") String productCode,
+            @Param("excludeId") Long excludeId);
+
+    @Select("SELECT COUNT(*) FROM shop s "
+            + "JOIN sys_tenant t ON t.id = s.tenant_id AND t.deleted = 0 "
+            + "WHERE t.parent_wms_tenant_id = #{wmsTenantId} AND s.default_logistics_product_id = #{productId}")
+    Long countShopReferences(@Param("wmsTenantId") Long wmsTenantId, @Param("productId") Long productId);
+
+    @Select("SELECT COUNT(*) FROM wms_fulfillment_order "
+            + "WHERE wms_tenant_id = #{wmsTenantId} AND logistics_product_id = #{productId} AND deleted = 0")
+    Long countFulfillmentReferences(@Param("wmsTenantId") Long wmsTenantId,
+            @Param("productId") Long productId);
+
+    @Select("SELECT COUNT(*) FROM wms_sales_outbound_order o "
+            + "JOIN sys_tenant t ON t.id = o.erp_tenant_id AND t.deleted = 0 "
+            + "WHERE t.parent_wms_tenant_id = #{wmsTenantId} AND o.logistics_product_id = #{productId}")
+    Long countLegacyOutboundReferences(@Param("wmsTenantId") Long wmsTenantId,
+            @Param("productId") Long productId);
 
     /** 服务商产品分页（名称/编码模糊 + 状态过滤） */
     default IPage<WmsLogisticsProduct> pageByTenant(PageParam pageParam, Long wmsTenantId, String keyword,

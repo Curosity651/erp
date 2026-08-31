@@ -75,4 +75,14 @@ public class StockFlowDetailVO {
     @Schema(title = "创建时间")
     private LocalDateTime createTime;
 
+    private Long locationId;
+    private String locationCode;
+    private Long counterpartLocationId;
+    private String counterpartLocationCode;
+    private String quality;
+    private Integer quantityDelta;
+    private Integer reservedDelta;
+    private Integer beforeReserved;
+    private Integer afterReserved;
+
 }

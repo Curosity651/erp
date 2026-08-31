@@ -39,9 +39,16 @@ public class MonthlyBillVO {
 
     private BigDecimal totalAmount;
 
+    @Schema(title = "账单币种")
+    private String currency;
+
     private String status;
 
     private String confirmedTime;
+
+    private Long reviewerId;
+
+    private String reviewerName;
 
     private String paidTime;
 

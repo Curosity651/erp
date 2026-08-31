@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 class FulfillmentDispatchServiceTest {
@@ -68,6 +69,48 @@ class FulfillmentDispatchServiceTest {
 		assertThat(result.getFailures()).containsEntry(1L, "已下架但派单失败：库存预占不存在");
 		assertThat(result.getTasks()).hasSize(1);
 		assertThat(result.getTasks().get(0).getWarehouseId()).isEqualTo(20L);
+	}
+
+	@Test
+	void redispatches_waiting_pick_order_without_repeating_platform_accept() {
+		FulfillmentPickingService pickingService = mock(FulfillmentPickingService.class);
+		WmsFulfillmentOrderMapper orderMapper = mock(WmsFulfillmentOrderMapper.class);
+		FulfillmentDispatchService service = new FulfillmentDispatchService(pickingService, orderMapper);
+		WmsFulfillmentOrder pending = order(1L, 10L);
+		pending.setFulfillmentStatus(com.erp.admin.wms.model.enums.FulfillmentStatus.WAITING_PICK);
+		pending.setDispatchStatus("FAILED");
+		when(orderMapper.selectBatchIds(Collections.singletonList(1L)))
+				.thenReturn(Collections.singletonList(pending));
+		when(pickingService.hasTaskAssociation(1L)).thenReturn(false);
+		when(pickingService.createTask(Collections.singletonList(1L), 99L))
+				.thenReturn(task(101L, "FPT-A", 10L, 1, 2));
+
+		FulfillmentDispatchResultVO result = service.redispatch(Collections.singletonList(1L), 99L);
+
+		assertThat(result.getSuccessIds()).containsExactly(1L);
+		verify(pickingService, never()).accept(org.mockito.ArgumentMatchers.anyList());
+		verify(pickingService).createTask(Collections.singletonList(1L), 99L);
+	}
+
+	@Test
+	void redispatch_heals_status_when_task_was_created_before_status_writeback() {
+		FulfillmentPickingService pickingService = mock(FulfillmentPickingService.class);
+		WmsFulfillmentOrderMapper orderMapper = mock(WmsFulfillmentOrderMapper.class);
+		FulfillmentDispatchService service = new FulfillmentDispatchService(pickingService, orderMapper);
+		WmsFulfillmentOrder pending = order(1L, 10L);
+		pending.setFulfillmentStatus(com.erp.admin.wms.model.enums.FulfillmentStatus.WAITING_PICK);
+		pending.setDispatchStatus("FAILED");
+		when(orderMapper.selectBatchIds(Collections.singletonList(1L)))
+				.thenReturn(Collections.singletonList(pending));
+		when(pickingService.hasTaskAssociation(1L)).thenReturn(true);
+
+		FulfillmentDispatchResultVO result = service.redispatch(Collections.singletonList(1L), 99L);
+
+		assertThat(result.getSuccessIds()).containsExactly(1L);
+		verify(pickingService, never()).accept(org.mockito.ArgumentMatchers.anyList());
+		verify(pickingService, never()).createTask(org.mockito.ArgumentMatchers.anyList(),
+				org.mockito.ArgumentMatchers.anyLong());
+		verify(orderMapper).updateDispatchStatus(1L, "SUCCEEDED", null);
 	}
 
 	private WmsFulfillmentOrder order(Long id, Long warehouseId) {

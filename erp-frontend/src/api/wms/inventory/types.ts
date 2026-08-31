@@ -36,6 +36,8 @@ export interface InventoryQO {
   warehouseId?: number
   // SKU编码（模糊匹配）
   skuCode?: string
+	locationCode?: string
+	quality?: 'GOOD' | 'DEFECTIVE'
   // 仓库类型
   warehouseType?: string
   // 库存状态
@@ -174,6 +176,14 @@ export interface InventoryPageVO {
   warehouseId: number
   // 仓库名称
   warehouseName: string
+	regionId?: number
+	regionName?: string
+	locationId: number
+	rackNo?: string
+	locationCode: string
+	zoneType?: string
+	zoneName?: string
+	quality: 'GOOD' | 'DEFECTIVE'
   // 仓库类型
   warehouseDisplay: WarehouseDisplayVO
   // SKU编码
@@ -182,6 +192,7 @@ export interface InventoryPageVO {
   skuBrief?: SkuBriefVO
   // 仓内库存（计算字段）
   warehouseQuantity: number
+	physicalQuantity: number
   // 可用库存
   availableQuantity: number
   // 占用库存

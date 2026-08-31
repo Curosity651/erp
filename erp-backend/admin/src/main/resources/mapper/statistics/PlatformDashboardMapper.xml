@@ -17,22 +17,22 @@
         </if>
     </sql>
 
-    <!-- ===== A 在库总量：统一以仓内物理库存为准，包含普通、退货、暂存与虚拟库存 ===== -->
+    <!-- ===== A 在库总量：以新版逻辑库位库存内核为准，包含所有分区库存 ===== -->
     <select id="selectOnHand" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$StockRow">
         SELECT
-            COALESCE(SUM(p.quantity), 0) AS onHandQty,
-            COUNT(DISTINCT p.sku_code) AS skuCount,
-            COUNT(DISTINCT p.erp_tenant_id) AS ownerCount
-        FROM wms_physical_inventory p
-        INNER JOIN wms_warehouse w ON w.id = p.warehouse_id
+            COALESCE(SUM(li.quantity), 0) AS onHandQty,
+            COUNT(DISTINCT li.sku_code) AS skuCount,
+            COUNT(DISTINCT li.erp_tenant_id) AS ownerCount
+        FROM wms_location_inventory li
+        INNER JOIN wms_warehouse w ON w.id = li.warehouse_id
         <where>
             w.warehouse_type = 'OWN' AND w.deleted = 0
-            AND p.quantity > 0
+            AND li.deleted = 0 AND li.quantity > 0
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                AND p.warehouse_id IN
+                AND li.warehouse_id IN
                 <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
             </if>
-            <include refid="operatorFilter"><property name="col" value="p."/></include>
+            <include refid="operatorFilter"><property name="col" value="li."/></include>
         </where>
     </select>
 
@@ -59,18 +59,25 @@
     <!-- ===== A 今日出库：只有完成签出的单据才算出库 ===== -->
     <select id="selectTodayOutbound" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$MetricRow">
         SELECT
-            COALESCE(SUM(total_quantity), 0) AS qty,
+            COALESCE(SUM(i.total_quantity), 0) AS qty,
             COUNT(*) AS orders
-        FROM wms_sales_outbound_order
+        FROM wms_fulfillment_order o
+        LEFT JOIN (
+            SELECT fulfillment_order_id, SUM(quantity) AS total_quantity
+            FROM wms_fulfillment_item
+            WHERE deleted = 0
+            GROUP BY fulfillment_order_id
+        ) i ON i.fulfillment_order_id = o.id
         <where>
-            order_status IN ('SHIPPED', 'COMPLETED')
-            AND shipped_time IS NOT NULL
-            AND DATE(CONVERT_TZ(shipped_time, '+08:00', '+03:00')) = #{qo.todayDate}
+            o.deleted = 0
+            AND o.fulfillment_status = 'SHIPPED'
+            AND o.shipped_time IS NOT NULL
+            AND DATE(CONVERT_TZ(o.shipped_time, '+08:00', '+03:00')) = #{qo.todayDate}
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                AND warehouse_id IN
+                AND o.warehouse_id IN
                 <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
             </if>
-            <include refid="operatorFilter"><property name="col" value=""/></include>
+            <include refid="operatorFilter"><property name="col" value="o."/></include>
         </where>
     </select>
 
@@ -99,28 +106,29 @@
         </where>
     </select>
 
-    <!-- ===== A 待办：销售出库 待拣货打包 / 待出库 ===== -->
+    <!-- ===== A 待办：订单级履约 待拣货打包 / 待签出 ===== -->
     <select id="countPendingPickPack" resultType="long">
-        SELECT COUNT(*) FROM wms_sales_outbound_order
+        SELECT COUNT(*) FROM wms_fulfillment_order o
         <where>
-            order_status IN ('CONFIRMED', 'PICKING', 'PICKED')
+            o.deleted = 0
+            AND o.fulfillment_status IN ('WAITING_PICK', 'PICKING', 'WAITING_PACK')
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                AND warehouse_id IN
+                AND o.warehouse_id IN
                 <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
             </if>
-            <include refid="operatorFilter"><property name="col" value=""/></include>
+            <include refid="operatorFilter"><property name="col" value="o."/></include>
         </where>
     </select>
 
     <select id="countPendingOutbound" resultType="long">
-        SELECT COUNT(*) FROM wms_sales_outbound_order
+        SELECT COUNT(*) FROM wms_fulfillment_order o
         <where>
-            order_status = 'PACKED'
+            o.deleted = 0 AND o.fulfillment_status = 'PACKED'
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                AND warehouse_id IN
+                AND o.warehouse_id IN
                 <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
             </if>
-            <include refid="operatorFilter"><property name="col" value=""/></include>
+            <include refid="operatorFilter"><property name="col" value="o."/></include>
         </where>
     </select>
 
@@ -131,15 +139,13 @@
             w.id AS warehouseId,
             w.warehouse_name AS warehouseName,
             (SELECT COUNT(*) FROM wms_location l
-                WHERE l.warehouse_id = w.id AND l.deleted = 0 AND l.is_virtual = 0) AS total,
-            (SELECT COUNT(DISTINCT p.location_code)
-                FROM wms_physical_inventory p
-                JOIN wms_location l ON l.warehouse_id = p.warehouse_id
-                    AND l.location_code = p.location_code
-                    AND l.deleted = 0
-                    AND l.is_virtual = 0
-                WHERE p.warehouse_id = w.id AND p.quantity > 0
-                <include refid="operatorFilter"><property name="col" value="p."/></include>
+                WHERE l.warehouse_id = w.id AND l.deleted = 0) AS total,
+            (SELECT COUNT(DISTINCT li.location_id)
+                FROM wms_location_inventory li
+                JOIN wms_location l ON l.id = li.location_id
+                    AND l.warehouse_id = li.warehouse_id AND l.deleted = 0
+                WHERE li.warehouse_id = w.id AND li.deleted = 0 AND li.quantity > 0
+                <include refid="operatorFilter"><property name="col" value="li."/></include>
             ) AS used
         FROM wms_warehouse w
         <where>
@@ -175,7 +181,6 @@
             JOIN wms_zone z ON z.id = l.zone_id AND z.deleted = 0
             <where>
                 l.deleted = 0
-                AND l.is_virtual = 0
                 <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
                     AND l.warehouse_id IN
                     <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
@@ -184,15 +189,18 @@
             GROUP BY z.zone_type
         ) loc ON loc.zone_type = zt.zone_type
         LEFT JOIN (
-            SELECT z.zone_type AS zone_type, COALESCE(SUM(p.quantity), 0) AS qty
-            FROM wms_physical_inventory p
-            JOIN wms_zone z ON z.id = p.zone_id AND z.deleted = 0
+            SELECT z.zone_type AS zone_type, COALESCE(SUM(li.quantity), 0) AS qty
+            FROM wms_location_inventory li
+            JOIN wms_location l ON l.id = li.location_id
+                AND l.warehouse_id = li.warehouse_id AND l.deleted = 0
+            JOIN wms_zone z ON z.id = l.zone_id AND z.deleted = 0
             <where>
+                li.deleted = 0 AND li.quantity > 0
                 <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                    AND p.warehouse_id IN
+                    AND li.warehouse_id IN
                     <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
                 </if>
-                <include refid="operatorFilter"><property name="col" value="p."/></include>
+                <include refid="operatorFilter"><property name="col" value="li."/></include>
             </where>
             GROUP BY z.zone_type
         ) inv ON inv.zone_type = zt.zone_type
@@ -219,21 +227,22 @@
     </select>
 
     <select id="selectOutboundDaily" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$DailyCountRow">
-        SELECT DATE_FORMAT(CONVERT_TZ(shipped_time, '+08:00', '+03:00'), '%Y-%m-%d') AS bizDate,
+        SELECT DATE_FORMAT(CONVERT_TZ(o.shipped_time, '+08:00', '+03:00'), '%Y-%m-%d') AS bizDate,
                COUNT(*) AS cnt
-        FROM wms_sales_outbound_order
+        FROM wms_fulfillment_order o
         <where>
-            order_status IN ('SHIPPED', 'COMPLETED')
-            AND shipped_time IS NOT NULL
-            AND DATE(CONVERT_TZ(shipped_time, '+08:00', '+03:00'))
+            o.deleted = 0
+            AND o.fulfillment_status = 'SHIPPED'
+            AND o.shipped_time IS NOT NULL
+            AND DATE(CONVERT_TZ(o.shipped_time, '+08:00', '+03:00'))
                 BETWEEN #{qo.startDate} AND #{qo.endDate}
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                AND warehouse_id IN
+                AND o.warehouse_id IN
                 <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
             </if>
-            <include refid="operatorFilter"><property name="col" value=""/></include>
+            <include refid="operatorFilter"><property name="col" value="o."/></include>
         </where>
-        GROUP BY DATE_FORMAT(CONVERT_TZ(shipped_time, '+08:00', '+03:00'), '%Y-%m-%d')
+        GROUP BY DATE_FORMAT(CONVERT_TZ(o.shipped_time, '+08:00', '+03:00'), '%Y-%m-%d')
     </select>
 
     <select id="selectReturnDaily" resultType="com.erp.admin.platform.dashboard.model.vo.DashboardRowVO$DailyCountRow">
@@ -258,15 +267,15 @@
         SELECT
             op.id AS wmsTenantId,
             op.tenant_name AS operatorName,
-            COALESCE(SUM(p.quantity), 0) AS qty
-        FROM wms_physical_inventory p
-        JOIN wms_warehouse w ON w.id = p.warehouse_id AND w.warehouse_type = 'OWN' AND w.deleted = 0
-        JOIN sys_tenant owner ON owner.id = p.erp_tenant_id AND owner.deleted = 0
+            COALESCE(SUM(li.quantity), 0) AS qty
+        FROM wms_location_inventory li
+        JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.warehouse_type = 'OWN' AND w.deleted = 0
+        JOIN sys_tenant owner ON owner.id = li.erp_tenant_id AND owner.deleted = 0
         JOIN sys_tenant op ON op.id = owner.parent_wms_tenant_id AND op.deleted = 0
         <where>
-            p.quantity > 0
+            li.deleted = 0 AND li.quantity > 0
             <if test="qo.warehouseIds != null and qo.warehouseIds.size() > 0">
-                AND p.warehouse_id IN
+                AND li.warehouse_id IN
                 <foreach collection="qo.warehouseIds" item="w" open="(" separator="," close=")">#{w}</foreach>
             </if>
             <if test="qo.wmsTenantIds != null and qo.wmsTenantIds.size() > 0">
@@ -301,9 +310,10 @@
                 <include refid="operatorFilter"><property name="col" value=""/></include>
             </where>
             UNION ALL
-            SELECT erp_tenant_id FROM wms_sales_outbound_order
+            SELECT erp_tenant_id FROM wms_fulfillment_order
             <where>
-                order_status IN ('SHIPPED', 'COMPLETED')
+                deleted = 0
+                AND fulfillment_status = 'SHIPPED'
                 AND shipped_time IS NOT NULL
                 AND DATE(CONVERT_TZ(shipped_time, '+08:00', '+03:00'))
                     BETWEEN #{qo.startDate} AND #{qo.endDate}

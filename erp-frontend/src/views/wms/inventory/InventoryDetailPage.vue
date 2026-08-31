@@ -7,7 +7,7 @@
     row-key="id"
     :request="tableRequest"
     :columns="columns"
-    :scroll="{ x: 800 }"
+    :scroll="{ x: 1260 }"
     size="middle"
   >
     <!-- 工具栏 -->
@@ -32,6 +32,12 @@
           @click="handleViewFlows(record)"
         />
       </template>
+
+	  <template v-else-if="column.key === 'quality'">
+		<a-tag :color="record.quality === 'DEFECTIVE' ? 'red' : 'green'">
+		  {{ record.quality === 'DEFECTIVE' ? '不良品' : '良品' }}
+		</a-tag>
+	  </template>
 
       <!-- 库存数量列 -->
       <template v-else-if="column.key === 'warehouseQuantity'">
@@ -76,6 +82,8 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { DownloadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+import ExcelJS from 'exceljs'
+import { isSuccess } from '@/api'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import { OperationGroup } from '@/components/Operation'
@@ -110,11 +118,15 @@ let searchParams: InventoryQO = {
 
 const columns: ProColumns[] = [
   { title: '仓库信息', key: 'warehouseInfo', width: 120, fixed: 'left' },
+	{ title: '排', dataIndex: 'rackNo', width: 70 },
+	{ title: '库位', dataIndex: 'locationCode', width: 110 },
+	{ title: '分区', dataIndex: 'zoneName', width: 100 },
   { title: 'SKU信息', key: 'skuInfo', width: 200 },
+	{ title: '品质', key: 'quality', width: 80 },
   {
-    title: '仓内',
-    key: 'warehouseQuantity',
-    dataIndex: 'warehouseQuantity',
+    title: '实物',
+    key: 'physicalQuantity',
+    dataIndex: 'physicalQuantity',
     width: 60,
     align: 'right'
   },
@@ -130,20 +142,6 @@ const columns: ProColumns[] = [
     title: '占用',
     key: 'reservedQuantity',
     dataIndex: 'reservedQuantity',
-    width: 60,
-    align: 'right'
-  },
-  {
-    title: '在途',
-    key: 'inTransitQuantity',
-    dataIndex: 'inTransitQuantity',
-    width: 60,
-    align: 'right'
-  },
-  {
-    title: '残品',
-    key: 'damagedQuantity',
-    dataIndex: 'damagedQuantity',
     width: 60,
     align: 'right'
   },
@@ -170,8 +168,43 @@ function handleViewFlows(record: InventoryPageVO) {
   flowDrawerRef.value?.open(record.warehouseId, skuCode, warehouseName)
 }
 
-function handleExport() {
-  message.info('导出功能开发中...')
+async function handleExport() {
+  const hide = message.loading('正在生成库存明细...', 0)
+  try {
+    const result = await pageInventory({ page: 1, size: 10000, ...searchParams })
+    if (!isSuccess(result) || !result.data) throw new Error('库存数据读取失败')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('库存明细')
+    sheet.columns = [
+      { header: '区域', key: 'regionName', width: 16 },
+      { header: '仓库', key: 'warehouseName', width: 18 },
+      { header: '排', key: 'rackNo', width: 10 },
+      { header: '库位', key: 'locationCode', width: 16 },
+      { header: '分区', key: 'zoneName', width: 14 },
+      { header: 'SKU', key: 'skuCode', width: 28 },
+      { header: '品质', key: 'quality', width: 10 },
+      { header: '实物', key: 'physicalQuantity', width: 10 },
+      { header: '预占', key: 'reservedQuantity', width: 10 },
+      { header: '可用', key: 'availableQuantity', width: 10 },
+      { header: '更新时间', key: 'updateTime', width: 22 }
+    ]
+    result.data.records.forEach(row => sheet.addRow({
+      ...row,
+      warehouseName: row.warehouseDisplay?.warehouseName || row.warehouseName,
+      quality: row.quality === 'DEFECTIVE' ? '不良品' : '良品'
+    }))
+    sheet.getRow(1).font = { bold: true }
+    const buffer = await workbook.xlsx.writeBuffer()
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+    link.download = `库存明细-${new Date().toISOString().slice(0, 10)}.xlsx`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  } catch (error: any) {
+    message.error(error?.message || '导出失败')
+  } finally {
+    hide()
+  }
 }
 
 defineExpose({

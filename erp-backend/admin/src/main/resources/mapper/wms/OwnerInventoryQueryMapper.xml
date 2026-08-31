@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.OwnerInventoryQueryMapper">
+
+    <sql id="ownerScope">
+        <if test="!unrestricted">
+            AND li.erp_tenant_id IN
+            <foreach collection="ownerIds" item="ownerId" open="(" separator="," close=")">#{ownerId}</foreach>
+        </if>
+    </sql>
+
+    <select id="selectSummary" resultType="com.erp.admin.wms.model.vo.InventorySummaryVO">
+        SELECT COUNT(DISTINCT CASE WHEN li.quantity &gt; 0 THEN li.sku_code END) AS totalSkuCount,
+               COALESCE(SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity - li.reserved_quantity ELSE 0 END), 0) AS availableQuantity,
+               COALESCE(SUM(CASE WHEN li.quality = 'GOOD' THEN li.reserved_quantity ELSE 0 END), 0) AS reservedQuantity,
+               0 AS inTransitQuantity,
+               COALESCE(SUM(CASE WHEN li.quality = 'DEFECTIVE' THEN li.quantity ELSE 0 END), 0) AS damagedQuantity,
+               COUNT(DISTINCT li.warehouse_id) AS warehouseCount,
+               COALESCE(SUM(CASE WHEN li.quality = 'GOOD' AND s.outer_length_mm IS NOT NULL
+                    AND s.outer_width_mm IS NOT NULL AND s.outer_height_mm IS NOT NULL
+                    THEN li.quantity * s.outer_length_mm * s.outer_width_mm * s.outer_height_mm / 1000000000 ELSE 0 END), 0) AS totalVolume,
+               COUNT(DISTINCT CASE WHEN li.quantity &gt; 0 AND (s.outer_length_mm IS NULL OR s.outer_width_mm IS NULL
+                    OR s.outer_height_mm IS NULL) THEN li.sku_code END) AS volumeMissingSkuCount
+        FROM wms_location_inventory li
+        INNER JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
+        LEFT JOIN sku s ON s.tenant_id = li.erp_tenant_id AND s.sku_code = li.sku_code
+        WHERE li.deleted = 0
+        <include refid="ownerScope"/>
+    </select>
+
+    <select id="selectWarehouseSummary" resultType="com.erp.admin.wms.model.vo.WarehouseSummaryVO">
+        SELECT li.warehouse_id AS warehouseId, COUNT(DISTINCT li.sku_code) AS skuCount,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity - li.reserved_quantity ELSE 0 END) AS availableQuantity,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.reserved_quantity ELSE 0 END) AS reservedQuantity,
+               0 AS inTransitQuantity,
+               SUM(CASE WHEN li.quality = 'DEFECTIVE' THEN li.quantity ELSE 0 END) AS damagedQuantity,
+               COALESCE(SUM(CASE WHEN li.quality = 'GOOD' AND s.outer_length_mm IS NOT NULL
+                    AND s.outer_width_mm IS NOT NULL AND s.outer_height_mm IS NOT NULL
+                    THEN li.quantity * s.outer_length_mm * s.outer_width_mm * s.outer_height_mm / 1000000000 ELSE 0 END), 0) AS totalVolume
+        FROM wms_location_inventory li
+        INNER JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
+        LEFT JOIN sku s ON s.tenant_id = li.erp_tenant_id AND s.sku_code = li.sku_code
+        WHERE li.deleted = 0
+        <include refid="ownerScope"/>
+        GROUP BY li.warehouse_id
+        ORDER BY w.warehouse_name, li.warehouse_id
+    </select>
+
+    <select id="selectSkuSummary" resultType="com.erp.admin.wms.model.vo.SkuSummaryVO">
+        SELECT x.sku_code AS skuCode,
+               SUM(x.warehouse_count) AS warehouseCount,
+               SUM(x.available_quantity) AS availableQuantity,
+               SUM(x.reserved_quantity) AS reservedQuantity,
+               0 AS inTransitQuantity,
+               SUM(x.damaged_quantity) AS damagedQuantity,
+               SUM(x.fbo_quantity) AS fboWarehouseQuantity,
+               SUM(x.own_quantity) AS ownWarehouseQuantity
+        FROM (
+            SELECT li.sku_code, COUNT(DISTINCT li.warehouse_id) AS warehouse_count,
+                   SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity - li.reserved_quantity ELSE 0 END) AS available_quantity,
+                   SUM(CASE WHEN li.quality = 'GOOD' THEN li.reserved_quantity ELSE 0 END) AS reserved_quantity,
+                   SUM(CASE WHEN li.quality = 'DEFECTIVE' THEN li.quantity ELSE 0 END) AS damaged_quantity,
+                   0 AS fbo_quantity,
+                   SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity ELSE 0 END) AS own_quantity
+            FROM wms_location_inventory li
+            INNER JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
+            WHERE li.deleted = 0
+            <include refid="ownerScope"/>
+            GROUP BY li.sku_code
+            UNION ALL
+            SELECT f.sku_code, 0, 0, 0, 0, SUM(f.quantity), 0
+            FROM wms_fbo_inventory_snapshot f
+            WHERE 1 = 1
+            <if test="!unrestricted">
+                AND f.tenant_id IN
+                <foreach collection="ownerIds" item="ownerId" open="(" separator="," close=")">#{ownerId}</foreach>
+            </if>
+            GROUP BY f.sku_code
+        ) x
+        <where>
+            <if test="keyword != null and keyword != ''">AND x.sku_code LIKE CONCAT('%', #{keyword}, '%')</if>
+        </where>
+        GROUP BY x.sku_code
+        <if test="stockStatus == 'HAS_STOCK'">HAVING SUM(x.available_quantity + x.reserved_quantity + x.damaged_quantity + x.fbo_quantity) &gt; 0</if>
+        <if test="stockStatus == 'ZERO_STOCK'">HAVING SUM(x.available_quantity + x.reserved_quantity + x.damaged_quantity + x.fbo_quantity) = 0</if>
+        ORDER BY x.sku_code
+    </select>
+
+    <select id="selectLocationPage" resultType="com.erp.admin.wms.model.vo.InventoryPageVO">
+        SELECT li.id, li.warehouse_id AS warehouseId, w.region_id AS regionId, r.region_name AS regionName,
+               li.location_id AS locationId, l.rack_no AS rackNo, l.location_code AS locationCode,
+               z.zone_type AS zoneType, z.zone_name AS zoneName, li.sku_code AS skuCode, li.quality,
+               li.quantity AS physicalQuantity,
+               CASE WHEN li.quality = 'GOOD' THEN li.quantity - li.reserved_quantity ELSE 0 END AS availableQuantity,
+               CASE WHEN li.quality = 'GOOD' THEN li.reserved_quantity ELSE 0 END AS reservedQuantity,
+               0 AS inTransitQuantity,
+               CASE WHEN li.quality = 'DEFECTIVE' THEN li.quantity ELSE 0 END AS damagedQuantity,
+               li.update_time AS updateTime
+        FROM wms_location_inventory li
+        INNER JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
+        INNER JOIN wms_location l ON l.id = li.location_id AND l.deleted = 0
+        LEFT JOIN wms_zone z ON z.id = l.zone_id AND z.deleted = 0
+        LEFT JOIN wms_region r ON r.id = w.region_id
+        WHERE li.deleted = 0
+        <include refid="ownerScope"/>
+        <if test="qo.regionId != null">AND w.region_id = #{qo.regionId}</if>
+        <if test="qo.warehouseId != null">AND li.warehouse_id = #{qo.warehouseId}</if>
+        <if test="qo.skuCode != null and qo.skuCode != ''">AND li.sku_code LIKE CONCAT('%', #{qo.skuCode}, '%')</if>
+        <if test="qo.locationCode != null and qo.locationCode != ''">AND l.location_code LIKE CONCAT('%', #{qo.locationCode}, '%')</if>
+        <if test="qo.quality != null and qo.quality != ''">AND li.quality = #{qo.quality}</if>
+        <if test="qo.hasDamaged != null and qo.hasDamaged">AND li.quality = 'DEFECTIVE' AND li.quantity &gt; 0</if>
+        <if test="qo.stockStatus == 'HAS_STOCK'">AND li.quantity &gt; 0</if>
+        <if test="qo.stockStatus == 'ZERO_STOCK'">AND li.quantity = 0</if>
+        ORDER BY w.region_id, w.warehouse_name, l.rack_no, l.location_code, li.sku_code, li.quality
+    </select>
+
+    <select id="selectDetail" resultType="com.erp.admin.wms.model.vo.InventoryDetailVO">
+        SELECT MIN(li.id) AS id, li.warehouse_id AS warehouseId, li.sku_code AS skuCode,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity ELSE 0 END) AS physicalQuantity,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity - li.reserved_quantity ELSE 0 END) AS availableQuantity,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.reserved_quantity ELSE 0 END) AS reservedQuantity,
+               SUM(CASE WHEN li.quality = 'DEFECTIVE' THEN li.quantity ELSE 0 END) AS damagedQuantity,
+               0 AS inTransitQuantity, MAX(li.update_time) AS updateTime
+        FROM wms_location_inventory li
+        INNER JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
+        WHERE li.deleted = 0 AND li.warehouse_id = #{warehouseId} AND li.sku_code = #{skuCode}
+        <include refid="ownerScope"/>
+        GROUP BY li.warehouse_id, li.sku_code
+    </select>
+
+    <select id="selectRegionSkuStocks" resultType="com.erp.admin.wms.model.dto.RegionSkuStockDTO">
+        SELECT w.region_id AS regionId, li.sku_code AS skuCode,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity - li.reserved_quantity ELSE 0 END) AS totalAvailable,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.reserved_quantity ELSE 0 END) AS totalReserved,
+               0 AS totalInTransit,
+               SUM(CASE WHEN li.quality = 'DEFECTIVE' THEN li.quantity ELSE 0 END) AS totalDamaged
+        FROM wms_location_inventory li
+        INNER JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
+        WHERE li.deleted = 0
+        <include refid="ownerScope"/>
+        <if test="regionIds != null and regionIds.size() &gt; 0">
+            AND w.region_id IN <foreach collection="regionIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        </if>
+        <if test="keyword != null and keyword != ''">AND li.sku_code LIKE CONCAT('%', #{keyword}, '%')</if>
+        GROUP BY w.region_id, li.sku_code
+    </select>
+
+    <select id="selectRegionAggregates" resultType="com.erp.admin.wms.model.dto.WarehouseAggregateDTO">
+        SELECT w.region_id AS regionId, COUNT(DISTINCT li.warehouse_id) AS warehouseCount,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.quantity - li.reserved_quantity ELSE 0 END) AS totalAvailable,
+               SUM(CASE WHEN li.quality = 'GOOD' THEN li.reserved_quantity ELSE 0 END) AS totalReserved,
+               0 AS totalInTransit,
+               SUM(CASE WHEN li.quality = 'DEFECTIVE' THEN li.quantity ELSE 0 END) AS totalDamaged
+        FROM wms_location_inventory li
+        INNER JOIN wms_warehouse w ON w.id = li.warehouse_id AND w.deleted = 0 AND w.status = 1 AND w.warehouse_type = 'OWN'
+        WHERE li.deleted = 0
+        <include refid="ownerScope"/>
+        <if test="regionIds != null and regionIds.size() &gt; 0">
+            AND w.region_id IN <foreach collection="regionIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        </if>
+        GROUP BY w.region_id
+    </select>
+</mapper>

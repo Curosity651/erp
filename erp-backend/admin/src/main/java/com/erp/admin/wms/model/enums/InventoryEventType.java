@@ -1,0 +1,16 @@
+package com.erp.admin.wms.model.enums;
+
+public enum InventoryEventType {
+	INBOUND_PUTAWAY,
+	RETURN_PUTAWAY,
+	DECREASE,
+	RESERVE,
+	RELEASE,
+	SHIP,
+	MOVE,
+	STOCKTAKE_GAIN,
+	STOCKTAKE_LOSS,
+	SCRAP_RESERVE,
+	SCRAP_RELEASE,
+	SCRAP
+}

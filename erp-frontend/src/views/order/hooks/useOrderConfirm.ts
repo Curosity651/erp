@@ -30,7 +30,8 @@ export function useOrderConfirm<T extends BaseOrderVO>(options: UseOrderConfirmO
     total: 0,
     eligible: [] as T[],
     ineligible: [] as (T & { reason: string })[],
-    logisticsProductId: undefined as number | undefined
+    logisticsProductId: undefined as number | undefined,
+    wmsWarehouseId: undefined as number | undefined
   })
 
   function openConfirmDialog(rows: T[]) {
@@ -50,6 +51,8 @@ export function useOrderConfirm<T extends BaseOrderVO>(options: UseOrderConfirmO
     confirmModal.total = list.length
     confirmModal.eligible = eligible
     confirmModal.ineligible = ineligible
+    confirmModal.logisticsProductId = undefined
+    confirmModal.wmsWarehouseId = undefined
     confirmModal.open = true
   }
 
@@ -63,7 +66,7 @@ export function useOrderConfirm<T extends BaseOrderVO>(options: UseOrderConfirmO
     try {
       const results = await Promise.allSettled(
         confirmModal.eligible.map(order =>
-          submitOrderFulfillment(order.id, undefined, confirmModal.logisticsProductId)
+          submitOrderFulfillment(order.id, confirmModal.wmsWarehouseId, confirmModal.logisticsProductId)
         )
       )
       const failures = results

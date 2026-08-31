@@ -33,9 +33,11 @@ import com.erp.admin.wms.service.FulfillmentProgressService;
 import com.erp.admin.wms.service.platform.PlatformActionResult;
 import org.junit.jupiter.api.Test;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.annotations.Update;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
@@ -45,6 +47,19 @@ import static org.mockito.Mockito.never;
 import org.mockito.ArgumentCaptor;
 
 class FulfillmentPickingServiceTest {
+	@Test
+	void pick_line_mapper_calculates_completion_before_incrementing_picked_quantity()
+			throws Exception {
+		Method method = WmsFulfillmentPickTaskLineMapper.class.getMethod("addPicked",
+				Long.class, Integer.class, Integer.class);
+		String sql = String.join(" ", method.getAnnotation(Update.class).value());
+
+		assertThat(sql.indexOf("line_status = CASE WHEN picked_quantity + #{quantity} = planned_quantity"))
+				.isGreaterThanOrEqualTo(0);
+		assertThat(sql.indexOf("line_status = CASE"))
+				.isLessThan(sql.indexOf("picked_quantity = picked_quantity + #{quantity}"));
+	}
+
 	@Test
 	void claiming_pending_task_assigns_picker_and_starts_waiting_orders() {
 		WmsFulfillmentOrderMapper orderMapper = mock(WmsFulfillmentOrderMapper.class);
@@ -179,6 +194,7 @@ class FulfillmentPickingServiceTest {
 		line.setVersion(0);
 
 		when(taskMapper.selectById(11L)).thenReturn(task);
+		when(taskMapper.claimOperationMode(11L, "SCAN")).thenReturn(1);
 		when(taskOrderMapper.selectList(any())).thenReturn(Collections.singletonList(taskOrder));
 		when(orderMapper.selectById(1L)).thenReturn(order);
 		when(lineMapper.selectList(any())).thenReturn(Collections.singletonList(line));
@@ -222,6 +238,7 @@ class FulfillmentPickingServiceTest {
 		line.setId(41L);
 		line.setVersion(0);
 		when(taskMapper.selectById(11L)).thenReturn(task);
+		when(taskMapper.claimOperationMode(11L, "SCAN")).thenReturn(1);
 		when(taskOrderMapper.selectList(any())).thenReturn(Arrays.asList(first, second));
 		when(orderMapper.selectById(1L)).thenReturn(firstOrder);
 		when(orderMapper.selectById(2L)).thenReturn(secondOrder);
@@ -243,6 +260,68 @@ class FulfillmentPickingServiceTest {
 		assertThat(second.getOrderStatus()).isEqualTo("WAITING_LABEL");
 		verify(orderMapper).transit(2L, FulfillmentStatus.PICKING,
 				FulfillmentStatus.WAITING_PACK);
+	}
+
+	@Test
+	void simplified_completion_rejects_task_that_already_started_scan_mode() {
+		WmsFulfillmentOrderMapper orderMapper = mock(WmsFulfillmentOrderMapper.class);
+		WmsFulfillmentPickTaskMapper taskMapper = mock(WmsFulfillmentPickTaskMapper.class);
+		WmsFulfillmentPickTaskOrderMapper taskOrderMapper = mock(WmsFulfillmentPickTaskOrderMapper.class);
+		WmsFulfillmentPickTaskLineMapper lineMapper = mock(WmsFulfillmentPickTaskLineMapper.class);
+		FulfillmentPickingService service = new FulfillmentPickingService(orderMapper,
+				mock(FulfillmentPlatformActionService.class), taskMapper, taskOrderMapper, lineMapper,
+				mock(WmsInventoryReservationMapper.class), mock(WmsFulfillmentItemMapper.class),
+				mock(WmsLocationMapper.class), mock(FulfillmentProgressService.class));
+		WmsFulfillmentPickTask task = activeTask(11L, 99L);
+		task.setOperationMode("SCAN");
+		when(taskMapper.selectById(11L)).thenReturn(task);
+
+		assertThatThrownBy(() -> service.completeSimplifiedPicking(11L,
+				Collections.singletonList(801L), 99L))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("逐单扫码");
+	}
+
+	@Test
+	void simplified_completion_fills_all_lines_and_moves_orders_to_waiting_pack() {
+		WmsFulfillmentOrderMapper orderMapper = mock(WmsFulfillmentOrderMapper.class);
+		WmsFulfillmentPickTaskMapper taskMapper = mock(WmsFulfillmentPickTaskMapper.class);
+		WmsFulfillmentPickTaskOrderMapper taskOrderMapper = mock(WmsFulfillmentPickTaskOrderMapper.class);
+		WmsFulfillmentPickTaskLineMapper lineMapper = mock(WmsFulfillmentPickTaskLineMapper.class);
+		FulfillmentProgressService progress = mock(FulfillmentProgressService.class);
+		FulfillmentPickingService service = new FulfillmentPickingService(orderMapper,
+				mock(FulfillmentPlatformActionService.class), taskMapper, taskOrderMapper, lineMapper,
+				mock(WmsInventoryReservationMapper.class), mock(WmsFulfillmentItemMapper.class),
+				mock(WmsLocationMapper.class), progress);
+		WmsFulfillmentPickTask task = activeTask(11L, 99L);
+		WmsFulfillmentPickTaskOrder taskOrder = taskOrder(31L, 11L, 1L);
+		WmsFulfillmentPickTaskLine line = new WmsFulfillmentPickTaskLine();
+		line.setId(41L);
+		line.setTaskId(11L);
+		line.setFulfillmentOrderId(1L);
+		line.setPlannedQuantity(3);
+		line.setPickedQuantity(0);
+		line.setLineStatus("PENDING");
+		line.setVersion(0);
+		WmsFulfillmentOrder order = pickingOrder(1L, "FO-1");
+		order.setLabelFileUrl("https://labels.example/1.pdf");
+		order.setLabelBarcode("TRACK-1");
+		when(taskMapper.selectById(11L)).thenReturn(task);
+		when(taskMapper.claimOperationMode(11L, "SIMPLE")).thenReturn(1);
+		when(taskOrderMapper.selectList(any())).thenReturn(Collections.singletonList(taskOrder));
+		when(lineMapper.selectList(any())).thenReturn(Collections.singletonList(line));
+		when(orderMapper.selectForUpdate(1L)).thenReturn(order);
+		when(lineMapper.completeForSimplifiedTask(41L, 0)).thenReturn(1);
+		when(orderMapper.transit(1L, FulfillmentStatus.PICKING,
+				FulfillmentStatus.WAITING_PACK)).thenReturn(1);
+
+		assertThat(service.completeSimplifiedPicking(11L,
+				Collections.singletonList(801L), 99L)).containsExactly(1L);
+		assertThat(task.getOperationMode()).isEqualTo("SIMPLE");
+		assertThat(task.getEvidenceFileIds()).isEqualTo("801");
+		assertThat(taskOrder.getOrderStatus()).isEqualTo("WAITING_LABEL");
+		verify(lineMapper).completeForSimplifiedTask(41L, 0);
+		verify(progress).sync(order, FulfillmentStatus.WAITING_PACK);
 	}
 
 	@Test
@@ -327,6 +406,14 @@ class FulfillmentPickingServiceTest {
 		order.setFulfillmentNo(fulfillmentNo);
 		order.setFulfillmentStatus(FulfillmentStatus.PICKING);
 		return order;
+	}
+
+	private WmsFulfillmentPickTask activeTask(Long id, Long operatorId) {
+		WmsFulfillmentPickTask task = new WmsFulfillmentPickTask();
+		task.setId(id);
+		task.setTaskStatus("PICKING");
+		task.setOperatorId(operatorId);
+		return task;
 	}
 
 	private WmsFulfillmentPickTaskOrder taskOrder(Long id, Long taskId, Long fulfillmentOrderId) {

@@ -94,6 +94,8 @@ public class InventoryAlertTask {
         // 筛选告急和断货的 SKU
         List<ForecastSummaryVO> alertItems = result.getList().stream()
                 .filter(vo -> vo.getStatus() == ForecastStatus.CRITICAL || vo.getStatus() == ForecastStatus.STOCKOUT)
+				.filter(vo -> Boolean.TRUE.equals(inventoryConfigService
+						.getEffectiveConfig(vo.getRegionId(), vo.getSkuCode()).getNotifyEnabled()))
                 .collect(Collectors.toList());
 
         if (alertItems.isEmpty()) {

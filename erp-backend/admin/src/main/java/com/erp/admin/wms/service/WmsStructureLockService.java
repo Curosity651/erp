@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.enums.WmsResultCode;
-import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
 import com.erp.admin.wms.mapper.WmsPalletMapper;
 import com.erp.admin.wms.mapper.LocationTransferOrderMapper;
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
  *
  * <p>库位管理的「保存结构 / 重新生成」是整仓级破坏性操作，满足以下任一即锁定：
  * <ul>
- * <li><b>A 有货物占用</b>：{@code wms_physical_inventory} 该仓存在 quantity&gt;0 的批次；</li>
+ * <li><b>A 有货物占用</b>：逻辑库位库存存在数量或预留；</li>
  * <li><b>B 有当前有效分配</b>：{@code wms_rack_assignment} 该仓存在当前有效（已生效未结束）的货架分配。</li>
  * </ul>
  * 后端硬闸（{@link #assertEditable}）与前端置灰共用同一口径（{@link #compute} 提供展示数据）。
@@ -40,7 +40,7 @@ public class WmsStructureLockService {
 
 	private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
 
-	private final WmsPhysicalInventoryMapper physicalInventoryMapper;
+	private final WmsLocationInventoryMapper locationInventoryMapper;
 
 	private final WmsRackAssignmentMapper rackAssignmentMapper;
 
@@ -104,7 +104,7 @@ public class WmsStructureLockService {
 	 */
 	public LockInfo compute(Long warehouseId) {
 		// A：有货占用（quantity>0 的库位数，口径与 listOccupiedLocationCodes 统一）
-		int occupiedCount = physicalInventoryMapper.listBlockingPhysicalLocationCodes(warehouseId).size();
+		int occupiedCount = locationInventoryMapper.listOccupiedLocationCodes(warehouseId).size();
 
 		// B：当前有效分配
 		LocalDate today = LocalDate.now(BUSINESS_ZONE);

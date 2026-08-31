@@ -10,6 +10,7 @@ export interface IncomeSummaryRow {
   productName: string
   tags: string[]
   unitPrice?: number
+  currency: string
   billMonth: string
   usageCount: number
   subtotal: number
@@ -17,7 +18,7 @@ export interface IncomeSummaryRow {
 
 /** 收入汇总 */
 export interface IncomeSummary {
-  totalAmount: number
+  currencyTotals: Array<{ currency: string; amount: number }>
   totalCount: number
   rows: IncomeSummaryRow[]
 }
@@ -28,10 +29,14 @@ export interface IncomeRecord {
   billMonth: string
   productId: number
   productName: string
+  productNameSnapshot?: string
+  productDescriptionSnapshot?: string
   ownerName?: string
-  outboundNo?: string
+  businessNo?: string
+  platformOrderId?: string
   trackingNo?: string
   amount: number
+  currency: string
   createTime: string
 }
 
@@ -49,6 +54,7 @@ export interface ExpenseBillVO {
   inspectionFee: number
   driverFee: number
   totalAmount: number
+  currency: string
   status: 'DRAFT' | 'CONFIRMED' | 'PAID' | 'DISPUTED'
   confirmedTime?: string
   paidTime?: string
@@ -57,8 +63,8 @@ export interface ExpenseBillVO {
 
 /** 支出账单状态元数据 */
 export const EXPENSE_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  DRAFT: { label: '草稿', color: 'default' },
-  CONFIRMED: { label: '已确认', color: 'processing' },
+  DRAFT: { label: '草稿估算', color: 'default' },
+  CONFIRMED: { label: '已确认应付', color: 'processing' },
   PAID: { label: '已付款', color: 'success' },
-  DISPUTED: { label: '争议', color: 'error' }
+  DISPUTED: { label: '争议中', color: 'error' }
 }

@@ -25,6 +25,17 @@ public interface WmsLocationInventoryMapper extends ExtendMapper<WmsLocationInve
 			@Param("erpTenantId") Long erpTenantId, @Param("skuCode") String skuCode,
 			@Param("quality") String quality);
 
+	List<String> listOccupiedLocationCodes(@Param("warehouseId") Long warehouseId);
+
+	List<Long> listBlockingWmsTenantIdsByRack(@Param("warehouseId") Long warehouseId,
+			@Param("rackNo") String rackNo);
+
+	Long sumQuantityByProviderAndWarehouse(@Param("wmsTenantId") Long wmsTenantId,
+			@Param("warehouseId") Long warehouseId);
+
+	Long sumReservedByProviderAndWarehouse(@Param("wmsTenantId") Long wmsTenantId,
+			@Param("warehouseId") Long warehouseId);
+
 	int increaseQuantity(@Param("id") Long id, @Param("quantity") int quantity,
 			@Param("version") int version);
 

@@ -58,15 +58,25 @@
               <span class="bucket-name" :style="{ color: getBucketColor(record.bucket) }">
                 {{ BucketMap[record.bucket] || record.bucket }}
               </span>
-              <span :class="record.deltaQuantity > 0 ? 'delta-positive' : 'delta-negative'">
-                {{ record.deltaQuantity > 0 ? '+' : '' }}{{ record.deltaQuantity }}
+              <span :class="eventDelta(record) > 0 ? 'delta-positive' : 'delta-negative'">
+                {{ eventDelta(record) > 0 ? '+' : '' }}{{ eventDelta(record) }}
               </span>
             </div>
             <div class="bucket-change-detail">
               {{ record.beforeQuantity }} → {{ record.afterQuantity }}
             </div>
+			<div class="bucket-change-detail" v-if="record.reservedDelta">
+			  预占 {{ signed(record.reservedDelta) }}（{{ record.beforeReserved }} → {{ record.afterReserved }}）
+			</div>
           </div>
         </template>
+
+		<template v-else-if="column.key === 'locationCode'">
+		  <span>{{ record.locationCode || '-' }}</span>
+		  <span v-if="record.counterpartLocationCode" class="text-tertiary">
+			→ {{ record.counterpartLocationCode }}
+		  </span>
+		</template>
 
         <!-- 来源单号 -->
         <template v-else-if="column.key === 'sourceNo'">
@@ -133,8 +143,8 @@ const tableRequest: TableRequest = (params, sorter, filter) => {
   return pageStockFlow({
     ...pageParam,
     ...rest,
-    createTimeStart: startTime || undefined,
-    createTimeEnd: endTime || undefined,
+    startTime: startTime || undefined,
+    endTime: endTime || undefined,
     direction: flowDirection || undefined,
     postingTypes: postingType ? [postingType] : undefined
   })
@@ -151,6 +161,14 @@ const searchTable = (params: Record<string, any>) => {
 
 function formatTime(time: string) {
   return dayjs(time).format('MM-DD HH:mm')
+}
+
+function eventDelta(record: StockFlowPageVO) {
+  return record.quantityDelta !== 0 ? record.quantityDelta : record.reservedDelta
+}
+
+function signed(value: number) {
+  return value > 0 ? `+${value}` : String(value)
 }
 
 function handleViewSource(record: StockFlowPageVO) {
@@ -180,8 +198,19 @@ function handleViewInventory(record: StockFlowPageVO) {
 }
 
 async function handleExport() {
-  // TODO: 实现导出逻辑
-  console.log('导出流水数据', searchParams)
+	const result = await pageStockFlow({ page: 1, size: 10000, ...searchParams })
+	const rows = result.data?.records || []
+	const headers = ['时间', '类型', '仓库', '库位', '目标库位', 'SKU', '品质', '实物变化', '预占变化', '来源单号']
+	const csv = [headers, ...rows.map(row => [row.createTime, PostingTypeMap[row.postingType] || row.postingType,
+		row.warehouseDisplay?.warehouseName || '', row.locationCode || '', row.counterpartLocationCode || '',
+		row.skuCode, row.quality === 'DEFECTIVE' ? '不良品' : '良品', row.quantityDelta,
+		row.reservedDelta, row.sourceNo || ''])]
+		.map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n')
+	const link = document.createElement('a')
+	link.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
+	link.download = `库存流水-${new Date().toISOString().slice(0, 10)}.csv`
+	link.click()
+	URL.revokeObjectURL(link.href)
 }
 
 const columns: ProColumns[] = [
@@ -189,6 +218,7 @@ const columns: ProColumns[] = [
   { title: '类型', key: 'postingType', width: 100 },
   { title: '仓库/区域', key: 'location', width: 100 },
   { title: 'SKU 信息', key: 'skuInfo', width: 220 },
+	{ title: '库位', key: 'locationCode', width: 150 },
   { title: '库存桶变动', key: 'bucketChange', width: 180 },
   { title: '来源单号', key: 'sourceNo', width: 140 },
   { title: '操作', key: 'operate', width: 80, align: 'center' }

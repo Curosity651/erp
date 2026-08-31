@@ -28,7 +28,8 @@ class FulfillmentStatusSyncServiceTest {
 
 		service.cancelFromException(10L, false, "货主取消");
 
-		verify(inventoryService).release(10L);
+		verify(inventoryService).release(eq(10L), argThat(context ->
+				"fulfillment-release:10".equals(context.getIdempotencyKey())));
 		verify(orderMapper).transit(10L, FulfillmentStatus.EXCEPTION,
 				FulfillmentStatus.CANCELLED);
 		verify(progressService).sync(order, FulfillmentStatus.CANCELLED);
@@ -49,7 +50,7 @@ class FulfillmentStatusSyncServiceTest {
 
 		service.cancelFromException(10L, true, "货主取消");
 
-		verify(inventoryService, never()).release(anyLong());
+		verify(inventoryService, never()).release(anyLong(), any());
 		verify(orderMapper).transitWithReason(10L, FulfillmentStatus.EXCEPTION,
 				FulfillmentStatus.CANCEL_RETURNING, "货主取消");
 		verify(progressService).sync(order, FulfillmentStatus.CANCEL_RETURNING);

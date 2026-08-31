@@ -1,3 +1,5 @@
+import type { PageParam } from '@/api/types'
+
 export type FulfillmentStatus =
   | 'DRAFT'
   | 'WAITING_SHELF'
@@ -19,6 +21,8 @@ export interface FulfillmentOrder {
   sourceType: string
   sourceOrderNo: string
   fulfillmentStatus: FulfillmentStatus
+  dispatchStatus?: 'PENDING' | 'SUCCEEDED' | 'FAILED'
+  dispatchError?: string
   recipientName?: string
   recipientPhone?: string
   recipientAddress?: string
@@ -39,6 +43,39 @@ export interface FulfillmentOrder {
   logisticsProductCurrency?: string
   logisticsFeeAdjustmentReason?: string
   createTime?: string
+}
+
+export interface FulfillmentShippingOrder {
+  id: number
+  erpTenantId: number
+  ownerName?: string
+  warehouseId: number
+  warehouseName?: string
+  fulfillmentNo: string
+  sourceType: string
+  sourceOrderNo: string
+  fulfillmentStatus: 'WAITING_PACK' | 'PACKED' | 'SHIPPED'
+  recipientName?: string
+  logisticsProductName?: string
+  logisticsProductActualFee?: number
+  logisticsProductCurrency?: string
+  carrierName?: string
+  shippingMethod?: string
+  trackingNo?: string
+  packageWeightKg?: number
+  shippedBy?: number
+  shippedByName?: string
+  shippedTime?: string
+  createTime?: string
+}
+
+export interface FulfillmentShippingQuery extends PageParam {
+  erpTenantId?: number
+  warehouseId?: number
+  fulfillmentStatus?: 'WAITING_PACK' | 'PACKED' | 'SHIPPED'
+  shippedBy?: number
+  startDate?: string
+  endDate?: string
 }
 
 export interface FulfillmentShelfOrderQuery {
@@ -74,6 +111,9 @@ export interface FulfillmentPickTask {
   orderCount: number
   totalQuantity: number
   operatorId?: number
+  operationMode?: 'SCAN' | 'SIMPLE'
+  evidenceFileIds?: string
+  simplifiedCompletedTime?: string
   claimedTime?: string
   createTime?: string
   completedOrderCount?: number

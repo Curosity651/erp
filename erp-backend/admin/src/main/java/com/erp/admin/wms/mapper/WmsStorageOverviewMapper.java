@@ -7,8 +7,8 @@ import com.erp.admin.wms.model.vo.StorageOverviewVO;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * 服务商「仓储概览」聚合 Mapper。全部按当前服务商 wms_tenant_id 限定；占用归属靠货架分配 JOIN 收窄，
- * 不依赖 physical_inventory.wms_tenant_id（该列历史数据可能为 0）。纯只读。
+ * 服务商「仓储概览」聚合 Mapper。容量按有效排分配统计，库存按 physical_inventory.wms_tenant_id
+ * 和货主父服务商双重收窄；公共暂存库存只计入库存，不计入分配容量。纯只读。
  *
  * @author erp
  */
@@ -34,7 +34,7 @@ public interface WmsStorageOverviewMapper {
 			@Param("warehouseId") Long warehouseId, @Param("today") LocalDate today);
 
 	/**
-	 * 某仓内该服务商货架上、按货主拆分的占用（库位数/件数/SKU 数）。
+	 * 某仓内该服务商名下库存按货主拆分（包含公共暂存库存，不返回具体库位名称）。
 	 * @param wmsTenantId 当前服务商
 	 * @param warehouseId 仓库
 	 * @param today 当日

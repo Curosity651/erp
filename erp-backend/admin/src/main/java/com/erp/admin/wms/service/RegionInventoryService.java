@@ -1,6 +1,5 @@
 package com.erp.admin.wms.service;
 
-import com.erp.admin.wms.mapper.InventoryMapper;
 import com.erp.admin.wms.mapper.RegionInventoryMapper;
 import com.erp.admin.wms.mapper.RegionMapper;
 import com.erp.admin.wms.model.dto.WarehouseAggregateDTO;
@@ -26,14 +25,11 @@ import java.util.stream.Collectors;
 public class RegionInventoryService extends ExtendServiceImpl<RegionInventoryMapper, RegionInventory> {
 
     private final RegionMapper regionMapper;
-    private final InventoryMapper inventoryMapper;
-    private final ErpOwnerScopeService erpOwnerScopeService;
+    private final OwnerInventoryQueryService ownerInventoryQueryService;
 
-    public RegionInventoryService(RegionMapper regionMapper, InventoryMapper inventoryMapper,
-            ErpOwnerScopeService erpOwnerScopeService) {
+    public RegionInventoryService(RegionMapper regionMapper, OwnerInventoryQueryService ownerInventoryQueryService) {
         this.regionMapper = regionMapper;
-        this.inventoryMapper = inventoryMapper;
-        this.erpOwnerScopeService = erpOwnerScopeService;
+        this.ownerInventoryQueryService = ownerInventoryQueryService;
     }
 
     /**
@@ -101,8 +97,8 @@ public class RegionInventoryService extends ExtendServiceImpl<RegionInventoryMap
                 .collect(Collectors.toSet());
 
         // Step 2: 批量查询各区域的仓库库存聚合（单次查询）
-        Map<Long, WarehouseAggregateDTO> warehouseAggMap = inventoryMapper
-                .selectAggregateByRegionIds(regionIds, erpOwnerScopeService.readScope())
+        Map<Long, WarehouseAggregateDTO> warehouseAggMap = ownerInventoryQueryService
+                .getRegionAggregates(regionIds)
                 .stream()
                 .collect(Collectors.toMap(
                         WarehouseAggregateDTO::getRegionId,

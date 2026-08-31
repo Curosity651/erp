@@ -10,6 +10,7 @@ import com.erp.admin.order.model.dto.SubmitFulfillmentDTO;
 import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.order.model.entity.ErpOrderItem;
 import com.erp.admin.order.service.ErpOrderFulfillmentSubmissionService;
+import com.erp.admin.order.service.FulfillmentRecipientSnapshotService;
 import com.erp.admin.product.mapper.SkuMapper;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.product.service.WarehouseSkuCodeService;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -53,7 +55,8 @@ class ErpOrderFulfillmentSubmissionTest {
 		WmsLogisticsProductService logisticsProductService = mock(WmsLogisticsProductService.class);
 		ErpOrderFulfillmentSubmissionService service = new ErpOrderFulfillmentSubmissionService(orderMapper,
 				itemMapper, shopMapper, skuMapper, warehouseSkuCodeService, warehouseService,
-				fulfillmentOrderService, logisticsProductService);
+				fulfillmentOrderService, logisticsProductService,
+				new FulfillmentRecipientSnapshotService(new com.fasterxml.jackson.databind.ObjectMapper()));
 
 		ErpOrder order = new ErpOrder();
 		order.setId(10L);
@@ -81,7 +84,7 @@ class ErpOrderFulfillmentSubmissionTest {
 		sku.setOuterWidthMm(200);
 		sku.setOuterHeightMm(300);
 		sku.setOuterGrossWeightG(4000);
-		when(orderMapper.selectById(10L)).thenReturn(order);
+		when(orderMapper.selectForFulfillmentSubmit(10L, 3L)).thenReturn(order);
 		when(shopMapper.selectById(20L)).thenReturn(shop);
 		when(warehouseService.validateOperableOwnWarehouse(30L)).thenReturn(new Warehouse());
 		when(itemMapper.selectByOrderId(10L)).thenReturn(Collections.singletonList(orderItem));
@@ -110,5 +113,33 @@ class ErpOrderFulfillmentSubmissionTest {
 		ArgumentCaptor<ErpOrder> updateCaptor = ArgumentCaptor.forClass(ErpOrder.class);
 		verify(orderMapper).updateById(updateCaptor.capture());
 		assertThat(updateCaptor.getValue().getWarehouseFulfillmentStatus()).isEqualTo("WAITING_PICK");
+	}
+
+	@Test
+	void rejects_order_already_bound_to_new_or_legacy_outbound_flow() {
+		ErpOrderMapper orderMapper = mock(ErpOrderMapper.class);
+		ErpOrderFulfillmentSubmissionService service = new ErpOrderFulfillmentSubmissionService(orderMapper,
+				mock(ErpOrderItemMapper.class), mock(ShopMapper.class), mock(SkuMapper.class),
+				mock(WarehouseSkuCodeService.class), mock(WarehouseService.class),
+				mock(FulfillmentOrderService.class), mock(WmsLogisticsProductService.class),
+				new FulfillmentRecipientSnapshotService(new com.fasterxml.jackson.databind.ObjectMapper()));
+		ErpOrder order = new ErpOrder();
+		order.setId(11L);
+		order.setShopId(20L);
+		order.setFulfillmentType("FBS");
+		order.setFulfillmentOrderId(88L);
+		when(orderMapper.selectForFulfillmentSubmit(11L, 3L)).thenReturn(order);
+		TenantContext.setCurrentTenant(3L);
+		WmsTenantContext.setCurrentWmsTenant(4L);
+		SubmitFulfillmentDTO dto = new SubmitFulfillmentDTO();
+		dto.setErpOrderId(11L);
+
+		assertThatThrownBy(() -> service.submit(dto))
+				.hasMessageContaining("已经进入仓库履约或旧出库流程");
+
+		order.setFulfillmentOrderId(null);
+		order.setOutboundOrderId(99L);
+		assertThatThrownBy(() -> service.submit(dto))
+				.hasMessageContaining("已经进入仓库履约或旧出库流程");
 	}
 }

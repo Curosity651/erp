@@ -13,11 +13,12 @@ import com.erp.admin.platform.finance.model.vo.ContractRefundCheckVO;
 import com.erp.admin.system.model.vo.SysFileVO;
 import com.erp.admin.system.service.SysFileService;
 import com.erp.admin.tenant.service.TenantIdentityService;
+import com.erp.admin.tenant.mapper.SysTenantMapper;
+import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
-import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
 import com.erp.admin.wms.mapper.WarehouseMapper;
-import com.erp.admin.wms.model.entity.WmsPhysicalInventory;
 import com.erp.admin.wms.model.entity.WmsRackAssignment;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.common.core.exception.BusinessException;
@@ -32,6 +33,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -55,9 +57,10 @@ public class ServiceContractService {
     private final WmsRackAssignmentMapper rackAssignmentMapper;
     private final WarehouseMapper warehouseMapper;
     private final WmsLocationMapper locationMapper;
-    private final WmsPhysicalInventoryMapper physicalInventoryMapper;
+    private final WmsLocationInventoryMapper locationInventoryMapper;
     private final SysFileService sysFileService;
     private final TenantIdentityService tenantIdentityService;
+    private final SysTenantMapper tenantMapper;
 
     public List<WmsServiceContract> list() {
         assertPlatform();
@@ -77,6 +80,10 @@ public class ServiceContractService {
         assertPlatform();
         Assert.isTrue(dto.getEndDate().isAfter(dto.getStartDate()), "合同结束日期必须晚于开始日期");
         Assert.notNull(warehouseMapper.selectByIdForUpdate(dto.getWarehouseId()), "仓库不存在");
+        SysTenant operator = tenantMapper.selectById(dto.getWmsTenantId());
+        Assert.notNull(operator, "WMS服务商不存在");
+        Assert.isTrue("WMS_OPERATOR".equals(operator.getTenantType())
+                && Integer.valueOf(1).equals(operator.getStatus()), "只能为启用的WMS服务商创建合同");
 
         int rackCount = dto.getRackUnitCount() == null ? 3 : dto.getRackUnitCount();
         List<String> rackNos = dto.getRackNos() == null ? java.util.Collections.emptyList()
@@ -104,8 +111,12 @@ public class ServiceContractService {
         Assert.isTrue("application/pdf".equalsIgnoreCase(contractFile.getContentType()),
                 "服务合同仅支持PDF格式");
 
+        BigDecimal monthlyRent = nz(dto.getMonthlyRentPerUnit(), new BigDecimal("20000"));
+        Assert.isTrue(monthlyRent.compareTo(BigDecimal.ZERO) >= 0, "单架月租不能为负数");
         BigDecimal deposit = calculateWarehouseDeposit();
         BigDecimal subscription = calculateSubscriptionTotal(rackCount);
+        BigDecimal rackRentTotal = calculateRackRentTotal(rackCount, monthlyRent,
+                dto.getStartDate(), dto.getEndDate());
         BigDecimal refundableRate = nz(dto.getRefundableRate(), new BigDecimal("0.70"));
         Assert.isTrue(refundableRate.compareTo(BigDecimal.ZERO) >= 0
                 && refundableRate.compareTo(BigDecimal.ONE) <= 0, "可退比例必须在0到1之间");
@@ -119,13 +130,14 @@ public class ServiceContractService {
         contract.setStartDate(dto.getStartDate());
         contract.setEndDate(dto.getEndDate());
         contract.setRackUnitCount(rackCount);
-        contract.setMonthlyRentPerUnit(nz(dto.getMonthlyRentPerUnit(), new BigDecimal("20000")));
+        contract.setMonthlyRentPerUnit(monthlyRent);
+        contract.setRackRentTotal(rackRentTotal);
         contract.setWarehouseDeposit(deposit);
         contract.setSubscriptionTotal(subscription);
         contract.setRefundableRate(refundableRate);
         contract.setRefundableAmount(refundable);
         contract.setServiceAmount(service);
-        contract.setMonthlyServiceRecognition(service.divide(new BigDecimal("12"), 2, RoundingMode.HALF_UP));
+        contract.setMonthlyServiceRecognition(BigDecimal.ZERO);
         contract.setContractFileUrl(dto.getContractFileUrl());
         contract.setContractFileId(dto.getContractFileId());
         contract.setContractStatus("DRAFT");
@@ -151,6 +163,7 @@ public class ServiceContractService {
         Assert.isTrue("DRAFT".equals(contract.getContractStatus()), "只有草稿合同可以确认到账");
 
         bindContractRacks(contract);
+        receipt(contract, "RACK_RENT", contract.getRackRentTotal(), remark);
         receipt(contract, "WAREHOUSE_DEPOSIT", contract.getWarehouseDeposit(), remark);
         receipt(contract, "SUBSCRIPTION_REFUNDABLE", contract.getRefundableAmount(), remark);
         receipt(contract, "SUBSCRIPTION_SERVICE", contract.getServiceAmount(), remark);
@@ -173,24 +186,6 @@ public class ServiceContractService {
         contractMapper.updateById(contract);
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    public void recognize(Long contractId, String month) {
-        assertPlatform();
-        WmsServiceContract contract = contractMapper.selectByIdForUpdate(contractId);
-        Assert.notNull(contract, "合同不存在");
-        Assert.isTrue(PAID.equals(contract.getPaymentStatus())
-                && "ACTIVE".equals(contract.getContractStatus()), "合同尚未到账或已经结算");
-        YearMonth ym = YearMonth.parse(month);
-        Assert.isTrue(!ym.atEndOfMonth().isBefore(contract.getStartDate())
-                && !ym.atDay(1).isAfter(contract.getEndDate()), "账期不在合同有效期内");
-        String bizId = "CONTRACT:" + contractId + ":SERVICE:" + month;
-        if (exists(bizId)) {
-            return;
-        }
-        ledger(bizId, contract, "SUBSCRIPTION_SERVICE", "RECOGNITION", "IN",
-                contract.getMonthlyServiceRecognition(), month, "认购费不可退部分按月确认");
-    }
-
     public ContractRefundCheckVO refundCheck(Long contractId) {
         assertPlatform();
         WmsServiceContract contract = contractMapper.selectById(contractId);
@@ -200,12 +195,10 @@ public class ServiceContractService {
         LocalDate eligibleDate = contract.getEndDate().isAfter(minimumTermDate)
                 ? contract.getEndDate() : minimumTermDate;
         BigDecimal unpaid = nz(monthlyBillMapper.sumUnpaidAmount(contract.getWmsTenantId()), BigDecimal.ZERO);
-        List<WmsPhysicalInventory> stock = physicalInventoryMapper.selectList(
-                WrappersX.lambdaQueryX(WmsPhysicalInventory.class)
-                        .eq(WmsPhysicalInventory::getWmsTenantId, contract.getWmsTenantId())
-                        .eq(WmsPhysicalInventory::getWarehouseId, contract.getWarehouseId()));
-        long quantity = stock.stream().mapToLong(row -> value(row.getQuantity())).sum();
-        long reserved = stock.stream().mapToLong(row -> value(row.getReservedQty())).sum();
+        long quantity = nz(locationInventoryMapper.sumQuantityByProviderAndWarehouse(
+                contract.getWmsTenantId(), contract.getWarehouseId()), 0L);
+        long reserved = nz(locationInventoryMapper.sumReservedByProviderAndWarehouse(
+                contract.getWmsTenantId(), contract.getWarehouseId()), 0L);
 
         ContractRefundCheckVO result = new ContractRefundCheckVO();
         result.setContractId(contractId);
@@ -374,8 +367,15 @@ public class ServiceContractService {
         return SUBSCRIPTION_PER_RACK.multiply(BigDecimal.valueOf(rackCount));
     }
 
-    private int value(Integer number) {
-        return number == null ? 0 : number;
+    public static BigDecimal calculateRackRentTotal(int rackCount, BigDecimal monthlyRent,
+            LocalDate startDate, LocalDate endDate) {
+        long months = ChronoUnit.MONTHS.between(YearMonth.from(startDate), YearMonth.from(endDate)) + 1;
+        return monthlyRent.multiply(BigDecimal.valueOf(rackCount))
+                .multiply(BigDecimal.valueOf(months)).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private long nz(Long number, long fallback) {
+        return number == null ? fallback : number;
     }
 
     private void assertPlatform() {

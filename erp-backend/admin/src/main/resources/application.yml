@@ -154,10 +154,4 @@ inventory:
 # 货币汇率转换
 fixer:
   api:
-    keys:
-      - '3edac32c010fc7d03f0fff73bc42c62e'
-      - 'f68e8210a40aa84e79a94a8c4524131e'
-      - 'fad35173414eebd4fde14d735ec5dd63'
-      - '76c3839bfd00e2bc1ccbe52da7a73aa0'
-      - '16af88eecf19f332437f33bd47915b46'
-      - '95380f64066a6ba1abdcae807720e2a6'
+    keys: ${FIXER_API_KEYS:}

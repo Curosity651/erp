@@ -1,5 +1,5 @@
 import httpClient from '@/utils/axios'
-import type { ApiResult } from '@/api/types'
+import type { ApiResult, PageResult } from '@/api/types'
 import type {
   FulfillmentItem,
   FulfillmentOrder,
@@ -10,7 +10,9 @@ import type {
   PlatformLabelResult,
   ManualFulfillmentForm,
   FulfillmentShelfOrderQuery,
-  FulfillmentPickTaskQuery
+  FulfillmentPickTaskQuery,
+  FulfillmentShippingOrder,
+  FulfillmentShippingQuery
 } from './types'
 
 const baseUrl = '/wms/manual-fulfillment'
@@ -53,6 +55,10 @@ export function acceptFulfillmentOrders(ids: number[]) {
   return httpClient.post<ApiResult<FulfillmentDispatchResult>>(`${pickingBaseUrl}/accept`, ids)
 }
 
+export function redispatchFulfillmentOrders(ids: number[]) {
+  return httpClient.post<ApiResult<FulfillmentDispatchResult>>(`${pickingBaseUrl}/redispatch`, ids)
+}
+
 export function createFulfillmentPickTask(ids: number[]) {
   return httpClient.post<ApiResult<FulfillmentPickTask>>(`${pickingBaseUrl}/tasks`, {
     fulfillmentOrderIds: ids
@@ -82,20 +88,17 @@ export const markFulfillmentPickException = (
   taskId: number,
   orderId: number,
   dto: { exceptionType: string; reason: string; imageUrls?: string[] }
-) => httpClient.post<ApiResult<void>>(
-  `${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/exception`,
-  dto
-)
+) =>
+  httpClient.post<ApiResult<void>>(
+    `${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/exception`,
+    dto
+  )
 
 export const restoreFulfillmentPickException = (taskId: number, orderId: number) =>
-  httpClient.post<ApiResult<void>>(
-    `${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/restore`
-  )
+  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/restore`)
 
 export const cancelFulfillmentPickException = (taskId: number, orderId: number) =>
-  httpClient.post<ApiResult<void>>(
-    `${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/cancel`
-  )
+  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/cancel`)
 
 export function scanFulfillmentPickLine(dto: {
   taskId: number
@@ -107,10 +110,27 @@ export function scanFulfillmentPickLine(dto: {
   return httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/scan`, dto)
 }
 
+export const completeSimplifiedFulfillmentTask = (taskId: number, evidenceFileIds: number[]) =>
+  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${taskId}/simplified-complete`, {
+    evidenceFileIds
+  })
+
+export const startSimplifiedFulfillmentTask = (taskId: number) =>
+  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${taskId}/simplified-start`)
+
 const shippingBaseUrl = '/wms/fulfillment-shipping'
 
 export function listFulfillmentShippingOrders() {
   return httpClient.get<ApiResult<FulfillmentOrder[]>>(shippingBaseUrl)
+}
+
+export function pageFulfillmentShippingOrders(params: FulfillmentShippingQuery) {
+  return httpClient.get<ApiResult<PageResult<FulfillmentShippingOrder>>>(
+    `${shippingBaseUrl}/page`,
+    {
+      params
+    }
+  )
 }
 
 export function printFulfillmentLabel(id: number) {
@@ -121,20 +141,26 @@ export function verifyFulfillmentLabel(id: number, barcode: string) {
   return httpClient.post<ApiResult<void>>(`${shippingBaseUrl}/${id}/label/verify`, { barcode })
 }
 
-export function packFulfillment(id: number, dto: {
-  carrierCode?: string
-  carrierName: string
-  shippingMethod: string
-  trackingNo: string
-  packageWeightKg: number
-}) {
+export function packFulfillment(
+  id: number,
+  dto: {
+    carrierCode?: string
+    carrierName: string
+    shippingMethod: string
+    trackingNo: string
+    packageWeightKg: number
+  }
+) {
   return httpClient.post<ApiResult<void>>(`${shippingBaseUrl}/${id}/pack`, dto)
 }
 
-export function adjustFulfillmentLogisticsFee(id: number, dto: {
-  amount: number
-  adjustmentReason?: string
-}) {
+export function adjustFulfillmentLogisticsFee(
+  id: number,
+  dto: {
+    amount: number
+    adjustmentReason?: string
+  }
+) {
   return httpClient.post<ApiResult<void>>(`${shippingBaseUrl}/${id}/logistics-fee`, dto)
 }
 

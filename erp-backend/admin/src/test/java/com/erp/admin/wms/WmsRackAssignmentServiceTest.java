@@ -10,7 +10,7 @@ import com.erp.admin.platform.finance.mapper.WmsContractRackMapper;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.wms.mapper.WarehouseMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
-import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.vo.RackVO;
@@ -87,7 +87,7 @@ class WmsRackAssignmentServiceTest {
 	@Test
 	void preview_uses_actual_non_shared_logical_locations_without_legacy_generation_state() {
 		WmsLocationMapper locationMapper = mock(WmsLocationMapper.class);
-		WmsPhysicalInventoryMapper inventoryMapper = mock(WmsPhysicalInventoryMapper.class);
+		WmsLocationInventoryMapper inventoryMapper = mock(WmsLocationInventoryMapper.class);
 		WarehouseMapper warehouseMapper = mock(WarehouseMapper.class);
 		SysTenantMapper tenantMapper = mock(SysTenantMapper.class);
 		PrincipalAttributeAccessor principalAccessor = mock(PrincipalAttributeAccessor.class);

@@ -3,7 +3,7 @@
     <div class="page-head">
       <div>
         <h2 class="title">仓储概览</h2>
-        <div class="sub">查看名下海外仓的仓库、被分配的容量与占用（只读）</div>
+        <div class="sub">查看名下海外仓的分配容量与库存（在库件数包含公共暂存库存）</div>
       </div>
       <a-button size="small" :loading="loading" @click="loadSummary">刷新</a-button>
     </div>
@@ -14,7 +14,7 @@
         <div class="tile"><div class="k">我的仓库数</div><div class="v">{{ fmt(overview.warehouseCount) }}</div></div>
       </a-col>
       <a-col :xs="12" :sm="8" :md="4">
-        <div class="tile"><div class="k">分配货架数</div><div class="v">{{ fmt(overview.rackCount) }}</div></div>
+        <div class="tile"><div class="k">已分配排数</div><div class="v">{{ fmt(overview.rackCount) }}</div></div>
       </a-col>
       <a-col :xs="12" :sm="8" :md="4">
         <div class="tile"><div class="k">分配库位数</div><div class="v">{{ fmt(overview.allocatedLocations) }}</div></div>
@@ -90,7 +90,7 @@ const drawerRef = ref<InstanceType<typeof StorageWarehouseDrawer>>()
 
 const whColumns = [
   { title: '仓库 / 区域', key: 'name' },
-  { title: '分配货架', dataIndex: 'rackCount', align: 'right', width: 96 },
+  { title: '已分配排', dataIndex: 'rackCount', align: 'right', width: 96 },
   { title: '分配库位', dataIndex: 'allocatedLocations', align: 'right', width: 96 },
   { title: '已占用', dataIndex: 'occupiedLocations', align: 'right', width: 88 },
   { title: '占用率', key: 'occ', width: 200 },

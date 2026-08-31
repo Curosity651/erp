@@ -144,6 +144,26 @@ public class RegionSalesDataProvider {
         return map.getOrDefault(regionId + ":" + skuCode, 0);
     }
 
+	public Map<Long, Set<String>> getRegionSkuCodesWithSales(Set<Long> regionIds, String skuKeyword) {
+		Map<Long, List<String>> regionPlatformsMap = getRegionPlatformsMap(regionIds);
+		Set<String> platforms = regionPlatformsMap.values().stream().flatMap(Collection::stream)
+				.collect(Collectors.toSet());
+		if (platforms.isEmpty()) return Collections.emptyMap();
+		List<PlatformSkuSalesDTO> rows = erpOrderMapper.selectFbsSalesByPlatformsAndSkus(platforms,
+				Collections.emptySet(), LocalDateTime.now().minusDays(ForecastConstants.SALES_STAT_DAYS));
+		Map<Long, Set<String>> result = new HashMap<>();
+		for (Map.Entry<Long, List<String>> entry : regionPlatformsMap.entrySet()) {
+			Set<String> skus = rows.stream()
+					.filter(row -> entry.getValue().contains(row.getPlatform()))
+					.map(PlatformSkuSalesDTO::getSkuCode)
+					.filter(sku -> skuKeyword == null || skuKeyword.trim().isEmpty()
+							|| sku.toLowerCase().contains(skuKeyword.trim().toLowerCase()))
+					.collect(Collectors.toSet());
+			if (!skus.isEmpty()) result.put(entry.getKey(), skus);
+		}
+		return result;
+	}
+
     /**
      * 加权移动平均日均销量
      * <p>

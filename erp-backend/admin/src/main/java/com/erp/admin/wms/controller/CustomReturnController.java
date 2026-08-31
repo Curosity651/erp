@@ -70,7 +70,7 @@ public class CustomReturnController {
     @GetMapping("/detail")
     @PreAuthorize("@per.hasPermission('wms:custom-return:read')")
     public ApiResult<PurchaseInboundDetailVO> getDetail(@RequestParam Long id) {
-        return ApiResult.ok(this.purchaseInboundService.getDetail(id));
+        return ApiResult.ok(this.purchaseInboundService.getDetail(id, InboundSourceType.CUSTOM_RETURN));
     }
 
     /**
@@ -92,7 +92,7 @@ public class CustomReturnController {
     @PutMapping
     @PreAuthorize("@per.hasPermission('wms:custom-return:edit')")
     public ApiResult<Void> update(@Validated({Default.class, UpdateGroup.class}) @RequestBody CustomReturnDTO dto) {
-        this.purchaseInboundService.updateCustomReturnOrder(dto);
+        this.purchaseInboundFacade.updateCustomReturn(dto);
         return ApiResult.ok();
     }
 
@@ -104,7 +104,7 @@ public class CustomReturnController {
     @PatchMapping("/submit")
     @PreAuthorize("@per.hasPermission('wms:custom-return:edit')")
     public ApiResult<Void> submit(@RequestParam Long id) {
-        this.purchaseInboundFacade.submit(id);
+        this.purchaseInboundFacade.submit(id, InboundSourceType.CUSTOM_RETURN);
         return ApiResult.ok();
     }
 
@@ -116,7 +116,7 @@ public class CustomReturnController {
     @PatchMapping("/cancel")
     @PreAuthorize("@per.hasPermission('wms:custom-return:edit')")
     public ApiResult<Void> cancel(@RequestParam Long id) {
-        this.purchaseInboundFacade.cancel(id);
+        this.purchaseInboundFacade.cancel(id, InboundSourceType.CUSTOM_RETURN);
         return ApiResult.ok();
     }
 
@@ -128,7 +128,7 @@ public class CustomReturnController {
     @DeleteMapping
     @PreAuthorize("@per.hasPermission('wms:custom-return:del')")
     public ApiResult<Void> delete(@RequestBody List<Long> ids) {
-        this.purchaseInboundFacade.delete(ids);
+        this.purchaseInboundFacade.delete(ids, InboundSourceType.CUSTOM_RETURN);
         return ApiResult.ok();
     }
 

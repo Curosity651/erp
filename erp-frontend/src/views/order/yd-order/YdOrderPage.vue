@@ -149,6 +149,7 @@
   <OrderConfirmModal
     v-model:open="confirmModal.open"
     v-model:logistics-product-id="confirmModal.logisticsProductId"
+    v-model:wms-warehouse-id="confirmModal.wmsWarehouseId"
     :loading="confirmModal.loading"
     :eligible="confirmModal.eligible"
     :ineligible="confirmModal.ineligible"

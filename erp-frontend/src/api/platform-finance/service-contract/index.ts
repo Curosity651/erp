@@ -10,6 +10,7 @@ export interface ServiceContract {
   endDate: string
   rackUnitCount: number
   monthlyRentPerUnit: number
+  rackRentTotal: number
   warehouseDeposit: number
   subscriptionTotal: number
   refundableRate: number
@@ -83,12 +84,6 @@ export function listContractFunds(contractId: number) {
     '/platform-finance/service-contracts/funds',
     { params: { contractId } }
   )
-}
-
-export function recognizeContractService(contractId: number, month: string) {
-  return httpClient.post<ApiResult<void>>('/platform-finance/service-contracts/recognize', null, {
-    params: { contractId, month }
-  })
 }
 
 export function receiveServiceContract(contractId: number, remark?: string) {

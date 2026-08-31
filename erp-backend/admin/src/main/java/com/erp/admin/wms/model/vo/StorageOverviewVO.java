@@ -9,9 +9,8 @@ import lombok.Data;
 /**
  * 服务商「仓储概览」聚合视图。
  *
- * <p>作用域：全部按当前登录服务商 wms_tenant_id 限定；占用归属靠
- * physical_inventory → wms_location(取 rack_no) → wms_rack_assignment(active, wms_tenant_id=服务商) 的 JOIN，
- * 与 physical_inventory.wms_tenant_id 是否可靠无关。纯只读。
+ * <p>作用域：分配容量按有效排分配统计，库存按 location_inventory.wms_tenant_id 和货主父服务商统计。
+ * 公共暂存库存计入在库件数，但不计入分配容量。纯只读。
  *
  * @author erp
  */
@@ -21,7 +20,7 @@ public class StorageOverviewVO {
 	/** 我的仓库数（有 active 货架分配的仓）。 */
 	private Integer warehouseCount;
 
-	/** 分配货架数（active 分配记录数）。 */
+	/** 已分配排数（active 分配记录数）。 */
 	private Integer rackCount;
 
 	/** 分配库位数（分配货架下的库位总数）。 */
@@ -33,7 +32,7 @@ public class StorageOverviewVO {
 	/** 占用率（百分比，一位小数；分配库位为 0 时为 0）。 */
 	private BigDecimal occupancyRate;
 
-	/** 在库总件数（分配货架下的库存件数合计）。 */
+	/** 在库总件数（包含公共暂存库存）。 */
 	private Long onHandQty;
 
 	/** 仓库明细列表。 */

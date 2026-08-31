@@ -42,12 +42,12 @@
     size="middle"
   >
     <template #bodyCell="{ column, record }">
-      <template v-if="column.key === 'rackFee'">₽ {{ formatMoney(record.rackFee) }}</template>
+      <template v-if="column.key === 'rackFee'">{{ formatCurrency(record.rackFee, record.currency) }}</template>
       <template v-else-if="column.key === 'operationFee'">
-        ₽ {{ formatMoney(operationSubtotal(record)) }}
+        {{ formatCurrency(operationSubtotal(record), record.currency) }}
       </template>
       <template v-else-if="column.key === 'totalAmount'">
-        <span class="total">₽ {{ formatMoney(record.totalAmount) }}</span>
+        <span class="total">{{ formatCurrency(record.totalAmount, record.currency) }}</span>
       </template>
       <template v-else-if="column.key === 'status'">
         <a-tag :color="EXPENSE_STATUS_MAP[record.status]?.color">
@@ -67,7 +67,7 @@
         <a-tag :color="EXPENSE_STATUS_MAP[detail.status]?.color">
           {{ EXPENSE_STATUS_MAP[detail.status]?.label }}
         </a-tag>
-        <span class="bill-total">₽ {{ formatMoney(detail.totalAmount) }}</span>
+        <span class="bill-total">{{ formatCurrency(detail.totalAmount, detail.currency) }}</span>
       </div>
       <a-alert
         v-if="detail.status === 'DISPUTED' && detail.remark"
@@ -78,31 +78,31 @@
       />
       <a-descriptions :column="1" bordered size="small">
         <a-descriptions-item label="货架租金"
-          >₽ {{ formatMoney(detail.rackFee) }}</a-descriptions-item
+          >{{ formatCurrency(detail.rackFee, detail.currency) }}</a-descriptions-item
         >
         <a-descriptions-item label="入库费"
-          >₽ {{ formatMoney(detail.inboundFee) }}</a-descriptions-item
+          >{{ formatCurrency(detail.inboundFee, detail.currency) }}</a-descriptions-item
         >
         <a-descriptions-item label="出库费"
-          >₽ {{ formatMoney(detail.outboundFee) }}</a-descriptions-item
+          >{{ formatCurrency(detail.outboundFee, detail.currency) }}</a-descriptions-item
         >
         <a-descriptions-item label="配送费"
-          >₽ {{ formatMoney(detail.deliveryFee) }}</a-descriptions-item
+          >{{ formatCurrency(detail.deliveryFee, detail.currency) }}</a-descriptions-item
         >
         <a-descriptions-item label="退货费"
-          >₽ {{ formatMoney(detail.returnFee) }}</a-descriptions-item
+          >{{ formatCurrency(detail.returnFee, detail.currency) }}</a-descriptions-item
         >
         <a-descriptions-item label="验货费"
-          >₽ {{ formatMoney(detail.inspectionFee) }}</a-descriptions-item
+          >{{ formatCurrency(detail.inspectionFee, detail.currency) }}</a-descriptions-item
         >
         <a-descriptions-item label="司机费"
-          >₽ {{ formatMoney(detail.driverFee) }}</a-descriptions-item
+          >{{ formatCurrency(detail.driverFee, detail.currency) }}</a-descriptions-item
         >
         <a-descriptions-item label="操作费小计">
-          ₽ {{ formatMoney(operationSubtotal(detail)) }}
+          {{ formatCurrency(operationSubtotal(detail), detail.currency) }}
         </a-descriptions-item>
         <a-descriptions-item label="合计应付">
-          <span class="bill-total">₽ {{ formatMoney(detail.totalAmount) }}</span>
+          <span class="bill-total">{{ formatCurrency(detail.totalAmount, detail.currency) }}</span>
         </a-descriptions-item>
         <a-descriptions-item label="确认时间">{{
           detail.confirmedTime || '—'
@@ -129,6 +129,7 @@ import { isSuccess } from '@/api'
 import { pageExpenseBills, getExpenseBillDetail } from '@/api/wms/operator-finance'
 import type { ExpenseBillVO } from '@/api/wms/operator-finance/types'
 import { EXPENSE_STATUS_MAP } from '@/api/wms/operator-finance/types'
+import { formatCurrency } from '@/views/wms/finance-income/currency'
 
 const tableRef = ref<ProTableInstanceExpose>()
 const monthRange = ref<[string, string]>()
@@ -177,11 +178,6 @@ const operationSubtotal = (b: ExpenseBillVO) =>
   Number(b.returnFee ?? 0) +
   Number(b.inspectionFee ?? 0) +
   Number(b.driverFee ?? 0)
-
-const formatMoney = (v?: number) =>
-  v == null
-    ? '0.00'
-    : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 // 详情抽屉
 const detailOpen = ref(false)

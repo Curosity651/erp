@@ -17,28 +17,18 @@
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="8" :sm="12">
-          <a-form-item label="仓库类型">
-            <a-select
-              v-model:value="formModel.warehouseType"
-              placeholder="全部"
-              allow-clear
-              :options="warehouseTypeOptions"
-            />
+          <a-form-item label="库位编码">
+            <a-input v-model:value="formModel.locationCode" placeholder="请输入库位编码" allow-clear />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="8" :sm="12">
-          <a-form-item label="库存状态">
+          <a-form-item label="品质">
             <a-select
-              v-model:value="formModel.stockStatus"
+              v-model:value="formModel.quality"
               placeholder="全部"
               allow-clear
-              :options="stockStatusOptions"
+              :options="qualityOptions"
             />
-          </a-form-item>
-        </a-col>
-        <a-col :xl="6" :md="8" :sm="12">
-          <a-form-item :label-col="{ span: 0 }" :wrapper-col="{ span: 24 }">
-            <a-checkbox v-model:checked="formModel.hasDamaged">仅显示有残品</a-checkbox>
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="8" :sm="12">
@@ -54,7 +44,6 @@ import { reactive, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Form } from 'ant-design-vue'
 import WarehouseSelect from '@/components/Lov/WarehouseSelect.vue'
-import { warehouseTypeOptions, stockStatusOptions } from '../../shared/constants'
 import type { InventoryQO } from '@/api/wms/inventory/types'
 
 defineOptions({ name: 'InventoryDetailSearch' })
@@ -62,6 +51,10 @@ defineOptions({ name: 'InventoryDetailSearch' })
 const useForm = Form.useForm
 
 const labelCol = { md: { span: 6 } }
+const qualityOptions = [
+  { label: '良品', value: 'GOOD' },
+  { label: '不良品', value: 'DEFECTIVE' }
+]
 
 const props = withDefaults(
   defineProps<{
@@ -80,9 +73,8 @@ const formModel = reactive<InventoryQO>({
   regionId: undefined,
   skuCode: undefined,
   warehouseId: undefined,
-  warehouseType: undefined,
-  stockStatus: undefined,
-  hasDamaged: undefined
+  locationCode: undefined,
+  quality: undefined
 })
 
 const { resetFields } = useForm(formModel)

@@ -10,13 +10,14 @@
         <a-col :span="6">
           <a-form-item label="首付款比例">
             <a-input-number
-              v-model:value="formModel.prepayRatio"
+              :value="formModel.prepayRatio"
               :min="0"
               :max="100"
               :precision="2"
               :disabled="disabled || paymentTermsDisabled"
               addon-after="%"
               style="width: 100%"
+              @change="(value: number | null) => updatePaymentTerms({ prepayRatio: value ?? undefined })"
             />
           </a-form-item>
         </a-col>
@@ -24,13 +25,14 @@
         <a-col :span="6">
           <a-form-item label="尾款账期">
             <a-input-number
-              v-model:value="formModel.balancePaymentDays"
+              :value="formModel.balancePaymentDays"
               :min="0"
               :max="365"
               :precision="0"
               :disabled="disabled || paymentTermsDisabled"
               addon-after="天"
               style="width: 100%"
+              @change="(value: number | null) => updatePaymentTerms({ balancePaymentDays: value ?? undefined })"
             />
           </a-form-item>
         </a-col>
@@ -144,6 +146,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emits = defineEmits<{
   (e: 'update:paymentInfo', value: PaymentInfoDTO): void
+  (e: 'update:terms', value: { prepayRatio?: number; balancePaymentDays?: number }): void
 }>()
 
 // 金额符号（按币种）
@@ -156,6 +159,14 @@ const voucherAllowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'applicatio
 const updatePaymentInfo = (updates: Partial<PaymentInfoDTO>) => {
   emits('update:paymentInfo', {
     ...props.formModel.paymentInfo,
+    ...updates
+  })
+}
+
+const updatePaymentTerms = (updates: { prepayRatio?: number; balancePaymentDays?: number }) => {
+  emits('update:terms', {
+    prepayRatio: props.formModel.prepayRatio,
+    balancePaymentDays: props.formModel.balancePaymentDays,
     ...updates
   })
 }

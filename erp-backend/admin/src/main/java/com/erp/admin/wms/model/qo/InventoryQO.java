@@ -21,6 +21,12 @@ public class InventoryQO {
     @Schema(title = "SKU编码（模糊）")
     private String skuCode;
 
+    @Schema(title = "库位编码（模糊）")
+    private String locationCode;
+
+    @Schema(title = "品质（GOOD/DEFECTIVE）")
+    private String quality;
+
     @Schema(title = "仓库类型")
     private String warehouseType;
 

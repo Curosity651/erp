@@ -35,6 +35,11 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
 public interface ErpOrderMapper extends ExtendMapper<ErpOrder> {
 
 	@InterceptorIgnore(tenantLine = "true")
+	@Select("SELECT * FROM erp_order WHERE id = #{orderId} AND tenant_id = #{erpTenantId} FOR UPDATE")
+	ErpOrder selectForFulfillmentSubmit(@Param("orderId") Long orderId,
+			@Param("erpTenantId") Long erpTenantId);
+
+	@InterceptorIgnore(tenantLine = "true")
 	@Update("UPDATE erp_order SET warehouse_fulfillment_status = #{status}, "
 			+ "fulfillment_order_id = COALESCE(#{fulfillmentOrderId}, fulfillment_order_id), update_time = NOW() "
 			+ "WHERE id = #{orderId} AND tenant_id = #{erpTenantId}")
@@ -147,6 +152,8 @@ public interface ErpOrderMapper extends ExtendMapper<ErpOrder> {
 				.eq(ErpOrder::getPlatform, platform)
 				.eq(ErpOrder::getErpStatus, ErpOrderStatusEnum.SHIPPED)
 				.eq(ErpOrder::getOutboundStatus, OutboundStatus.NONE.name())
+				.isNull(ErpOrder::getFulfillmentOrderId)
+				.isNull(ErpOrder::getOutboundOrderId)
 				.eq(ErpOrder::getFulfillmentType, "fbs")
 				.orderByDesc(ErpOrder::getPlatformCreatedAt, ErpOrder::getId);
 		return this.selectList(wrapper);

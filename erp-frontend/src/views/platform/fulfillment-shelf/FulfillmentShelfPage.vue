@@ -60,9 +60,11 @@
         v-if="lastFailures.length"
         type="warning"
         show-icon
+        closable
         :message="`本次有 ${lastFailures.length} 个订单未处理成功`"
         :description="lastFailures.join('；')"
         class="result-alert"
+        @close="clearFailures"
       />
       <a-table
         row-key="id"
@@ -91,6 +93,15 @@
           <template v-else-if="column.key === 'warehouse'">
             {{ warehouseNameMap.get(record.warehouseId) || `仓库 #${record.warehouseId}` }}
           </template>
+          <template v-else-if="column.key === 'dispatch'">
+            <template v-if="canRedispatch(record)">
+              <a-button type="link" size="small" :loading="retryingId === record.id" @click="handleRedispatch(record)">
+                重新派单
+              </a-button>
+              <div v-if="record.dispatchError" class="dispatch-error">{{ record.dispatchError }}</div>
+            </template>
+            <span v-else>{{ record.dispatchStatus === 'SUCCEEDED' ? '已派单' : '-' }}</span>
+          </template>
         </template>
       </a-table>
     </a-card>
@@ -98,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import { listAllErpTenants } from '@/api/tenant'
@@ -107,18 +118,26 @@ import { getWarehouseOptions } from '@/api/wms/warehouse'
 import type { WarehouseOptionVO } from '@/api/wms/warehouse/types'
 import {
   acceptFulfillmentOrders,
-  listFulfillmentShelfOrders
+  listFulfillmentShelfOrders,
+  redispatchFulfillmentOrders
 } from '@/api/wms/fulfillment'
 import type { FulfillmentOrder, FulfillmentShelfOrderQuery } from '@/api/wms/fulfillment/types'
 import { fulfillmentStatusText } from '@/api/wms/fulfillment/types'
 import { SearchActions } from '@/components/Search'
 import { isShelfOrderSelectable } from '../fulfillment-workbench/workbench-flow'
+import { createFailureAlertState } from './failure-alert'
 
 defineOptions({ name: 'FulfillmentShelfPage' })
 const loading = ref(false)
+const retryingId = ref<number>()
 const orders = ref<FulfillmentOrder[]>([])
 const selectedIds = ref<number[]>([])
-const lastFailures = ref<string[]>([])
+const {
+  failures: lastFailures,
+  show: showFailures,
+  clear: clearFailures,
+  dispose: disposeFailureAlert
+} = createFailureAlertState()
 const owners = ref<TenantBrief[]>([])
 const warehouses = ref<WarehouseOptionVO[]>([])
 const logisticsProductOptions = ref<Array<{ label: string; value: number }>>([])
@@ -152,6 +171,7 @@ const columns = [
   { title: '所属仓库', key: 'warehouse', width: 150 },
   { title: '收件人', dataIndex: 'recipientName', width: 130 },
   { title: '状态', key: 'status', width: 130 },
+  { title: '派单', key: 'dispatch', width: 180 },
   { title: '创建时间', dataIndex: 'createTime', width: 180, fixed: 'right' as const }
 ]
 const rowSelection = computed(() => ({
@@ -224,7 +244,7 @@ const handleAccept = async () => {
   if (!ids.length) return message.warning('请选择待下架订单')
   const result = await acceptFulfillmentOrders(ids)
   if (isSuccess(result)) {
-    lastFailures.value = Object.entries(result.data?.failures || {}).map(([id, reason]) => `${id}: ${reason}`)
+    showFailures(Object.entries(result.data?.failures || {}).map(([id, reason]) => `${id}: ${reason}`))
     const tasks = result.data?.tasks || []
     if (tasks.length) {
       Modal.info({
@@ -241,11 +261,27 @@ const handleAccept = async () => {
     await load()
   }
 }
+const canRedispatch = (record: FulfillmentOrder) =>
+  record.fulfillmentStatus === 'WAITING_PICK' && record.dispatchStatus !== 'SUCCEEDED'
+const handleRedispatch = async (record: FulfillmentOrder) => {
+  retryingId.value = record.id
+  try {
+    const result = await redispatchFulfillmentOrders([record.id])
+    if (!isSuccess(result)) return
+    const failure = result.data?.failures?.[String(record.id)]
+    if (failure) message.error(failure)
+    else message.success('拣货任务已重新创建')
+    await load()
+  } finally {
+    retryingId.value = undefined
+  }
+}
 onMounted(() => {
   loadOwners()
   loadWarehouses()
   load()
 })
+onBeforeUnmount(disposeFailureAlert)
 </script>
 
 <style scoped>
@@ -291,6 +327,12 @@ onMounted(() => {
 .secondary-text {
   color: rgba(0, 0, 0, 0.45);
   font-size: 12px;
+}
+.dispatch-error {
+  max-width: 160px;
+  color: #cf1322;
+  font-size: 12px;
+  white-space: normal;
 }
 :global(.dispatch-summary) {
   display: grid;

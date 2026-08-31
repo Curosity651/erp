@@ -2,11 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.erp.admin.wms.mapper.WmsStorageOverviewMapper">
 
-    <!--
-      归属口径：占用 = physical_inventory 落在「本服务商 active 货架分配」的库位上。
-      physical → wms_location(取 rack_no) → wms_rack_assignment(wms_tenant_id=本服务商, active)。
-      不依赖 physical_inventory.wms_tenant_id（历史可能为 0）。全部只读。
-    -->
+    <!-- 容量按有效分配排统计；库存按新版库位库存内核的服务商和货主归属统计。 -->
 
     <select id="listWarehouses" resultType="com.erp.admin.wms.model.vo.StorageOverviewVO$WarehouseRow">
         WITH ra AS (
@@ -16,31 +12,51 @@
               AND effective_from &lt;= #{today}
               AND (effective_to IS NULL OR effective_to &gt;= #{today})
         ),
-        alloc AS (
-            SELECT l.warehouse_id, l.location_code
+        allocated_locations AS (
+            SELECT l.id AS location_id, l.warehouse_id, l.location_code
             FROM wms_location l
             JOIN ra ON ra.warehouse_id = l.warehouse_id AND ra.rack_no = l.rack_no
-            WHERE l.deleted = 0
+            WHERE l.deleted = 0 AND COALESCE(l.public_shared, 0) = 0
         ),
-        occ AS (
-            SELECT a.warehouse_id, a.location_code, SUM(pi.quantity) AS qty
-            FROM alloc a
-            JOIN wms_physical_inventory pi
-              ON pi.warehouse_id = a.warehouse_id AND pi.location_code = a.location_code AND pi.quantity &gt; 0
+        assigned_occupancy AS (
+            SELECT a.warehouse_id, a.location_code
+            FROM allocated_locations a
+            JOIN wms_location_inventory li
+              ON li.warehouse_id = a.warehouse_id AND li.location_id = a.location_id
+             AND li.quantity &gt; 0 AND li.deleted = 0
+             AND li.wms_tenant_id = #{wmsTenantId}
+            JOIN sys_tenant t ON t.id = li.erp_tenant_id AND t.deleted = 0
+             AND t.parent_wms_tenant_id = #{wmsTenantId}
             GROUP BY a.warehouse_id, a.location_code
+        ),
+        owned_inventory AS (
+            SELECT li.warehouse_id,
+                   COUNT(DISTINCT li.location_id) AS occupiedLocations,
+                   COALESCE(SUM(li.quantity), 0) AS onHandQty
+            FROM wms_location_inventory li
+            JOIN sys_tenant t ON t.id = li.erp_tenant_id AND t.deleted = 0
+             AND t.parent_wms_tenant_id = #{wmsTenantId}
+            WHERE li.wms_tenant_id = #{wmsTenantId}
+              AND li.quantity &gt; 0
+              AND li.deleted = 0
+            GROUP BY li.warehouse_id
         )
         SELECT w.id                                                        AS warehouseId,
                w.warehouse_name                                            AS warehouseName,
                w.warehouse_code                                            AS warehouseCode,
                reg.region_name                                             AS regionName,
                (SELECT COUNT(*) FROM ra WHERE ra.warehouse_id = w.id)      AS rackCount,
-               (SELECT COUNT(*) FROM alloc a WHERE a.warehouse_id = w.id)  AS allocatedLocations,
-               (SELECT COUNT(*) FROM occ o WHERE o.warehouse_id = w.id)    AS occupiedLocations,
-               (SELECT COALESCE(SUM(o.qty), 0) FROM occ o WHERE o.warehouse_id = w.id) AS onHandQty
+               (SELECT COUNT(*) FROM allocated_locations a WHERE a.warehouse_id = w.id) AS allocatedLocations,
+               (SELECT COUNT(*) FROM assigned_occupancy o WHERE o.warehouse_id = w.id) AS occupiedLocations,
+               COALESCE((SELECT o.onHandQty FROM owned_inventory o WHERE o.warehouse_id = w.id), 0) AS onHandQty
         FROM wms_warehouse w
         LEFT JOIN wms_region reg ON reg.id = w.region_id
         WHERE w.deleted = 0
-          AND w.id IN (SELECT warehouse_id FROM ra)
+          AND w.id IN (
+              SELECT warehouse_id FROM ra
+              UNION
+              SELECT warehouse_id FROM owned_inventory
+          )
         ORDER BY w.id
     </select>
 
@@ -49,12 +65,18 @@
                a.monthly_fee   AS monthlyFee,
                a.effective_to  AS effectiveTo,
                (SELECT COUNT(*) FROM wms_location l
-                  WHERE l.warehouse_id = a.warehouse_id AND l.rack_no = a.rack_no AND l.deleted = 0) AS locationCount,
-               (SELECT COUNT(DISTINCT pi.location_code)
-                  FROM wms_physical_inventory pi
-                  JOIN wms_location l2 ON l2.warehouse_id = pi.warehouse_id
-                       AND l2.location_code = pi.location_code AND l2.deleted = 0
-                  WHERE pi.warehouse_id = a.warehouse_id AND l2.rack_no = a.rack_no AND pi.quantity &gt; 0) AS occupiedCount
+                  WHERE l.warehouse_id = a.warehouse_id AND l.rack_no = a.rack_no AND l.deleted = 0
+                    AND COALESCE(l.public_shared, 0) = 0) AS locationCount,
+               (SELECT COUNT(DISTINCT li.location_id)
+                  FROM wms_location_inventory li
+                  JOIN wms_location l2 ON l2.id = li.location_id
+                       AND l2.warehouse_id = li.warehouse_id AND l2.deleted = 0
+                       AND COALESCE(l2.public_shared, 0) = 0
+                  JOIN sys_tenant t ON t.id = li.erp_tenant_id AND t.deleted = 0
+                       AND t.parent_wms_tenant_id = #{wmsTenantId}
+                  WHERE li.warehouse_id = a.warehouse_id AND l2.rack_no = a.rack_no
+                    AND li.wms_tenant_id = #{wmsTenantId}
+                    AND li.quantity &gt; 0 AND li.deleted = 0) AS occupiedCount
         FROM wms_rack_assignment a
         WHERE a.wms_tenant_id = #{wmsTenantId}
           AND a.warehouse_id = #{warehouseId}
@@ -64,21 +86,21 @@
     </select>
 
     <select id="listOwners" resultType="com.erp.admin.wms.model.vo.StorageOverviewVO$OwnerRow">
-        SELECT pi.erp_tenant_id                    AS erpTenantId,
+        SELECT li.erp_tenant_id                    AS erpTenantId,
                t.tenant_name                       AS ownerName,
-               COUNT(DISTINCT pi.location_code)     AS occupiedLocations,
-               COALESCE(SUM(pi.quantity), 0)        AS onHandQty,
-               COUNT(DISTINCT pi.sku_code)          AS skuCount
-        FROM wms_physical_inventory pi
-        JOIN wms_location l ON l.warehouse_id = pi.warehouse_id
-             AND l.location_code = pi.location_code AND l.deleted = 0
-        JOIN wms_rack_assignment a ON a.warehouse_id = pi.warehouse_id AND a.rack_no = l.rack_no
-             AND a.wms_tenant_id = #{wmsTenantId}
-             AND a.effective_from &lt;= #{today}
-             AND (a.effective_to IS NULL OR a.effective_to &gt;= #{today})
-        LEFT JOIN sys_tenant t ON t.id = pi.erp_tenant_id
-        WHERE pi.warehouse_id = #{warehouseId} AND pi.quantity &gt; 0
-        GROUP BY pi.erp_tenant_id, t.tenant_name
+               COUNT(DISTINCT li.location_id)       AS occupiedLocations,
+               COALESCE(SUM(li.quantity), 0)        AS onHandQty,
+               COUNT(DISTINCT li.sku_code)          AS skuCount
+        FROM wms_location_inventory li
+        JOIN wms_location l ON l.id = li.location_id
+             AND l.warehouse_id = li.warehouse_id AND l.deleted = 0
+        JOIN sys_tenant t ON t.id = li.erp_tenant_id AND t.deleted = 0
+             AND t.parent_wms_tenant_id = #{wmsTenantId}
+        WHERE li.warehouse_id = #{warehouseId}
+          AND li.wms_tenant_id = #{wmsTenantId}
+          AND li.quantity &gt; 0
+          AND li.deleted = 0
+        GROUP BY li.erp_tenant_id, t.tenant_name
         ORDER BY onHandQty DESC
     </select>
 

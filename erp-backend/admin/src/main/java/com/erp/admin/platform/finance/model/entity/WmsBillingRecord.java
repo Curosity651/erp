@@ -24,6 +24,8 @@ public class WmsBillingRecord {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long monthlyBillId;
+
     @Schema(title = "业务幂等键")
     private String bizId;
 
@@ -70,6 +72,10 @@ public class WmsBillingRecord {
     private String sourceRef;
 
     private String remark;
+
+    private Long operatorId;
+
+    private String operatorName;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

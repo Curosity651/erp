@@ -4,6 +4,7 @@ import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.DecimalMin;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,6 +22,7 @@ public class ServiceContractCreateDTO {
     @NotNull
     private LocalDate endDate;
     private Integer rackUnitCount;
+    @DecimalMin(value = "0.00", message = "单架月租不能为负数")
     private BigDecimal monthlyRentPerUnit;
     private BigDecimal warehouseDeposit;
     private BigDecimal subscriptionTotal;

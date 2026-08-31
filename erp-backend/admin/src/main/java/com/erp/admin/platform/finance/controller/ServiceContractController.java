@@ -45,12 +45,6 @@ public class ServiceContractController {
         return ApiResult.ok(service.create(dto));
     }
 
-    @PostMapping("/recognize")
-    public ApiResult<Void> recognize(@RequestParam Long contractId, @RequestParam String month) {
-        service.recognize(contractId, month);
-        return ApiResult.ok();
-    }
-
     @PostMapping("/receive")
     @Operation(summary = "确认合同资金到账并激活货架")
     public ApiResult<WmsServiceContract> receive(@RequestParam Long contractId,

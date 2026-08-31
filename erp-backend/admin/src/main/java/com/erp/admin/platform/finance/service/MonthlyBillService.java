@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.erp.admin.platform.finance.mapper.WmsBillingRecordMapper;
 import com.erp.admin.platform.finance.mapper.WmsMonthlyBillMapper;
 import com.erp.admin.platform.finance.model.dto.GenerateBillDTO;
+import com.erp.admin.platform.finance.model.dto.BillAdjustmentDTO;
 import com.erp.admin.platform.finance.model.dto.ManualBillingDTO;
 import com.erp.admin.platform.finance.model.entity.WmsBillingRecord;
 import com.erp.admin.platform.finance.model.entity.WmsFeeRateCard;
@@ -20,10 +21,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.core.exception.BusinessException;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.ballcat.mybatisplus.toolkit.PageUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -61,6 +64,8 @@ public class MonthlyBillService {
 
     private final TenantIdentityService tenantIdentityService;
 
+    private final PrincipalAttributeAccessor principalAttributeAccessor;
+
     // ==================== 查询 ====================
 
     public PageResult<MonthlyBillVO> page(PageParam pageParam, MonthlyBillQO qo) {
@@ -74,7 +79,7 @@ public class MonthlyBillService {
         assertPlatform();
         MonthlyBillVO vo = monthlyBillMapper.selectVoById(id);
         if (vo != null) {
-            vo.setBillingRecords(billingRecordMapper.listPostedByBill(vo.getWmsTenantId(), vo.getBillMonth()));
+            vo.setBillingRecords(billingRecordMapper.listPostedByBill(vo.getId()));
         }
         Assert.notNull(vo, "账单不存在");
         return vo;
@@ -98,6 +103,19 @@ public class MonthlyBillService {
         return record;
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public MonthlyBillVO addAdjustment(Long id, BillAdjustmentDTO dto) {
+        assertPlatform();
+        WmsMonthlyBill bill = load(id);
+        if (!DRAFT.equals(bill.getStatus()) && !DISPUTED.equals(bill.getStatus())) {
+            throw new BusinessException(400, "账单已复核，不能再调整费用");
+        }
+        warehouseBillingService.recordBillAdjustment(bill, dto,
+                principalAttributeAccessor.getUserId(), username());
+        recalculateBill(bill);
+        return getDetail(id);
+    }
+
     // ==================== 生成 / 重算 ====================
 
     @Transactional(rollbackFor = Exception.class)
@@ -111,7 +129,6 @@ public class MonthlyBillService {
     /** 供 /generate 与 月初 cron 复用的核心生成逻辑。 */
     public GenerateBillResultVO generateForMonth(String billMonth, Long wmsTenantId) {
         YearMonth ym = YearMonth.parse(billMonth);
-        LocalDate monthStart = ym.atDay(1);
         LocalDate monthEnd = ym.atEndOfMonth();
 
         List<Long> targets = wmsTenantId != null ? java.util.Collections.singletonList(wmsTenantId)
@@ -125,30 +142,26 @@ public class MonthlyBillService {
                 result.setSkipped(result.getSkipped() + 1);
                 continue;
             }
-            BigDecimal rackFee = nz(monthlyBillMapper.sumRackFee(tid, monthStart, monthEnd));
-            List<FeeAmountRow> rows = monthlyBillMapper.sumFeeByType(tid, billMonth);
-            BigDecimal discount = monthlyBillMapper.selectDiscountPct(tid);
-
             WmsMonthlyBill bill = existing != null ? existing : new WmsMonthlyBill();
             bill.setBillMonth(billMonth);
             bill.setWmsTenantId(tid);
-            applyFees(bill, rackFee, rows, discount);
+            bill.setCurrency("CNY");
             bill.setStatus(DRAFT);
 
-            if (existing != null) {
-                monthlyBillMapper.updateById(bill);
-                result.setRecalculated(result.getRecalculated() + 1);
-            } else {
+            if (existing == null) {
                 monthlyBillMapper.insert(bill);
                 result.setCreated(result.getCreated() + 1);
+            } else {
+                result.setRecalculated(result.getRecalculated() + 1);
             }
+            billingRecordMapper.bindPostedRecordsToBill(bill.getId(), tid, billMonth, "CNY");
+            recalculateBill(bill);
         }
         return result;
     }
 
     /**
-     * 计费落账（纯逻辑，便于单测）：货架租金原值；6 项操作费按类型归位并叠加折扣；合计=租金+6项。
-     * 折扣仅作用于操作费（货架租金为合同月租，不打折）。
+     * 月度服务费落账：6项服务费按类型归位并叠加折扣，合同租赁费不进入月账单。
      */
     public static void applyFees(WmsMonthlyBill bill, BigDecimal rackFee, List<FeeAmountRow> rows,
             BigDecimal discountPct) {
@@ -157,7 +170,9 @@ public class MonthlyBillService {
         BigDecimal ret = BigDecimal.ZERO, inspection = BigDecimal.ZERO, driver = BigDecimal.ZERO;
         if (rows != null) {
             for (FeeAmountRow r : rows) {
-                BigDecimal amt = discounted(nz(r.getAmount()), factor);
+                BigDecimal amt = discounted(nz(r.getAmount()), factor)
+                        .add(nz(r.getAdjustmentAmount()))
+                        .setScale(2, RoundingMode.HALF_UP);
                 switch (r.getFeeType() == null ? "" : r.getFeeType()) {
                     case "INBOUND": inbound = inbound.add(amt); break;
                     case "OUTBOUND": outbound = outbound.add(amt); break;
@@ -169,7 +184,7 @@ public class MonthlyBillService {
                 }
             }
         }
-        BigDecimal rack = nz(rackFee).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal rack = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         bill.setRackFee(rack);
         bill.setInboundFee(inbound);
         bill.setOutboundFee(outbound);
@@ -189,10 +204,13 @@ public class MonthlyBillService {
         if (!DRAFT.equals(bill.getStatus()) && !DISPUTED.equals(bill.getStatus())) {
             throw new BusinessException(400, "仅草稿或争议账单可确认");
         }
-        bill.setStatus(CONFIRMED);
-        bill.setConfirmedTime(LocalDateTime.now());
-        bill.setRemark(null);
-        monthlyBillMapper.updateById(bill);
+        if (!YearMonth.parse(bill.getBillMonth()).isBefore(YearMonth.now())) {
+            throw new BusinessException(400, "账期尚未结束，不能确认账单");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (monthlyBillMapper.confirmIfPending(id, principalAttributeAccessor.getUserId(), username(), now) != 1) {
+            throw new BusinessException(409, "账单状态已变化，请刷新后重试");
+        }
         return monthlyBillMapper.selectVoById(id);
     }
 
@@ -213,10 +231,9 @@ public class MonthlyBillService {
         if (!CONFIRMED.equals(bill.getStatus())) {
             throw new BusinessException(400, "仅已确认账单可标记付款");
         }
-        bill.setStatus(PAID);
-        bill.setPaidTime(LocalDateTime.now());
-        bill.setPaymentVoucherFileId(paymentVoucherFileId);
-        monthlyBillMapper.updateById(bill);
+        if (monthlyBillMapper.payIfConfirmed(id, paymentVoucherFileId, LocalDateTime.now()) != 1) {
+            throw new BusinessException(409, "账单状态已变化，请刷新后重试");
+        }
         return monthlyBillMapper.selectVoById(id);
     }
 
@@ -227,9 +244,9 @@ public class MonthlyBillService {
         if (!CONFIRMED.equals(bill.getStatus())) {
             throw new BusinessException(400, "仅已确认账单可标记争议");
         }
-        bill.setStatus(DISPUTED);
-        bill.setRemark(remark);
-        monthlyBillMapper.updateById(bill);
+        if (monthlyBillMapper.disputeIfConfirmed(id, remark) != 1) {
+            throw new BusinessException(409, "账单状态已变化，请刷新后重试");
+        }
         return monthlyBillMapper.selectVoById(id);
     }
 
@@ -239,6 +256,19 @@ public class MonthlyBillService {
         WmsMonthlyBill bill = monthlyBillMapper.selectById(id);
         Assert.notNull(bill, "账单不存在");
         return bill;
+    }
+
+    private void recalculateBill(WmsMonthlyBill bill) {
+        List<FeeAmountRow> rows = monthlyBillMapper.sumFeeByBill(bill.getId());
+        BigDecimal discount = monthlyBillMapper.selectDiscountPct(bill.getWmsTenantId(),
+                YearMonth.parse(bill.getBillMonth()).atEndOfMonth());
+        applyFees(bill, BigDecimal.ZERO, rows, discount);
+        monthlyBillMapper.updateById(bill);
+    }
+
+    private String username() {
+        String name = principalAttributeAccessor.getUsername();
+        return StringUtils.hasText(name) ? name : "未知用户";
     }
 
     private static BigDecimal discounted(BigDecimal base, BigDecimal factor) {

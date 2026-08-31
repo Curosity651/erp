@@ -26,11 +26,18 @@ public class FulfillmentReservationService {
 			request.setSkuCode(item.getSkuCode());
 			request.setQuality(item.getQuality());
 			request.setQuantity(item.getQuantity());
-			inventoryService.reserve(request);
+			inventoryService.reserve(request, com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+					.eventType(com.erp.admin.wms.model.enums.InventoryEventType.RESERVE)
+					.sourceType("FULFILLMENT").sourceId(fulfillmentId)
+					.sourceNo(command.getSourceOrderNo()).reason("销售订单库存预占")
+					.idempotencyKey("fulfillment-reserve:" + fulfillmentId + ":" + item.getId()).build());
 		}
 	}
 
 	public void release(Long fulfillmentId) {
-		inventoryService.release(fulfillmentId);
+		inventoryService.release(fulfillmentId, com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+				.eventType(com.erp.admin.wms.model.enums.InventoryEventType.RELEASE)
+				.sourceType("FULFILLMENT").sourceId(fulfillmentId).reason("取消履约释放库存")
+				.idempotencyKey("fulfillment-release:" + fulfillmentId).build());
 	}
 }

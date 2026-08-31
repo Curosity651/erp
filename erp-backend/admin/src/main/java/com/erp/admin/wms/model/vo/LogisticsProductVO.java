@@ -36,6 +36,15 @@ public class LogisticsProductVO {
     @Schema(title = "状态 1启用/0停用")
     private Integer status;
 
+    @Schema(title = "是否已经产生业务订单")
+    private Boolean used;
+
+    @Schema(title = "引用该产品的店铺数量")
+    private Long shopReferenceCount;
+
+    @Schema(title = "引用该产品的订单数量（含历史订单）")
+    private Long orderReferenceCount;
+
     private String remark;
 
     private String createTime;

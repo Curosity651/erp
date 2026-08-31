@@ -8,6 +8,7 @@ import com.erp.admin.wms.model.entity.PurchaseInboundOrderItem;
 import com.erp.admin.wms.model.entity.ShippingOrder;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.enums.PurchaseInboundStatus;
+import com.erp.admin.wms.model.enums.InboundSourceType;
 import com.erp.admin.wms.model.enums.ShippingStatus;
 import com.erp.admin.wms.model.enums.WarehouseTypeEnum;
 import com.erp.admin.wms.service.*;
@@ -127,16 +128,39 @@ public class PurchaseInboundFacade {
         return orderId;
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public void updatePurchase(PurchaseInboundDTO dto) {
+        ShippingOrder shippingOrder = shippingOrderService.getByIdOrThrow(dto.getShippingOrderId());
+        Assert.isTrue(!ShippingStatus.PENDING.name().equals(shippingOrder.getShippingStatus()),
+                "物流单尚未发货，不能编辑入库单");
+        validateWarehouseInRegion(dto.getWarehouseId(), shippingOrder.getTargetRegionId());
+        purchaseInboundService.update(dto);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void updateManual(ManualInboundDTO dto) {
+        validateWarehouseIsOwn(dto.getWarehouseId());
+        purchaseInboundService.updateManualOrder(dto);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void updateCustomReturn(CustomReturnDTO dto) {
+        validateWarehouseIsOwn(dto.getWarehouseId());
+        purchaseInboundService.updateCustomReturnOrder(dto);
+    }
+
     /**
      * 提交入库单（草稿 → 已提交），提交后流转给平台收货/上架。
      *
      * @param id 入库单ID
      */
     @Transactional(rollbackFor = Exception.class)
-    public void submit(Long id) {
-        PurchaseInboundOrder order = purchaseInboundService.getByIdOrThrow(id);
+    public void submit(Long id, InboundSourceType expectedSourceType) {
+        PurchaseInboundOrder order = purchaseInboundService.getByIdOrThrow(id, expectedSourceType);
         PurchaseInboundStatus status = PurchaseInboundStatus.valueOf(order.getOrderStatus());
         Assert.isTrue(status == PurchaseInboundStatus.DRAFT, "只有草稿状态的入库单可以提交");
+
+        validateForSubmission(order);
 
         List<PurchaseInboundOrderItem> items = purchaseInboundItemService.getByInboundOrderId(id);
         Assert.notEmpty(items, "入库明细不能为空");
@@ -155,8 +179,8 @@ public class PurchaseInboundFacade {
      * @param id 入库单ID
      */
     @Transactional(rollbackFor = Exception.class)
-    public void cancel(Long id) {
-        PurchaseInboundOrder order = purchaseInboundService.getByIdOrThrow(id);
+    public void cancel(Long id, InboundSourceType expectedSourceType) {
+        PurchaseInboundOrder order = purchaseInboundService.getByIdOrThrow(id, expectedSourceType);
         PurchaseInboundStatus status = PurchaseInboundStatus.valueOf(order.getOrderStatus());
         Assert.isTrue(status == PurchaseInboundStatus.DRAFT, "只有草稿状态的入库单可以取消");
         purchaseInboundService.updateToCancelled(id);
@@ -169,15 +193,28 @@ public class PurchaseInboundFacade {
      * @param ids 入库单ID列表
      */
     @Transactional(rollbackFor = Exception.class)
-    public void delete(List<Long> ids) {
+    public void delete(List<Long> ids, InboundSourceType expectedSourceType) {
         for (Long id : ids) {
-            PurchaseInboundOrder order = purchaseInboundService.getByIdOrThrow(id);
+            PurchaseInboundOrder order = purchaseInboundService.getByIdOrThrow(id, expectedSourceType);
             PurchaseInboundStatus status = PurchaseInboundStatus.valueOf(order.getOrderStatus());
             Assert.isTrue(status == PurchaseInboundStatus.DRAFT || status == PurchaseInboundStatus.CANCELLED,
                     "只有草稿或已取消状态的入库单可以删除");
             purchaseInboundService.deleteOrder(id);
             log.info("Deleted inbound order via facade, id={}", id);
         }
+    }
+
+    private void validateForSubmission(PurchaseInboundOrder order) {
+        InboundSourceType sourceType = InboundSourceType.valueOf(order.getSourceType());
+        if (sourceType == InboundSourceType.PURCHASE) {
+            Assert.notNull(order.getShippingOrderId(), "采购入库单必须关联物流单");
+            ShippingOrder shippingOrder = shippingOrderService.getByIdOrThrow(order.getShippingOrderId());
+            Assert.isTrue(!ShippingStatus.PENDING.name().equals(shippingOrder.getShippingStatus()),
+                    "物流单尚未发货，不能提交入库单");
+            validateWarehouseInRegion(order.getWarehouseId(), shippingOrder.getTargetRegionId());
+            return;
+        }
+        validateWarehouseIsOwn(order.getWarehouseId());
     }
 
 }

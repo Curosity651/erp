@@ -47,4 +47,11 @@ public interface PurchaseOrderMapper extends ExtendMapper<PurchaseOrder> {
 		return this.selectCount(wrapper) > 0;
 	}
 
+	/**
+	 * Check whether a purchase order is referenced by an active shipping order.
+	 * @param purchaseOrderId purchase order ID
+	 * @return whether an association exists
+	 */
+	boolean existsAssociatedShippingOrder(@Param("purchaseOrderId") Long purchaseOrderId);
+
 }

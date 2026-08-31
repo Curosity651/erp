@@ -15,8 +15,11 @@
         b.inspection_fee AS inspectionFee,
         b.driver_fee AS driverFee,
         b.total_amount AS totalAmount,
+        b.currency,
         b.status,
         DATE_FORMAT(b.confirmed_time, '%Y-%m-%d %H:%i:%s') AS confirmedTime,
+        b.reviewer_id AS reviewerId,
+        b.reviewer_name AS reviewerName,
         DATE_FORMAT(b.paid_time, '%Y-%m-%d %H:%i:%s') AS paidTime,
         b.payment_voucher_file_id AS paymentVoucherFileId,
         b.remark
@@ -63,10 +66,23 @@
     </select>
 
     <select id="sumFeeByType" resultType="com.erp.admin.platform.finance.model.vo.FeeAmountRow">
-        SELECT fee_type AS feeType, COALESCE(SUM(amount), 0) AS amount
+        SELECT fee_type AS feeType,
+               COALESCE(SUM(CASE WHEN source_type = 'BILL_ADJUSTMENT' THEN 0 ELSE amount END), 0) AS amount,
+               COALESCE(SUM(CASE WHEN source_type = 'BILL_ADJUSTMENT' THEN amount ELSE 0 END), 0) AS adjustmentAmount
         FROM wms_billing_record
         WHERE wms_tenant_id = #{wmsTenantId} AND bill_month = #{billMonth}
           AND charge_status = 'POSTED'
+        GROUP BY fee_type
+    </select>
+
+    <select id="sumFeeByBill" resultType="com.erp.admin.platform.finance.model.vo.FeeAmountRow">
+        SELECT fee_type AS feeType,
+               COALESCE(SUM(CASE WHEN source_type = 'BILL_ADJUSTMENT' THEN 0 ELSE amount END), 0) AS amount,
+               COALESCE(SUM(CASE WHEN source_type = 'BILL_ADJUSTMENT' THEN amount ELSE 0 END), 0) AS adjustmentAmount
+        FROM wms_billing_record r
+        WHERE r.monthly_bill_id = #{billId}
+          AND r.charge_status = 'POSTED'
+          AND r.currency = 'CNY'
         GROUP BY fee_type
     </select>
 
@@ -79,6 +95,8 @@
     <select id="selectDiscountPct" resultType="java.math.BigDecimal">
         SELECT discount_pct FROM wms_tenant_rate_discount
         WHERE wms_tenant_id = #{wmsTenantId}
+          AND (effective_from IS NULL OR effective_from &lt;= #{billingDate})
+          AND (effective_to IS NULL OR effective_to &gt;= #{billingDate})
         ORDER BY id DESC LIMIT 1
     </select>
 

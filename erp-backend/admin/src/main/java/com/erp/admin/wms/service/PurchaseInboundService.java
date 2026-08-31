@@ -100,11 +100,22 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 	 * @return 入库单详情
 	 */
 	public PurchaseInboundDetailVO getDetail(Long id) {
+		return getDetail(id, null);
+	}
+
+	public PurchaseInboundDetailVO getDetail(Long id, InboundSourceType expectedSourceType) {
 		// 数据级可见性：货主只能看自己的入库单；平台超管(scope=null)看全部
 		Long scope = inboundErpScope();
+		PurchaseInboundOrder order = null;
 		if (scope != null) {
-			PurchaseInboundOrder order = this.getById(id);
+			order = this.getById(id);
 			Assert.isTrue(order != null && scope.equals(order.getErpTenantId()), "入库单不存在");
+		}
+		if (expectedSourceType != null) {
+			if (order == null) {
+				order = getByIdOrThrow(id);
+			}
+			assertSourceType(order, expectedSourceType);
 		}
 
 		PurchaseInboundDetailVO detail = baseMapper.selectDetailById(id);
@@ -130,6 +141,7 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		PurchaseInboundOrder order = this.getById(dto.getId());
 		Assert.notNull(order, "入库单不存在");
 		assertOwnership(order);
+		assertSourceType(order, InboundSourceType.PURCHASE);
 
 		PurchaseInboundStatus status = PurchaseInboundStatus.valueOf(order.getOrderStatus());
 		Assert.isTrue(status == PurchaseInboundStatus.DRAFT, "只有草稿状态的入库单可以编辑");
@@ -343,6 +355,13 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		return order;
 	}
 
+	public PurchaseInboundOrder getByIdOrThrow(Long id, InboundSourceType expectedSourceType) {
+		PurchaseInboundOrder order = getByIdOrThrow(id);
+		assertOwnership(order);
+		assertSourceType(order, expectedSourceType);
+		return order;
+	}
+
 	/**
 	 * 创建入库单（仅创建自身，不处理关联的数量占用）
 	 * <p>
@@ -461,6 +480,7 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		PurchaseInboundOrder order = this.getById(dto.getId());
 		Assert.notNull(order, "入库单不存在");
 		assertOwnership(order);
+		assertSourceType(order, InboundSourceType.MANUAL);
 		Assert.isTrue(PurchaseInboundStatus.DRAFT.name().equals(order.getOrderStatus()), "只有草稿状态的入库单可以编辑");
 		Assert.notEmpty(dto.getItems(), "入库明细不能为空");
 
@@ -520,6 +540,7 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 		PurchaseInboundOrder order = this.getById(dto.getId());
 		Assert.notNull(order, "退货单不存在");
 		assertOwnership(order);
+		assertSourceType(order, InboundSourceType.CUSTOM_RETURN);
 		Assert.isTrue(PurchaseInboundStatus.DRAFT.name().equals(order.getOrderStatus()), "只有草稿状态的退货单可以编辑");
 		Assert.notEmpty(dto.getItems(), "退货明细不能为空");
 		Assert.isTrue(CustomReturnType.isValid(dto.getReturnType()), "退货类型不合法");
@@ -568,6 +589,11 @@ public class PurchaseInboundService extends ExtendServiceImpl<PurchaseInboundMap
 	private void assertOwnership(PurchaseInboundOrder order) {
 		Long scope = inboundErpScope();
 		Assert.isTrue(scope == null || scope.equals(order.getErpTenantId()), "入库单不存在");
+	}
+
+	public void assertSourceType(PurchaseInboundOrder order, InboundSourceType expectedSourceType) {
+		Assert.notNull(expectedSourceType, "入库单来源不能为空");
+		Assert.isTrue(expectedSourceType.name().equals(order.getSourceType()), "入库单不存在");
 	}
 
 	/**

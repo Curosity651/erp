@@ -47,10 +47,17 @@ public class WmsMonthlyBill {
 
     private BigDecimal totalAmount;
 
+    @Schema(title = "账单币种")
+    private String currency;
+
     @Schema(title = "DRAFT/CONFIRMED/PAID/DISPUTED")
     private String status;
 
     private LocalDateTime confirmedTime;
+
+    private Long reviewerId;
+
+    private String reviewerName;
 
     private LocalDateTime paidTime;
 

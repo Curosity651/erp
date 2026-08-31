@@ -6,12 +6,16 @@ import java.util.Map;
 import com.erp.admin.wms.model.dto.FulfillmentPackDTO;
 import com.erp.admin.wms.model.dto.FulfillmentLogisticsFeeDTO;
 import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
+import com.erp.admin.wms.model.qo.FulfillmentShippingQuery;
 import com.erp.admin.wms.model.vo.FulfillmentBatchResultVO;
+import com.erp.admin.wms.model.vo.FulfillmentShippingOrderVO;
 import com.erp.admin.wms.service.FulfillmentShippingService;
 import com.erp.admin.wms.service.platform.PlatformLabelResult;
 import lombok.RequiredArgsConstructor;
 import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.ballcat.common.model.result.ApiResult;
+import org.ballcat.common.model.domain.PageParam;
+import org.ballcat.common.model.domain.PageResult;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +36,13 @@ public class FulfillmentShippingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<List<WmsFulfillmentOrder>> list() {
 		return ApiResult.ok(service.listWorkOrders());
+	}
+
+	@GetMapping("/page")
+	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
+	public ApiResult<PageResult<FulfillmentShippingOrderVO>> page(PageParam pageParam,
+			FulfillmentShippingQuery query) {
+		return ApiResult.ok(service.pageWorkOrders(pageParam, query));
 	}
 
 	@PostMapping("/{id}/label")
@@ -67,6 +78,6 @@ public class FulfillmentShippingController {
 	@PostMapping("/ship")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<FulfillmentBatchResultVO> ship(@RequestBody List<Long> ids) {
-		return ApiResult.ok(service.ship(ids));
+		return ApiResult.ok(service.ship(ids, principalAttributeAccessor.getUserId()));
 	}
 }

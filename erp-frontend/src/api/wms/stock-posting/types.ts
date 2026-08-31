@@ -50,6 +50,17 @@ export interface StockPostingItemVO {
   quantity: number
   warehouseDisplay?: WarehouseDisplayVO
   regionDisplay?: RegionDisplayVO
+	locationId: number
+	locationCode?: string
+	counterpartLocationId?: number
+	counterpartLocationCode?: string
+	quality: 'GOOD' | 'DEFECTIVE'
+	quantityDelta: number
+	reservedDelta: number
+	beforeQuantity: number
+	afterQuantity: number
+	beforeReserved: number
+	afterReserved: number
 }
 
 /** 过账单详情 VO */
@@ -76,4 +87,15 @@ export interface StockPostingItemPageVO {
   quantity: number
   warehouseDisplay?: WarehouseDisplayVO
   regionDisplay?: RegionDisplayVO
+	locationId: number
+	locationCode?: string
+	counterpartLocationId?: number
+	counterpartLocationCode?: string
+	quality: 'GOOD' | 'DEFECTIVE'
+	quantityDelta: number
+	reservedDelta: number
+	beforeQuantity: number
+	afterQuantity: number
+	beforeReserved: number
+	afterReserved: number
 }

@@ -5,20 +5,20 @@ import type { BillStatus, MonthlyBillVO } from '@/api/platform-finance/receivabl
  * 假设：平台↔WMS服务商 按 ₽(RUB) 结算，与系统主币种一致。
  * 若实际按 ¥(CNY)，改这一个常量即可（后端接入时确认）。
  */
-export const CURRENCY_SYMBOL = '₽'
+export const CURRENCY_SYMBOL = '¥'
 
 /** 状态文案 */
 export const BILL_STATUS_TEXT: Record<BillStatus, string> = {
-  DRAFT: '草稿',
-  CONFIRMED: '已确认',
-  PAID: '已付款',
-  DISPUTED: '争议'
+  DRAFT: '待复核',
+  CONFIRMED: '已复核',
+  PAID: '已复核',
+  DISPUTED: '有异议'
 }
 
 /** 状态 tag 颜色 */
 export const BILL_STATUS_COLOR: Record<BillStatus, string> = {
-  DRAFT: 'default',
-  CONFIRMED: 'processing',
+  DRAFT: 'orange',
+  CONFIRMED: 'success',
   PAID: 'success',
   DISPUTED: 'error'
 }
@@ -29,9 +29,8 @@ export const BILL_STATUS_OPTIONS = (Object.keys(BILL_STATUS_TEXT) as BillStatus[
   value: v
 }))
 
-/** 费用科目元数据：货架租金 + 6 项操作费 */
-export const FEE_FIELDS: { key: keyof MonthlyBillVO; label: string; group: 'rack' | 'op' }[] = [
-  { key: 'rackFee', label: '货架租金', group: 'rack' },
+/** 月度服务费用科目。货架租赁费在合同收款时一次性收取。 */
+export const FEE_FIELDS: { key: keyof MonthlyBillVO; label: string; group: 'op' }[] = [
   { key: 'inboundFee', label: '入库费', group: 'op' },
   { key: 'outboundFee', label: '出库费', group: 'op' },
   { key: 'deliveryFee', label: '配送费', group: 'op' },
@@ -42,7 +41,7 @@ export const FEE_FIELDS: { key: keyof MonthlyBillVO; label: string; group: 'rack
 
 /** 操作费小计（6 项之和） */
 export function operationSubtotal(bill: MonthlyBillVO): number {
-  return FEE_FIELDS.filter(f => f.group === 'op').reduce(
+  return FEE_FIELDS.reduce(
     (s, f) => s + (Number(bill[f.key]) || 0),
     0
   )

@@ -78,6 +78,18 @@ public class ReturnInboundOrder {
     @Schema(title = "退货质检状态 RETURN_PENDING/QC_PENDING/COMPLETED（平台质检工作流）")
     private String returnStatus;
 
+    private Long receivedBy;
+
+    private LocalDateTime receivedTime;
+
+    private Long qcBy;
+
+    private LocalDateTime qcTime;
+
+    private Long closedBy;
+
+    private LocalDateTime closedTime;
+
     @Schema(title = "备注")
     private String remark;
 

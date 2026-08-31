@@ -77,7 +77,7 @@ public class PurchaseInboundController {
     @GetMapping("/detail")
     @PreAuthorize("@per.hasPermission('wms:purchase-inbound:read')")
     public ApiResult<PurchaseInboundDetailVO> getDetail(@RequestParam Long id) {
-        PurchaseInboundDetailVO detail = this.purchaseInboundService.getDetail(id);
+        PurchaseInboundDetailVO detail = this.purchaseInboundService.getDetail(id, InboundSourceType.PURCHASE);
 
         // Controller 层组装跨服务数据：填充物流单扩展信息
         if (detail.getShippingOrderId() != null) {
@@ -112,7 +112,7 @@ public class PurchaseInboundController {
     @PutMapping
     @PreAuthorize("@per.hasPermission('wms:purchase-inbound:edit')")
     public ApiResult<Void> update(@Validated({Default.class, UpdateGroup.class}) @RequestBody PurchaseInboundDTO dto) {
-        this.purchaseInboundService.update(dto);
+        this.purchaseInboundFacade.updatePurchase(dto);
         return ApiResult.ok();
     }
 
@@ -126,7 +126,7 @@ public class PurchaseInboundController {
     @PatchMapping("/submit")
     @PreAuthorize("@per.hasPermission('wms:purchase-inbound:edit')")
     public ApiResult<Void> submit(@RequestParam Long id) {
-        this.purchaseInboundFacade.submit(id);
+        this.purchaseInboundFacade.submit(id, InboundSourceType.PURCHASE);
         return ApiResult.ok();
     }
 
@@ -140,7 +140,7 @@ public class PurchaseInboundController {
     @PatchMapping("/cancel")
     @PreAuthorize("@per.hasPermission('wms:purchase-inbound:edit')")
     public ApiResult<Void> cancel(@RequestParam Long id) {
-        this.purchaseInboundFacade.cancel(id);
+        this.purchaseInboundFacade.cancel(id, InboundSourceType.PURCHASE);
         return ApiResult.ok();
     }
 
@@ -154,7 +154,7 @@ public class PurchaseInboundController {
     @DeleteMapping
     @PreAuthorize("@per.hasPermission('wms:purchase-inbound:del')")
     public ApiResult<Void> delete(@RequestBody List<Long> ids) {
-        this.purchaseInboundFacade.delete(ids);
+        this.purchaseInboundFacade.delete(ids, InboundSourceType.PURCHASE);
         return ApiResult.ok();
     }
 

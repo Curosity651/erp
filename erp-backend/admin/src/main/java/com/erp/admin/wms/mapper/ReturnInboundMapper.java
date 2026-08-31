@@ -15,6 +15,7 @@ import org.ballcat.mybatisplus.toolkit.WrappersX;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 /**
  * 退货入库单 Mapper
@@ -81,6 +82,22 @@ public interface ReturnInboundMapper extends ExtendMapper<ReturnInboundOrder> {
                 .set(ReturnInboundOrder::getReturnStatus, next)
                 .eq(ReturnInboundOrder::getId, id)
                 .eq(ReturnInboundOrder::getReturnStatus, expect));
+    }
+
+    default int markReceivedAudit(Long id, Long userId) {
+        return this.update(null, WrappersX.lambdaUpdate(ReturnInboundOrder.class)
+                .set(ReturnInboundOrder::getReceivedBy, userId)
+                .set(ReturnInboundOrder::getReceivedTime, LocalDateTime.now())
+                .eq(ReturnInboundOrder::getId, id)
+                .eq(ReturnInboundOrder::getReturnStatus, "QC_PENDING"));
+    }
+
+    default int markClosedAudit(Long id, Long userId) {
+        return this.update(null, WrappersX.lambdaUpdate(ReturnInboundOrder.class)
+                .set(ReturnInboundOrder::getClosedBy, userId)
+                .set(ReturnInboundOrder::getClosedTime, LocalDateTime.now())
+                .eq(ReturnInboundOrder::getId, id)
+                .eq(ReturnInboundOrder::getReturnStatus, "CLOSED"));
     }
 
 }

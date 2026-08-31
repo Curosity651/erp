@@ -72,6 +72,15 @@ export interface ReturnOrderVO {
   totalQty: number
   status: ReturnStatus
   createTime: string
+  receivedBy?: number
+  receivedByName?: string
+  receivedTime?: string
+  qcBy?: number
+  qcByName?: string
+  qcTime?: string
+  closedBy?: number
+  closedByName?: string
+  closedTime?: string
   // 详情才带
   items?: ReturnOrderItemVO[]
 }

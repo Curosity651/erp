@@ -285,7 +285,13 @@ public class LogicalLocationTransferService {
 		}
 		validateCompletionCapacity(items, sources, targets);
 		for (LocationTransferItem item : items) {
-			inventoryService.move(item.getSourceInventoryId(), item.getTargetLocationId(), item.getQuantity());
+			inventoryService.move(item.getSourceInventoryId(), item.getTargetLocationId(), item.getQuantity(),
+					com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+							.eventType(com.erp.admin.wms.model.enums.InventoryEventType.MOVE)
+							.sourceType("LOCATION_TRANSFER").sourceId(order.getId())
+							.sourceNo(order.getTransferNo()).operatorId(currentUserId())
+							.reason(order.getRemark())
+							.idempotencyKey("location-transfer:" + order.getId() + ":" + item.getId()).build());
 		}
 		Assert.isTrue(orderMapper.casComplete(order.getId(), LocationTransferStatus.PENDING.name(),
 				LocationTransferStatus.COMPLETED.name(), currentUserId()) == 1,

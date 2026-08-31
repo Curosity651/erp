@@ -14,7 +14,16 @@
         GREATEST((SELECT COUNT(*) FROM wms_return_qc_item ri WHERE ri.return_order_id = o.id), 1) AS skuKinds,
         o.total_quantity AS totalQty,
         o.return_status AS status,
-        DATE_FORMAT(o.create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+        DATE_FORMAT(o.create_time, '%Y-%m-%d %H:%i:%s') AS createTime,
+        o.received_by AS receivedBy,
+        COALESCE(NULLIF(receive_user.nickname, ''), receive_user.username) AS receivedByName,
+        DATE_FORMAT(o.received_time, '%Y-%m-%d %H:%i:%s') AS receivedTime,
+        o.qc_by AS qcBy,
+        COALESCE(NULLIF(qc_user.nickname, ''), qc_user.username) AS qcByName,
+        DATE_FORMAT(o.qc_time, '%Y-%m-%d %H:%i:%s') AS qcTime,
+        o.closed_by AS closedBy,
+        COALESCE(NULLIF(close_user.nickname, ''), close_user.username) AS closedByName,
+        DATE_FORMAT(o.closed_time, '%Y-%m-%d %H:%i:%s') AS closedTime
     </sql>
 
     <select id="pageOrders" resultType="com.erp.admin.wms.model.vo.ReturnOrderVO">
@@ -24,6 +33,9 @@
         LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
         LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
         LEFT JOIN wms_warehouse w ON w.id = o.warehouse_id
+        LEFT JOIN sys_user receive_user ON receive_user.user_id = o.received_by AND receive_user.deleted = 0
+        LEFT JOIN sys_user qc_user ON qc_user.user_id = o.qc_by AND qc_user.deleted = 0
+        LEFT JOIN sys_user close_user ON close_user.user_id = o.closed_by AND close_user.deleted = 0
         <where>
             o.deleted = 0
             <if test="qo.returnNo != null and qo.returnNo != ''">
@@ -56,6 +68,9 @@
         LEFT JOIN sys_tenant t ON t.id = o.erp_tenant_id
         LEFT JOIN sys_tenant op ON op.id = t.parent_wms_tenant_id
         LEFT JOIN wms_warehouse w ON w.id = o.warehouse_id
+        LEFT JOIN sys_user receive_user ON receive_user.user_id = o.received_by AND receive_user.deleted = 0
+        LEFT JOIN sys_user qc_user ON qc_user.user_id = o.qc_by AND qc_user.deleted = 0
+        LEFT JOIN sys_user close_user ON close_user.user_id = o.closed_by AND close_user.deleted = 0
         WHERE o.id = #{id} AND o.deleted = 0
     </select>
 

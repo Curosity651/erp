@@ -46,4 +46,16 @@ public class StockPostingItemVO {
     @Schema(title = "区域展示信息")
     private RegionDisplayVO regionDisplay;
 
+    private Long locationId;
+    private String locationCode;
+    private Long counterpartLocationId;
+    private String counterpartLocationCode;
+    private String quality;
+    private Integer quantityDelta;
+    private Integer reservedDelta;
+    private Integer beforeQuantity;
+    private Integer afterQuantity;
+    private Integer beforeReserved;
+    private Integer afterReserved;
+
 }

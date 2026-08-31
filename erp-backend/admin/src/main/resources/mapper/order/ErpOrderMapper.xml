@@ -2,16 +2,16 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.erp.admin.order.mapper.ErpOrderMapper">
 
-    <!-- 计算指定年份按月分组的已完成订单销售额(RUB) -->
+    <!-- 与 Dashboard 一致：按莫斯科业务月统计非取消订单的有效销售额(RUB) -->
     <select id="calculateMonthlyCompletedOrdersAmount" resultType="com.erp.admin.order.model.dto.MonthlyAmountDTO">
         SELECT
-            MONTH(platform_created_at) as month,
+            MONTH(platform_created_at_moscow) as month,
             COALESCE(SUM(total_amount_rub / 100), 0) as amount
         FROM erp_order
-        WHERE YEAR(platform_created_at) = #{year}
-          AND erp_status = 'DELIVERED'
+        WHERE YEAR(platform_created_at_moscow) = #{year}
+          AND erp_status != 'CANCELED'
           AND total_amount_rub IS NOT NULL
-        GROUP BY MONTH(platform_created_at)
+        GROUP BY MONTH(platform_created_at_moscow)
     </select>
 
     <!-- 使用乐观锁占用订单用于出库 -->
@@ -23,6 +23,8 @@
         WHERE id = #{id}
           AND version = #{version}
           AND outbound_status = 'NONE'
+          AND fulfillment_order_id IS NULL
+          AND outbound_order_id IS NULL
     </update>
 
     <!-- 释放订单出库占用 -->
@@ -287,6 +289,8 @@
         WHERE o.platform = #{qo.platform}
           AND o.erp_status = 'SHIPPED'
           AND o.outbound_status = 'NONE'
+          AND o.fulfillment_order_id IS NULL
+          AND o.outbound_order_id IS NULL
           AND o.fulfillment_type = 'fbs'
           AND o.locked = 0
         <if test="qo.keyword != null and qo.keyword != ''">

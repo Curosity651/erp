@@ -190,7 +190,14 @@ public class LogicalInboundPutawayService {
 			key.setLocationId(line.getLocationId());
 			key.setSkuCode(line.getSkuCode());
 			key.setQuality(normalizeQuality(line.getQuality()));
-			inventoryService.increase(key, line.getQuantity());
+			inventoryService.increase(key, line.getQuantity(),
+					com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+							.eventType(com.erp.admin.wms.model.enums.InventoryEventType.INBOUND_PUTAWAY)
+							.sourceType("PURCHASE_INBOUND").sourceId(order.getId())
+							.sourceNo(order.getInboundNo()).operatorId(principalAccessor.getUserId())
+							.reason("入库上架")
+							.idempotencyKey("inbound-putaway:" + order.getId() + ":" + line.getLocationId()
+									+ ":" + line.getSkuCode() + ":" + key.getQuality()).build());
 			saveReceipt(order.getId(), locations.get(line.getLocationId()), line);
 		}
 

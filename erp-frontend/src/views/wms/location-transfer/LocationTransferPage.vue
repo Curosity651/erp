@@ -87,12 +87,6 @@
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a @click="handleViewDetail(record)">查看</a>
-          <a
-            v-if="record.orderStatus === 'PLANNED' && hasPermission('wms:location:transfer')"
-            @click="handlePlan(record)"
-          >
-            完善计划
-          </a>
           <confirm-text-button
             v-if="record.orderStatus === 'PLANNED' && hasPermission('wms:location:transfer')"
             title="确认取消该调整计划吗？已预留的库存将被释放。"
@@ -120,7 +114,6 @@
 
   <location-transfer-create-drawer ref="createRef" @success="reloadTable" />
   <location-transfer-detail-drawer ref="detailRef" />
-  <location-transfer-plan-modal ref="planRef" @success="reloadTable" />
 </template>
 
 <script setup lang="ts">
@@ -155,7 +148,6 @@ import type {
 } from '@/api/wms/location-transfer/types'
 import LocationTransferCreateDrawer from './LocationTransferCreateDrawer.vue'
 import LocationTransferDetailDrawer from './LocationTransferDetailDrawer.vue'
-import LocationTransferPlanModal from './LocationTransferPlanModal.vue'
 
 defineOptions({ name: 'LocationTransferPage' })
 
@@ -163,7 +155,6 @@ const { hasPermission } = useAuthorize()
 const tableRef = ref<ProTableInstanceExpose>()
 const createRef = ref<InstanceType<typeof LocationTransferCreateDrawer>>()
 const detailRef = ref<InstanceType<typeof LocationTransferDetailDrawer>>()
-const planRef = ref<InstanceType<typeof LocationTransferPlanModal>>()
 const { allUsers: userOptions, loading: usersLoading, loadAllUsers } = useUserData()
 
 const statusOptions = LocationTransferStatusList.map(s => ({ label: s.label, value: s.value }))
@@ -240,7 +231,6 @@ const columns: ProColumns[] = [
 
 const handleNew = () => createRef.value?.open()
 const handleViewDetail = (r: LocationTransferPageVO) => detailRef.value?.open(r.id)
-const handlePlan = (r: LocationTransferPageVO) => planRef.value?.open(r.id)
 const handleComplete = (r: LocationTransferPageVO) => {
   doRequest(completeLocationTransfer(r.id), {
     successMessage: '库位调整已完成',

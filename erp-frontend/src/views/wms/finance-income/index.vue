@@ -26,18 +26,24 @@
   </a-card>
 
   <!-- ② 统计卡 -->
-  <a-row :gutter="16" style="margin-bottom: 16px">
-    <a-col :span="12">
+  <a-row :gutter="[16, 16]" style="margin-bottom: 16px">
+    <a-col
+      v-for="item in summary?.currencyTotals ?? []"
+      :key="item.currency"
+      :xs="24"
+      :sm="12"
+      :lg="6"
+    >
       <a-card :bordered="false">
         <a-statistic
-          title="区间收入合计"
-          :value="summary?.totalAmount ?? 0"
+          :title="`区间收入 · ${item.currency}`"
+          :value="item.amount"
           :precision="2"
-          prefix="₽"
+          :suffix="item.currency"
         />
       </a-card>
     </a-col>
-    <a-col :span="12">
+    <a-col :xs="24" :sm="12" :lg="6">
       <a-card :bordered="false">
         <a-statistic title="产品使用总次数" :value="summary?.totalCount ?? 0" suffix="次" />
       </a-card>
@@ -69,12 +75,13 @@
         </template>
       </a-table-column>
       <a-table-column title="单价" align="right" :width="120">
-        <template #default="{ record }">₽ {{ formatMoney(record.unitPrice) }}</template>
+        <template #default="{ record }">{{ formatCurrency(record.unitPrice, record.currency) }}</template>
       </a-table-column>
+      <a-table-column title="币种" data-index="currency" align="center" :width="80" />
       <a-table-column title="使用次数" data-index="usageCount" align="right" :width="100" />
       <a-table-column title="小计" align="right" :width="140">
         <template #default="{ record }">
-          <span class="subtotal">₽ {{ formatMoney(record.subtotal) }}</span>
+          <span class="subtotal">{{ formatCurrency(record.subtotal, record.currency) }}</span>
         </template>
       </a-table-column>
     </a-table>
@@ -91,10 +98,11 @@
     >
       <a-table-column title="时间" data-index="createTime" :width="160" />
       <a-table-column title="货主" data-index="ownerName" :width="140" />
-      <a-table-column title="出库单号" data-index="outboundNo" :width="180" />
+      <a-table-column title="履约/出库单号" data-index="businessNo" :width="190" />
+      <a-table-column title="平台订单号" data-index="platformOrderId" :width="180" />
       <a-table-column title="跟踪号" data-index="trackingNo" :width="140" />
       <a-table-column title="金额" align="right" :width="110">
-        <template #default="{ record }">₽ {{ formatMoney(record.amount) }}</template>
+        <template #default="{ record }">{{ formatCurrency(record.amount, record.currency) }}</template>
       </a-table-column>
     </a-table>
   </a-drawer>
@@ -111,6 +119,7 @@ import type {
   IncomeSummary,
   IncomeSummaryRow
 } from '@/api/wms/operator-finance/types'
+import { formatCurrency } from './currency'
 
 const loading = ref(false)
 const monthRange = ref<[string, string]>()
@@ -130,7 +139,10 @@ async function loadData() {
     if (isSuccess(res) && res.data) {
       summary.value = {
         ...res.data,
-        rows: (res.data.rows || []).map(r => ({ ...r, rowKey: `${r.productId}-${r.billMonth}` }))
+        rows: (res.data.rows || []).map(r => ({
+          ...r,
+          rowKey: `${r.productId}-${r.billMonth}-${r.currency}`
+        }))
       }
     }
   } finally {
@@ -151,7 +163,7 @@ const recordsTitle = ref('')
 const records = ref<IncomeRecord[]>([])
 
 async function openRecords(row: RowWithKey) {
-  recordsTitle.value = `明细流水 · ${row.productName} · ${row.billMonth}`
+  recordsTitle.value = `明细流水 · ${row.productName} · ${row.billMonth} · ${row.currency}`
   recordsOpen.value = true
   recordsLoading.value = true
   records.value = []
@@ -176,11 +188,6 @@ const tagColor = (tag: string) => {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) % 997
   return TAG_COLORS[h % TAG_COLORS.length]
 }
-const formatMoney = (v?: number) =>
-  v == null
-    ? '0.00'
-    : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
 onMounted(() => loadData())
 </script>
 

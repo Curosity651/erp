@@ -21,6 +21,8 @@ export interface StockFlowQO {
   postingTypes?: string[]
   /** 方向: IN/OUT */
   direction?: string
+	startTime?: string
+	endTime?: string
 }
 
 /**
@@ -104,6 +106,15 @@ export interface StockFlowPageVO {
   createBy?: number
   // 创建时间
   createTime: string
+	locationId: number
+	locationCode?: string
+	counterpartLocationId?: number
+	counterpartLocationCode?: string
+	quality: 'GOOD' | 'DEFECTIVE'
+	quantityDelta: number
+	reservedDelta: number
+	beforeReserved: number
+	afterReserved: number
 }
 
 /**

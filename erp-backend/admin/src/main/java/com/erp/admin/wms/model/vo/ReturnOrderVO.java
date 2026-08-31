@@ -41,6 +41,24 @@ public class ReturnOrderVO {
 
     private String createTime;
 
+    private Long receivedBy;
+
+    private String receivedByName;
+
+    private String receivedTime;
+
+    private Long qcBy;
+
+    private String qcByName;
+
+    private String qcTime;
+
+    private Long closedBy;
+
+    private String closedByName;
+
+    private String closedTime;
+
     @Schema(title = "明细(详情才带)")
     private List<ReturnOrderItemVO> items;
 

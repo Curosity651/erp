@@ -59,12 +59,6 @@
             </a>
             <a
               v-if="record.contractStatus === 'ACTIVE' && record.paymentStatus === 'PAID'"
-              @click="openRecognize(record)"
-            >
-              按月确认
-            </a>
-            <a
-              v-if="record.contractStatus === 'ACTIVE' && record.paymentStatus === 'PAID'"
               @click="openRefund(record)"
             >
               办理退款
@@ -234,8 +228,17 @@
         <a-descriptions-item label="合同">{{ current.contractNo }}</a-descriptions-item>
         <a-descriptions-item label="押金">{{ money(current.warehouseDeposit) }}</a-descriptions-item>
         <a-descriptions-item label="认购款">{{ money(current.subscriptionTotal) }}</a-descriptions-item>
+        <a-descriptions-item label="货架租赁费">
+          {{ money(current.rackRentTotal) }}
+        </a-descriptions-item>
         <a-descriptions-item label="合计到账">
-          <b>{{ money(Number(current.warehouseDeposit) + Number(current.subscriptionTotal)) }}</b>
+          <b>{{
+            money(
+              Number(current.warehouseDeposit) +
+                Number(current.subscriptionTotal) +
+                Number(current.rackRentTotal)
+            )
+          }}</b>
         </a-descriptions-item>
       </a-descriptions>
       <a-textarea
@@ -258,6 +261,9 @@
         <a-descriptions-item label="不退服务费">
           {{ money(current.serviceAmount) }}
         </a-descriptions-item>
+        <a-descriptions-item label="一次性货架租赁费">
+          {{ money(current.rackRentTotal) }}
+        </a-descriptions-item>
         <a-descriptions-item label="合同文件" :span="2">
           <sys-file-upload
             v-if="current.contractFileId"
@@ -277,51 +283,6 @@
         class="fund-table"
       />
     </a-drawer>
-
-    <a-modal
-      v-model:open="recognizeOpen"
-      title="按月确认服务收入"
-      :width="680"
-      :confirm-loading="recognizeLoading"
-      :ok-button-props="{ disabled: !recognizeMonth }"
-      ok-text="确认本月"
-      @ok="recognize"
-    >
-      <a-spin :spinning="recognizeLoading">
-        <div class="recognition-term">
-          认购期：{{ current?.startDate }} 至 {{ current?.endDate }}
-        </div>
-        <div v-if="recognitionMonthOptions.length" class="recognition-month-grid">
-          <button
-            v-for="month in recognitionMonthOptions"
-            :key="month.value"
-            type="button"
-            class="recognition-month"
-            :class="{
-              recognized: recognizedMonths.includes(month.value),
-              selected: recognizeMonth === month.value
-            }"
-            :disabled="recognizedMonths.includes(month.value)"
-            @click="recognizeMonth = month.value"
-          >
-            <span>{{ month.label }}</span>
-            <span class="recognition-month-status">
-              <CheckCircleOutlined v-if="recognizedMonths.includes(month.value)" />
-              {{ recognizedMonths.includes(month.value) ? '已确认' : '待确认' }}
-            </span>
-          </button>
-        </div>
-        <a-empty v-else description="合同认购期内没有可确认月份" />
-        <a-alert
-          type="info"
-          show-icon
-          :message="recognizeMonth
-            ? `${recognizeMonth} 确认不退认购服务费 ${money(current?.monthlyServiceRecognition || 0)}`
-            : `每月确认金额 ${money(current?.monthlyServiceRecognition || 0)}`"
-          class="recognition-alert"
-        />
-      </a-spin>
-    </a-modal>
 
     <a-modal
       v-model:open="refundOpen"
@@ -386,10 +347,8 @@ import {
   listContractFunds,
   listServiceContracts,
   receiveServiceContract,
-  recognizeContractService,
   refundServiceContract
 } from '@/api/platform-finance/service-contract'
-import { contractMonths, recognizedMonthValues } from './contract-recognition'
 import type {
   ContractFundLedger,
   ContractRefundCheck,
@@ -401,7 +360,6 @@ const loading = ref(false)
 const saving = ref(false)
 const rackLoading = ref(false)
 const refundLoading = ref(false)
-const recognizeLoading = ref(false)
 const rows = ref<ServiceContract[]>([])
 const funds = ref<ContractFundLedger[]>([])
 const operators = ref<{ id: number; tenantName: string }[]>([])
@@ -410,14 +368,11 @@ const current = ref<ServiceContract>()
 const createOpen = ref(false)
 const receiveOpen = ref(false)
 const fundOpen = ref(false)
-const recognizeOpen = ref(false)
 const refundOpen = ref(false)
 const receiveRemark = ref('')
 const refundRemark = ref('')
 const noDefault = ref(false)
 const refundCheck = ref<ContractRefundCheck>()
-const recognizeMonth = ref<string>()
-const recognizedMonths = ref<string[]>([])
 const dateRange = ref<[Dayjs, Dayjs]>()
 const rackNos = ref<string[]>([])
 const rackOptions = ref<{ label: string; value: string }[]>([])
@@ -455,11 +410,16 @@ const refundableAmount = computed(
   () => (Number(form.subscriptionTotal) * Number(refundablePercent.value)) / 100
 )
 const serviceAmount = computed(() => Number(form.subscriptionTotal) - refundableAmount.value)
+const rackRentTotal = computed(() => {
+  if (!dateRange.value || !form.rackUnitCount) return 0
+  const monthCount = dateRange.value[1].startOf('month').diff(
+    dateRange.value[0].startOf('month'),
+    'month'
+  ) + 1
+  return Number(form.monthlyRentPerUnit || 0) * form.rackUnitCount * monthCount
+})
 const firstCollectionAmount = computed(
-  () => Number(form.warehouseDeposit) + Number(form.subscriptionTotal)
-)
-const recognitionMonthOptions = computed(() =>
-  current.value ? contractMonths(current.value.startDate, current.value.endDate) : []
+  () => Number(form.warehouseDeposit) + Number(form.subscriptionTotal) + rackRentTotal.value
 )
 
 const columns = [
@@ -476,6 +436,12 @@ const columns = [
     title: '月租/架',
     dataIndex: 'monthlyRentPerUnit',
     width: 115,
+    customRender: ({ value }: any) => money(value)
+  },
+  {
+    title: '一次性租赁费',
+    dataIndex: 'rackRentTotal',
+    width: 135,
     customRender: ({ value }: any) => money(value)
   },
   {
@@ -668,40 +634,6 @@ async function showFunds(record: ServiceContract) {
   fundOpen.value = true
 }
 
-async function openRecognize(record: ServiceContract) {
-  current.value = record
-  recognizeMonth.value = undefined
-  recognizedMonths.value = []
-  recognizeOpen.value = true
-  recognizeLoading.value = true
-  try {
-    const response = await listContractFunds(record.id)
-    if (isSuccess(response)) {
-      recognizedMonths.value = recognizedMonthValues(response.data || [])
-    }
-  } finally {
-    recognizeLoading.value = false
-  }
-}
-
-async function recognize() {
-  if (!current.value || !recognizeMonth.value) {
-    message.warning('请选择确认月份')
-    return
-  }
-  recognizeLoading.value = true
-  try {
-    const month = recognizeMonth.value
-    const response = await recognizeContractService(current.value.id, month)
-    if (isSuccess(response)) {
-      recognizedMonths.value = Array.from(new Set([...recognizedMonths.value, month])).sort()
-      recognizeMonth.value = undefined
-      message.success(`${month} 服务收入已确认`)
-    }
-  } finally {
-    recognizeLoading.value = false
-  }
-}
 
 async function openRefund(record: ServiceContract) {
   current.value = record
@@ -786,7 +718,8 @@ function componentText(value: string) {
     {
       WAREHOUSE_DEPOSIT: '仓储押金',
       SUBSCRIPTION_REFUNDABLE: '可退认购款',
-      SUBSCRIPTION_SERVICE: '不退服务费'
+      SUBSCRIPTION_SERVICE: '不退服务费',
+      RACK_RENT: '货架租赁费'
     }[value] || value
   )
 }
@@ -863,50 +796,6 @@ onMounted(async () => {
   margin-top: 16px;
 }
 .fund-table {
-  margin-top: 16px;
-}
-.recognition-term {
-  margin-bottom: 12px;
-  color: rgba(0, 0, 0, 0.65);
-}
-.recognition-month-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
-  gap: 8px;
-}
-.recognition-month {
-  display: flex;
-  min-height: 58px;
-  padding: 8px 10px;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 4px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  background: #fff;
-  color: rgba(0, 0, 0, 0.88);
-  cursor: pointer;
-}
-.recognition-month:hover,
-.recognition-month.selected {
-  border-color: #1677ff;
-  background: #e6f4ff;
-}
-.recognition-month.recognized {
-  border-color: #b7eb8f;
-  background: #f6ffed;
-  color: #389e0d;
-  cursor: default;
-}
-.recognition-month-status {
-  color: rgba(0, 0, 0, 0.45);
-  font-size: 12px;
-}
-.recognition-month.recognized .recognition-month-status {
-  color: #52c41a;
-}
-.recognition-alert {
   margin-top: 16px;
 }
 .manual-check {

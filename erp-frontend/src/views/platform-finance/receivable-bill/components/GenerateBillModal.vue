@@ -10,7 +10,7 @@
     <a-alert
       type="info"
       show-icon
-      message="按账期汇总生成月度账单：草稿态账单将被重算覆盖，已确认/已付款账单跳过。"
+      message="按账期汇总入库、出库、配送、退货和验货等服务费；合同货架租赁费不进入月账单。"
       style="margin-bottom: 16px"
     />
     <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">

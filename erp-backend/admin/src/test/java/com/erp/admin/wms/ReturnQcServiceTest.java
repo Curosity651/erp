@@ -36,6 +36,7 @@ import org.ballcat.common.core.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,6 +78,7 @@ class ReturnQcServiceTest {
     private WmsSkuLookupMapper skuLookupMapper;
     private SysFileService sysFileService;
     private WarehouseSkuCodeService warehouseSkuCodeService;
+    private PrincipalAttributeAccessor principalAttributeAccessor;
     private ReturnQcService service;
 
     @BeforeEach
@@ -101,6 +103,8 @@ class ReturnQcServiceTest {
         skuLookupMapper = mock(WmsSkuLookupMapper.class);
         sysFileService = mock(SysFileService.class);
         warehouseSkuCodeService = mock(WarehouseSkuCodeService.class);
+        principalAttributeAccessor = mock(PrincipalAttributeAccessor.class);
+        when(principalAttributeAccessor.getUserId()).thenReturn(88L);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
         when(tis.currentIdentity(any())).thenReturn(id);
@@ -140,7 +144,7 @@ class ReturnQcServiceTest {
                 locationInventoryService, locationCapacityService, wmsLocationMapper, skuMapper,
                 locationService, zoneService, tis, erpOrderItemMapper, erpOrderMapper,
                 sysTenantMapper, wmsRackAssignmentService, warehouseService, palletService,
-                skuLookupMapper, sysFileService, warehouseSkuCodeService);
+                skuLookupMapper, sysFileService, warehouseSkuCodeService, principalAttributeAccessor);
     }
 
     private ReturnInboundOrder order(String status) {
@@ -197,6 +201,7 @@ class ReturnQcServiceTest {
         when(returnInboundMapper.selectById(1L)).thenReturn(order(ReturnQcStatus.RETURN_PENDING.name()));
         when(returnInboundMapper.casReturnStatus(1L, ReturnQcStatus.RETURN_PENDING.name(),
                 ReturnQcStatus.QC_PENDING.name())).thenReturn(1);
+        when(returnInboundMapper.markReceivedAudit(1L, 88L)).thenReturn(1);
         when(itemMapper.selectByReturnOrderId(1L)).thenReturn(new ArrayList<>());
         ReturnReceiveDTO dto = new ReturnReceiveDTO();
         dto.setReturnOrderId(1L);
@@ -210,6 +215,7 @@ class ReturnQcServiceTest {
         verify(itemMapper).insert(any(WmsReturnQcItem.class));
         verify(returnInboundMapper).casReturnStatus(1L, ReturnQcStatus.RETURN_PENDING.name(),
                 ReturnQcStatus.QC_PENDING.name());
+        verify(returnInboundMapper).markReceivedAudit(1L, 88L);
     }
 
     @Test
@@ -256,7 +262,8 @@ class ReturnQcServiceTest {
         service.qc(dto);
 
         ArgumentCaptor<LocationInventoryKey> inventoryKey = ArgumentCaptor.forClass(LocationInventoryKey.class);
-        verify(locationInventoryService).increase(inventoryKey.capture(), org.mockito.ArgumentMatchers.eq(5));
+        verify(locationInventoryService).increase(inventoryKey.capture(), org.mockito.ArgumentMatchers.eq(5),
+                org.mockito.ArgumentMatchers.any());
         assertThat(inventoryKey.getValue().getQuality()).isEqualTo("DEFECTIVE");
         assertThat(inventoryKey.getValue().getLocationId()).isEqualTo(2L);
         assertThat(inventoryKey.getValue().getErpTenantId()).isEqualTo(6L);
@@ -265,6 +272,8 @@ class ReturnQcServiceTest {
         verify(returnInboundMapper).updateById(ocap.capture());
         assertThat(ocap.getValue().getReturnStatus()).isEqualTo(ReturnQcStatus.COMPLETED.name());
         assertThat(ocap.getValue().getUnqualifiedQuantity()).isEqualTo(5);
+        assertThat(ocap.getValue().getQcBy()).isEqualTo(88L);
+        assertThat(ocap.getValue().getQcTime()).isNotNull();
     }
 
     @Test
@@ -292,7 +301,8 @@ class ReturnQcServiceTest {
         service.qc(dto);
 
         ArgumentCaptor<LocationInventoryKey> keys = ArgumentCaptor.forClass(LocationInventoryKey.class);
-        verify(locationInventoryService, times(2)).increase(keys.capture(), any(Integer.class));
+        verify(locationInventoryService, times(2)).increase(keys.capture(), any(Integer.class),
+                org.mockito.ArgumentMatchers.any());
         assertThat(keys.getAllValues()).extracting(LocationInventoryKey::getQuality)
                 .containsExactly("GOOD", "DEFECTIVE");
         assertThat(keys.getAllValues()).extracting(LocationInventoryKey::getLocationId)
@@ -327,11 +337,13 @@ class ReturnQcServiceTest {
         when(returnInboundMapper.selectById(1L)).thenReturn(order(ReturnQcStatus.RETURN_PENDING.name()));
         when(returnInboundMapper.casReturnStatus(1L, ReturnQcStatus.RETURN_PENDING.name(),
                 ReturnQcStatus.CLOSED.name())).thenReturn(1);
+        when(returnInboundMapper.markClosedAudit(1L, 88L)).thenReturn(1);
 
         service.close(1L);
 
         verify(returnInboundMapper).casReturnStatus(1L, ReturnQcStatus.RETURN_PENDING.name(),
                 ReturnQcStatus.CLOSED.name());
+        verify(returnInboundMapper).markClosedAudit(1L, 88L);
     }
 
     @Test

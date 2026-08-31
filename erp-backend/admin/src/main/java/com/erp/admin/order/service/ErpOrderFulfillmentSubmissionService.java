@@ -11,6 +11,7 @@ import com.erp.admin.order.mapper.ErpOrderMapper;
 import com.erp.admin.order.model.dto.SubmitFulfillmentDTO;
 import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.order.model.entity.ErpOrderItem;
+import com.erp.admin.order.model.enums.OutboundStatus;
 import com.erp.admin.product.mapper.SkuMapper;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.product.service.WarehouseSkuCodeService;
@@ -39,23 +40,27 @@ public class ErpOrderFulfillmentSubmissionService {
 	private final WarehouseService warehouseService;
 	private final FulfillmentOrderService fulfillmentOrderService;
 	private final WmsLogisticsProductService logisticsProductService;
+	private final FulfillmentRecipientSnapshotService recipientSnapshotService;
 
 	@Transactional(rollbackFor = Exception.class)
 	public Long submit(SubmitFulfillmentDTO dto) {
 		Assert.notNull(dto, "提交参数不能为空");
-		ErpOrder order = orderMapper.selectById(dto.getErpOrderId());
+		Long erpTenantId = TenantContext.getCurrentTenant();
+		Long wmsTenantId = WmsTenantContext.getCurrentWmsTenant();
+		Assert.isTrue(erpTenantId != null && erpTenantId > 0, "当前货主身份无效");
+		Assert.notNull(wmsTenantId, "当前货主尚未绑定WMS服务商");
+		ErpOrder order = orderMapper.selectForFulfillmentSubmit(dto.getErpOrderId(), erpTenantId);
 		Assert.notNull(order, "订单不存在");
 		Assert.isTrue("FBS".equalsIgnoreCase(order.getFulfillmentType()), "只有FBS订单可以提交海外仓履约");
+		boolean legacyStatusFree = order.getOutboundStatus() == null
+				|| OutboundStatus.NONE.name().equals(order.getOutboundStatus());
+		Assert.isTrue(order.getFulfillmentOrderId() == null && order.getOutboundOrderId() == null
+				&& legacyStatusFree, "订单已经进入仓库履约或旧出库流程，不能重复提交");
 		Shop shop = shopMapper.selectById(order.getShopId());
 		Assert.notNull(shop, "订单店铺不存在");
 		Long warehouseId = dto.getWmsWarehouseId() != null ? dto.getWmsWarehouseId() : shop.getDefaultWmsWarehouseId();
 		Assert.notNull(warehouseId, "请先为店铺设置默认WMS仓库，或在确认时选择仓库");
 		warehouseService.validateOperableOwnWarehouse(warehouseId);
-
-		Long erpTenantId = TenantContext.getCurrentTenant();
-		Long wmsTenantId = WmsTenantContext.getCurrentWmsTenant();
-		Assert.isTrue(erpTenantId != null && erpTenantId > 0, "当前货主身份无效");
-		Assert.notNull(wmsTenantId, "当前货主尚未绑定WMS服务商");
 
 		Long productId = dto.getLogisticsProductId() != null
 				? dto.getLogisticsProductId() : shop.getDefaultLogisticsProductId();
@@ -123,6 +128,10 @@ public class ErpOrderFulfillmentSubmissionService {
 		command.setSourceOrderId(order.getId());
 		command.setSourceOrderNo(order.getPlatformOrderId());
 		command.setPlatformStatus(order.getPlatformStatus());
+		FulfillmentRecipientSnapshotService.Snapshot recipient = recipientSnapshotService.from(order);
+		command.setRecipientName(recipient.getName());
+		command.setRecipientPhone(recipient.getPhone());
+		command.setRecipientAddress(recipient.getAddress());
 		command.setItems(items);
 		return command;
 	}

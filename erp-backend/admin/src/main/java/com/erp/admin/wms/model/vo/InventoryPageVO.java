@@ -21,6 +21,24 @@ public class InventoryPageVO {
     @Schema(title = "仓库ID")
     private Long warehouseId;
 
+    private Long regionId;
+
+    private String regionName;
+
+    private Long locationId;
+
+    private String rackNo;
+
+    private String locationCode;
+
+    private String zoneType;
+
+    private String zoneName;
+
+    private String quality;
+
+    private Integer physicalQuantity;
+
 	@Schema(title = "仓库展示信息")
 	private WarehouseDisplayVO warehouseDisplay;
 

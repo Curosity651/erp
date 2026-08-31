@@ -2,7 +2,7 @@ package com.erp.admin.wms.controller;
 
 import com.erp.admin.wms.model.qo.InventoryQO;
 import com.erp.admin.wms.model.vo.*;
-import com.erp.admin.wms.service.InventoryService;
+import com.erp.admin.wms.service.OwnerInventoryQueryService;
 import com.erp.admin.wms.service.RegionInventoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,14 +29,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InventoryController {
 
-    private final InventoryService inventoryService;
+    private final OwnerInventoryQueryService inventoryQueryService;
     private final RegionInventoryService regionInventoryService;
 
     @Operation(summary = "库存汇总统计")
     @GetMapping("/summary")
     @PreAuthorize("hasAuthority('wms:inventory:overview')")
     public ApiResult<InventorySummaryVO> getSummary() {
-        return ApiResult.ok(inventoryService.getSummary());
+        return ApiResult.ok(inventoryQueryService.getSummary());
     }
 
     @Operation(summary = "按仓库汇总")
@@ -44,7 +44,7 @@ public class InventoryController {
     @PreAuthorize("hasAuthority('wms:inventory:overview')")
     public ApiResult<List<WarehouseSummaryVO>> getSummaryByWarehouse(
             @RequestParam(required = false) String warehouseType) {
-        return ApiResult.ok(inventoryService.getSummaryByWarehouse(warehouseType));
+        return ApiResult.ok(inventoryQueryService.getSummaryByWarehouse(warehouseType));
     }
 
     @Operation(summary = "按SKU汇总分页")
@@ -54,14 +54,14 @@ public class InventoryController {
             PageParam pageParam,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String stockStatus) {
-        return ApiResult.ok(inventoryService.getSummaryBySku(pageParam, keyword, stockStatus));
+        return ApiResult.ok(inventoryQueryService.getSummaryBySku(pageParam, keyword, stockStatus));
     }
 
     @Operation(summary = "库存明细分页")
     @GetMapping("/page")
     @PreAuthorize("hasAuthority('wms:inventory:read')")
     public ApiResult<PageResult<InventoryPageVO>> queryPage(PageParam pageParam, InventoryQO qo) {
-        return ApiResult.ok(inventoryService.queryPage(pageParam, qo));
+        return ApiResult.ok(inventoryQueryService.queryPage(pageParam, qo));
     }
 
     @Operation(summary = "库存明细详情")
@@ -69,14 +69,7 @@ public class InventoryController {
     @PreAuthorize("hasAuthority('wms:inventory:read')")
     public ApiResult<InventoryDetailVO> getDetail(@RequestParam Long warehouseId,
                                                    @RequestParam String skuCode) {
-        return ApiResult.ok(inventoryService.getDetail(warehouseId, skuCode));
-    }
-
-    @Operation(summary = "服务商货架库存只读汇总(按 wms_tenant_id)")
-    @GetMapping("/by-operator")
-    @PreAuthorize("hasAuthority('wms:inventory:read')")
-    public ApiResult<List<com.erp.admin.wms.model.entity.Inventory>> listByOperator() {
-        return ApiResult.ok(inventoryService.listByCurrentOperator());
+        return ApiResult.ok(inventoryQueryService.getDetail(warehouseId, skuCode));
     }
 
     @Operation(summary = "按区域汇总")

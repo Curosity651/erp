@@ -34,6 +34,9 @@ const COMPONENT_OVERRIDES: Record<string, () => Promise<unknown>> = {
   pallets: () => import('@/views/platform/location-inventory/index.vue'),
   // rack-inventory(180400)：WMS 服务商「仓储概览」（原“货架库存(只读)”占位，改真实只读页）
   'rack-inventory': () => import('@/views/wms/storage-overview/index.vue')
+  ,
+  'fund-settlement': () => import('@/views/wms/fund-settlement/index.vue'),
+  'provider-funds': () => import('@/views/platform-finance/provider-funds/index.vue')
 }
 
 export const generatorDynamicRouter = (userMenus: SysMenuRouterVO[]): RouteRecordRaw => {

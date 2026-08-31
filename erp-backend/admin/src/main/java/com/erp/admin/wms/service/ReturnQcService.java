@@ -42,6 +42,7 @@ import org.ballcat.mybatisplus.toolkit.PageUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.ballcat.security.core.PrincipalAttributeAccessor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 /**
  * 海外仓平台出库作业·退货质检（业务需求 1.4）。退货=带质检的重新入库。
@@ -121,6 +123,8 @@ public class ReturnQcService {
 
     private final WarehouseSkuCodeService warehouseSkuCodeService;
 
+    private final PrincipalAttributeAccessor principalAttributeAccessor;
+
     // ==================== 查询 ====================
 
     public PageResult<ReturnOrderVO> page(PageParam pageParam, ReturnQO qo) {
@@ -171,6 +175,8 @@ public class ReturnQcService {
         if (claimed != 1) {
             throw new BusinessException(400, "该退货单已收货或正在处理，请勿重复操作");
         }
+		Assert.isTrue(returnInboundMapper.markReceivedAudit(order.getId(), currentUserId()) == 1,
+				"退货收货操作记录失败");
 
         // 重置并按收货明细重建质检明细行（幂等：同单重复收货以最新为准）
         List<WmsReturnQcItem> existing = returnQcItemMapper.selectByReturnOrderId(order.getId());
@@ -214,6 +220,8 @@ public class ReturnQcService {
         if (closed != 1) {
             throw new BusinessException(400, "仅待收货的退货单可以按未收到/拒收关闭");
         }
+		Assert.isTrue(returnInboundMapper.markClosedAudit(returnOrderId, currentUserId()) == 1,
+				"退货关闭操作记录失败");
         log.info("退货单按未收到/拒收关闭, returnId={}", returnOrderId);
     }
 
@@ -321,6 +329,8 @@ public class ReturnQcService {
         order.setQualifiedQuantity(qualified);
         order.setUnqualifiedQuantity(unqualified);
         order.setReturnStatus(ReturnQcStatus.COMPLETED.name());
+		order.setQcBy(currentUserId());
+		order.setQcTime(LocalDateTime.now());
         returnInboundMapper.updateById(order);
 
         // 质检完成才真正扣减订单「已退数量」（申报期不扣，货主侧只申报）。按实收量=合格+不合格累加。
@@ -343,6 +353,12 @@ public class ReturnQcService {
         log.info("退货质检完成, returnId={}, qualified={}, unqualified={}, 回写已退数量={}",
                 order.getId(), qualified, unqualified, received);
     }
+
+	private Long currentUserId() {
+		Long userId = principalAttributeAccessor.getUserId();
+		Assert.notNull(userId, "无法获取当前操作人");
+		return userId;
+	}
 
     private void validateQcPhotos(WmsReturnQcItem item, int damagedQty, List<Long> fileIds) {
         List<Long> ids = fileIds == null ? Collections.emptyList() : fileIds.stream()
@@ -392,7 +408,13 @@ public class ReturnQcService {
         key.setLocationId(locked.getId());
         key.setSkuCode(skuCode);
         key.setQuality(quality);
-        locationInventoryService.increase(key, quantity);
+        locationInventoryService.increase(key, quantity,
+				com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
+						.eventType(com.erp.admin.wms.model.enums.InventoryEventType.RETURN_PUTAWAY)
+						.sourceType("RETURN_QC").sourceId(order.getId()).sourceNo(order.getReturnNo())
+						.operatorId(currentUserId()).reason("退货质检上架")
+						.idempotencyKey("return-putaway:" + order.getId() + ":" + locked.getId()
+								+ ":" + skuCode + ":" + quality).build());
         return locked;
     }
 

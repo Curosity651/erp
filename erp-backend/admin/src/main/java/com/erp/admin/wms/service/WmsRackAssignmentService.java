@@ -20,7 +20,7 @@ import com.erp.admin.platform.finance.model.vo.ContractRackBindingVO;
 import com.erp.admin.wms.enums.WmsResultCode;
 import com.erp.admin.wms.mapper.WarehouseMapper;
 import com.erp.admin.wms.mapper.WmsLocationMapper;
-import com.erp.admin.wms.mapper.WmsPhysicalInventoryMapper;
+import com.erp.admin.wms.mapper.WmsLocationInventoryMapper;
 import com.erp.admin.wms.mapper.WmsRackAssignmentMapper;
 import com.erp.admin.wms.model.dto.RackAssignDTO;
 import com.erp.admin.wms.model.entity.WmsLocation;
@@ -51,7 +51,7 @@ public class WmsRackAssignmentService extends ExtendServiceImpl<WmsRackAssignmen
 
 	private final WmsLocationMapper wmsLocationMapper;
 
-	private final WmsPhysicalInventoryMapper physicalInventoryMapper;
+	private final WmsLocationInventoryMapper locationInventoryMapper;
 
 	private final WarehouseMapper warehouseMapper;
 
@@ -88,7 +88,7 @@ public class WmsRackAssignmentService extends ExtendServiceImpl<WmsRackAssignmen
 			if (!physicalRackNos.contains(rackNo)) {
 				throw new BusinessException(400, "排 " + rackNo + " 不存在或不是物理货架");
 			}
-			List<Long> stockOperators = physicalInventoryMapper
+			List<Long> stockOperators = locationInventoryMapper
 				.listBlockingWmsTenantIdsByRack(dto.getWarehouseId(), rackNo);
 			boolean containsOtherOperator = stockOperators.stream()
 				.anyMatch(id -> id == null || !id.equals(dto.getWmsTenantId()));
@@ -134,7 +134,7 @@ public class WmsRackAssignmentService extends ExtendServiceImpl<WmsRackAssignmen
 		if (assignment == null) {
 			throw new BusinessException(404, "货架分配记录不存在");
 		}
-		if (!physicalInventoryMapper
+		if (!locationInventoryMapper
 			.listBlockingWmsTenantIdsByRack(assignment.getWarehouseId(), assignment.getRackNo()).isEmpty()) {
 			throw new BusinessException(409, "排 " + assignment.getRackNo() + " 仍有库存或预占，不能解除分配");
 		}

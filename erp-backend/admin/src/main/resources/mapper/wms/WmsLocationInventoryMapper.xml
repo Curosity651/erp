@@ -52,6 +52,46 @@
 		FOR UPDATE
 	</select>
 
+	<select id="listOccupiedLocationCodes" resultType="string">
+		SELECT DISTINCT l.location_code
+		FROM wms_location_inventory i
+		JOIN wms_location l ON l.id = i.location_id
+			AND l.warehouse_id = i.warehouse_id
+			AND l.deleted = 0
+		WHERE i.warehouse_id = #{warehouseId}
+		  AND i.deleted = 0
+		  AND (i.quantity &gt; 0 OR i.reserved_quantity &gt; 0)
+		ORDER BY l.location_code
+	</select>
+
+	<select id="listBlockingWmsTenantIdsByRack" resultType="long">
+		SELECT DISTINCT i.wms_tenant_id
+		FROM wms_location_inventory i
+		JOIN wms_location l ON l.id = i.location_id
+			AND l.warehouse_id = i.warehouse_id
+			AND l.deleted = 0
+		WHERE i.warehouse_id = #{warehouseId}
+		  AND l.rack_no = #{rackNo}
+		  AND i.deleted = 0
+		  AND (i.quantity &gt; 0 OR i.reserved_quantity &gt; 0)
+	</select>
+
+	<select id="sumQuantityByProviderAndWarehouse" resultType="long">
+		SELECT COALESCE(SUM(quantity), 0)
+		FROM wms_location_inventory
+		WHERE wms_tenant_id = #{wmsTenantId}
+		  AND warehouse_id = #{warehouseId}
+		  AND deleted = 0
+	</select>
+
+	<select id="sumReservedByProviderAndWarehouse" resultType="long">
+		SELECT COALESCE(SUM(reserved_quantity), 0)
+		FROM wms_location_inventory
+		WHERE wms_tenant_id = #{wmsTenantId}
+		  AND warehouse_id = #{warehouseId}
+		  AND deleted = 0
+	</select>
+
 	<update id="increaseQuantity">
 		UPDATE wms_location_inventory
 		SET quantity = quantity + #{quantity}, version = version + 1

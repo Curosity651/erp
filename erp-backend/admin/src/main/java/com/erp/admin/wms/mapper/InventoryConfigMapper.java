@@ -58,4 +58,15 @@ public interface InventoryConfigMapper extends ExtendMapper<InventoryConfig> {
                 .in(InventoryConfig::getSkuCode, skuCodes);
         return this.selectList(wrapper);
     }
+
+	default List<InventoryConfig> selectByOwnerAndRegions(Long erpTenantId, Collection<Long> regionIds,
+			String skuKeyword) {
+		if (erpTenantId == null || regionIds == null || regionIds.isEmpty()) {
+			return java.util.Collections.emptyList();
+		}
+		return this.selectList(WrappersX.lambdaQueryX(InventoryConfig.class)
+				.eq(InventoryConfig::getErpTenantId, erpTenantId)
+				.in(InventoryConfig::getRegionId, regionIds)
+				.likeIfPresent(InventoryConfig::getSkuCode, skuKeyword));
+	}
 }

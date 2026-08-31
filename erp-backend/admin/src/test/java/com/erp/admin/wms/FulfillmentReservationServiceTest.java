@@ -4,6 +4,7 @@ import java.util.Collections;
 
 import com.erp.admin.wms.model.dto.FulfillmentCreateCommand;
 import com.erp.admin.wms.model.dto.InventoryReservationRequest;
+import com.erp.admin.wms.model.dto.InventoryMutationContext;
 import com.erp.admin.wms.model.entity.WmsFulfillmentItem;
 import com.erp.admin.wms.service.FulfillmentReservationService;
 import com.erp.admin.wms.service.LocationInventoryService;
@@ -39,10 +40,12 @@ class FulfillmentReservationServiceTest {
 		service.reserve(9L, command, Collections.singletonList(persistedItem));
 
 		ArgumentCaptor<InventoryReservationRequest> captor = ArgumentCaptor.forClass(InventoryReservationRequest.class);
-		verify(inventoryService).reserve(captor.capture());
+		ArgumentCaptor<InventoryMutationContext> contextCaptor = ArgumentCaptor.forClass(InventoryMutationContext.class);
+		verify(inventoryService).reserve(captor.capture(), contextCaptor.capture());
 		assertThat(captor.getValue().getFulfillmentOrderId()).isEqualTo(9L);
 		assertThat(captor.getValue().getFulfillmentItemId()).isEqualTo(31L);
 		assertThat(captor.getValue().getErpTenantId()).isEqualTo(3L);
 		assertThat(captor.getValue().getQuantity()).isEqualTo(5);
+		assertThat(contextCaptor.getValue().getIdempotencyKey()).isEqualTo("fulfillment-reserve:9:31");
 	}
 }

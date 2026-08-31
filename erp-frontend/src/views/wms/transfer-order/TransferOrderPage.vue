@@ -48,14 +48,7 @@
       <!-- 状态列 -->
       <template v-else-if="column.key === 'orderStatus'">
         <a-badge
-          :status="
-            (TransferOrderStatusBadgeMap[record.orderStatus] || 'default') as
-              | 'success'
-              | 'default'
-              | 'error'
-              | 'processing'
-              | 'warning'
-          "
+          :status="getBadgeStatus(record.orderStatus)"
           :text="TransferOrderStatusMap[record.orderStatus]"
         />
       </template>
@@ -187,6 +180,12 @@ const getStatusTime = (record: TransferOrderPageVO): string => {
  */
 const formatQuantity = (record: TransferOrderPageVO): string => {
   return `${record.skuCount} SKU / ${record.totalQuantity} 件`
+}
+
+type BadgeStatus = 'success' | 'default' | 'error' | 'processing' | 'warning'
+
+const getBadgeStatus = (status: string): BadgeStatus => {
+  return (TransferOrderStatusBadgeMap[status] || 'default') as BadgeStatus
 }
 
 // ==================== 表格配置 ====================

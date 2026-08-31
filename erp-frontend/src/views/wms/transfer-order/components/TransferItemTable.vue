@@ -23,12 +23,12 @@
         <template v-else-if="column.key === 'quantity'">
           <a-input-number
             v-if="!disabled"
-            v-model:value="items[index].quantity"
+            :value="record.quantity"
             :min="1"
             :max="record.availableQuantity"
             :precision="0"
             style="width: 100%"
-            @change="handleQuantityChange"
+            @change="(value: number | null) => handleItemChange(index, 'quantity', value ?? 1)"
           />
           <span v-else>{{ record.quantity }}</span>
         </template>
@@ -37,10 +37,10 @@
         <template v-else-if="column.key === 'remark'">
           <a-input
             v-if="!disabled"
-            v-model:value="items[index].remark"
+            :value="record.remark"
             placeholder="备注"
             :maxlength="200"
-            @change="handleRemarkChange"
+            @change="(event: Event) => handleItemChange(index, 'remark', (event.target as HTMLInputElement).value)"
           />
           <span v-else>{{ record.remark || '-' }}</span>
         </template>
@@ -128,7 +128,15 @@ const totalQuantity = computed(() => {
 /**
  * 处理数量变化
  */
-const handleQuantityChange = () => {
+const handleItemChange = <K extends 'quantity' | 'remark'>(
+  index: number,
+  key: K,
+  value: TransferItemFormData[K]
+) => {
+  const nextItems = props.items.map((item, itemIndex) =>
+    itemIndex === index ? { ...item, [key]: value } : item
+  )
+  emits('update:items', nextItems)
   emits('change')
 }
 

@@ -22,6 +22,9 @@ public class BillingRecordVO {
     private String sourceType;
     private String sourceRef;
     private String remark;
+
+    private Long operatorId;
+
+    private String operatorName;
     private LocalDateTime createTime;
 }
-

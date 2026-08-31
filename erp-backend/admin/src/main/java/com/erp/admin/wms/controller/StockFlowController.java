@@ -5,7 +5,7 @@ import com.erp.admin.wms.model.vo.StockFlowDetailVO;
 import com.erp.admin.wms.model.vo.StockFlowPageVO;
 import com.erp.admin.wms.model.vo.StockFlowTodaySummaryVO;
 import com.erp.admin.wms.model.vo.StockFlowTrendVO;
-import com.erp.admin.wms.service.StockFlowService;
+import com.erp.admin.wms.service.InventoryEventQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -31,20 +31,20 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StockFlowController {
 
-    private final StockFlowService stockFlowService;
+    private final InventoryEventQueryService inventoryEventQueryService;
 
     @Operation(summary = "流水分页查询")
     @GetMapping("/page")
     @PreAuthorize("hasAuthority('wms:stock-flow:read')")
     public ApiResult<PageResult<StockFlowPageVO>> queryPage(PageParam pageParam, StockFlowQO qo) {
-        return ApiResult.ok(stockFlowService.queryPage(pageParam, qo));
+        return ApiResult.ok(inventoryEventQueryService.queryFlowPage(pageParam, qo));
     }
 
     @Operation(summary = "流水详情")
     @GetMapping("/detail")
     @PreAuthorize("hasAuthority('wms:stock-flow:read')")
     public ApiResult<StockFlowDetailVO> getDetail(@RequestParam Long id) {
-        return ApiResult.ok(stockFlowService.getDetail(id));
+        return ApiResult.ok(inventoryEventQueryService.getFlowDetail(id));
     }
 
     @Operation(summary = "该仓+SKU实际出现过的过账类型(用于筛选下拉动态选项)")
@@ -53,7 +53,7 @@ public class StockFlowController {
     public ApiResult<List<String>> listPostingTypes(
             @RequestParam(required = false) Long warehouseId,
             @RequestParam(required = false) String skuCode) {
-        return ApiResult.ok(stockFlowService.listPostingTypes(warehouseId, skuCode));
+        return ApiResult.ok(inventoryEventQueryService.listEventTypes(warehouseId, skuCode));
     }
 
     @Operation(summary = "今日汇总统计")
@@ -61,7 +61,7 @@ public class StockFlowController {
     @PreAuthorize("hasAuthority('wms:stock-flow:read')")
     public ApiResult<StockFlowTodaySummaryVO> getTodaySummary(
             @RequestParam(required = false) Long warehouseId) {
-        return ApiResult.ok(stockFlowService.getTodaySummary(warehouseId));
+        return ApiResult.ok(inventoryEventQueryService.getTodaySummary(warehouseId));
     }
 
     @Operation(summary = "流水趋势数据")
@@ -70,7 +70,7 @@ public class StockFlowController {
     public ApiResult<List<StockFlowTrendVO>> getTrend(
             @RequestParam(defaultValue = "7") Integer days,
             @RequestParam(required = false) Long warehouseId) {
-        return ApiResult.ok(stockFlowService.getTrend(days, warehouseId));
+        return ApiResult.ok(inventoryEventQueryService.getTrend(days, warehouseId));
     }
 
 }

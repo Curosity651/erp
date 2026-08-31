@@ -21,6 +21,7 @@ import com.erp.admin.product.service.SkuMappingService;
 import com.erp.admin.shop.model.entity.Shop;
 import com.erp.admin.shop.service.ShopService;
 import com.erp.admin.wms.enums.WmsResultCode;
+import com.erp.admin.wms.config.WmsCoreModeGuard;
 import com.erp.admin.wms.facade.SalesOutboundFacade;
 import com.erp.admin.wms.model.dto.SalesOutboundDTO;
 import com.erp.admin.wms.model.qo.SalesOutboundQO;
@@ -75,6 +76,7 @@ public class SalesOutboundController {
     private final SkuBriefService skuBriefService;
     private final SkuMappingService skuMappingService;
     private final ErpOrderItemMapper orderItemMapper;
+    private final WmsCoreModeGuard coreModeGuard;
 
     @GetMapping("/page")
     @PreAuthorize("@per.hasPermission('wms:sales-outbound:read')")
@@ -95,6 +97,7 @@ public class SalesOutboundController {
     @OperationLog(bizType = "销售出库单管理", successMessage = "新建成功")
     @Operation(summary = "新建销售出库单")
     public ApiResult<Long> create(@Validated({Default.class, CreateGroup.class}) @RequestBody SalesOutboundDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧销售出库创建");
         return ApiResult.ok(salesOutboundFacade.create(dto));
     }
 
@@ -103,6 +106,7 @@ public class SalesOutboundController {
     @OperationLog(bizType = "销售出库单管理", successMessage = "编辑成功")
     @Operation(summary = "编辑销售出库单")
     public ApiResult<Void> update(@Validated({Default.class, UpdateGroup.class}) @RequestBody SalesOutboundDTO dto) {
+        coreModeGuard.assertLegacyWriteAllowed("旧销售出库编辑");
         salesOutboundFacade.update(dto);
         return ApiResult.ok();
     }
@@ -112,6 +116,7 @@ public class SalesOutboundController {
     @OperationLog(bizType = "销售出库单管理", successMessage = "确认出库成功")
     @Operation(summary = "确认出库")
     public ApiResult<List<StockShortageVO>> confirm(@RequestParam Long id) {
+        coreModeGuard.assertLegacyWriteAllowed("旧销售出库确认");
         List<StockShortageVO> shortages = salesOutboundFacade.confirm(id);
         if (!shortages.isEmpty()) {
             // 构建错误消息
@@ -129,6 +134,7 @@ public class SalesOutboundController {
     @OperationLog(bizType = "销售出库单管理", successMessage = "取消成功")
     @Operation(summary = "取消出库单")
     public ApiResult<Void> cancel(@RequestParam Long id) {
+        coreModeGuard.assertLegacyWriteAllowed("旧销售出库取消");
         salesOutboundFacade.cancel(id);
         return ApiResult.ok();
     }
@@ -138,6 +144,7 @@ public class SalesOutboundController {
     @OperationLog(bizType = "销售出库单管理", successMessage = "删除成功")
     @Operation(summary = "删除销售出库单")
     public ApiResult<Void> delete(@RequestBody List<Long> ids) {
+        coreModeGuard.assertLegacyWriteAllowed("旧销售出库删除");
         salesOutboundFacade.delete(ids);
         return ApiResult.ok();
     }

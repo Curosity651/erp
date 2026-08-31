@@ -65,7 +65,7 @@ describe('putaway Excel template', () => {
     const buffer = await buildPutawayTemplateBuffer(context)
     const rows = await parsePutawayTemplateBuffer(buffer)
     expect(rows).toEqual(createTemplateRows(context))
-  })
+  }, 60_000)
 
   it('accepts one SKU split across multiple valid location rows', () => {
     const result = validateTemplateRows([

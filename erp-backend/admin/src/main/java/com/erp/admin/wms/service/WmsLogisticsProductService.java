@@ -26,6 +26,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -50,48 +52,67 @@ public class WmsLogisticsProductService extends ExtendServiceImpl<WmsLogisticsPr
     public PageResult<LogisticsProductVO> page(PageParam pageParam, String keyword, Integer status) {
         Long wmsTenantId = currentOperatorId();
         IPage<WmsLogisticsProduct> page = baseMapper.pageByTenant(pageParam, wmsTenantId, keyword, status);
-        List<LogisticsProductVO> records = page.getRecords().stream().map(this::toVo).collect(Collectors.toList());
+        List<LogisticsProductVO> records = page.getRecords().stream().map(this::toManagementVo)
+            .collect(Collectors.toList());
         return new PageResult<>(records, page.getTotal());
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void saveProduct(LogisticsProductDTO dto) {
+    public void createProduct(LogisticsProductDTO dto) {
         Long wmsTenantId = currentOperatorId();
-        Assert.isTrue(dto.getUnitPrice() != null && dto.getUnitPrice().compareTo(BigDecimal.ZERO) >= 0, "单价不能为负");
-		Assert.hasText(dto.getProductCode(), "产品编码不能为空");
-		Assert.hasText(dto.getCurrency(), "币种不能为空");
+        WmsLogisticsProduct entity = new WmsLogisticsProduct();
+        entity.setWmsTenantId(wmsTenantId);
+        entity.setStatus(1);
+        fillProduct(entity, dto, wmsTenantId, null);
+        this.save(entity);
+        log.info("物流产品新建, id={}, wmsTenantId={}, name={}", entity.getId(), wmsTenantId, dto.getProductName());
+    }
 
-        WmsLogisticsProduct entity;
-        if (dto.getId() != null) {
-            entity = loadOwned(dto.getId(), wmsTenantId);
-        } else {
-            entity = new WmsLogisticsProduct();
-            entity.setWmsTenantId(wmsTenantId);
-            entity.setStatus(1);
-        }
+    @Transactional(rollbackFor = Exception.class)
+    public void updateProduct(Long id, LogisticsProductDTO dto) {
+        Long wmsTenantId = currentOperatorId();
+        WmsLogisticsProduct entity = loadOwned(id, wmsTenantId);
+        assertPricingIdentityEditable(entity, dto, wmsTenantId);
+        fillProduct(entity, dto, wmsTenantId, id);
+        this.updateById(entity);
+        log.info("物流产品编辑, id={}, wmsTenantId={}, name={}", entity.getId(), wmsTenantId, dto.getProductName());
+    }
+
+    private void fillProduct(WmsLogisticsProduct entity, LogisticsProductDTO dto, Long wmsTenantId, Long excludeId) {
+        Assert.isTrue(dto.getUnitPrice() != null && dto.getUnitPrice().compareTo(BigDecimal.ZERO) >= 0, "单价不能为负");
+        Assert.hasText(dto.getProductCode(), "产品编码不能为空");
+        Assert.hasText(dto.getCurrency(), "币种不能为空");
+        String productCode = dto.getProductCode().trim().toUpperCase(Locale.ROOT);
+        Long duplicateCount = baseMapper.countByCode(wmsTenantId, productCode, excludeId);
+        Assert.isTrue(duplicateCount == null || duplicateCount == 0, "产品编码已存在");
         entity.setProductName(dto.getProductName());
-        entity.setProductCode(dto.getProductCode().trim().toUpperCase());
+        entity.setProductCode(productCode);
         entity.setTags(dto.getTags() == null || dto.getTags().isEmpty() ? null : JsonUtils.toJson(dto.getTags()));
         entity.setUnitPrice(dto.getUnitPrice());
-		entity.setCurrency(dto.getCurrency().trim().toUpperCase());
-		entity.setProductDescription(dto.getProductDescription());
+        entity.setCurrency(dto.getCurrency().trim().toUpperCase(Locale.ROOT));
+        entity.setProductDescription(dto.getProductDescription());
         entity.setRemark(dto.getRemark());
-        this.saveOrUpdate(entity);
-        log.info("物流产品保存, id={}, wmsTenantId={}, name={}", entity.getId(), wmsTenantId, dto.getProductName());
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void updateStatus(Long id, Integer status) {
         Assert.isTrue(status != null && (status == 0 || status == 1), "状态非法");
-        WmsLogisticsProduct entity = loadOwned(id, currentOperatorId());
+        Long wmsTenantId = currentOperatorId();
+        WmsLogisticsProduct entity = loadOwned(id, wmsTenantId);
+        if (status == 0 && !Integer.valueOf(0).equals(entity.getStatus())) {
+            long shopCount = nz(baseMapper.countShopReferences(wmsTenantId, id));
+            Assert.isTrue(shopCount == 0, "该物流产品仍是 " + shopCount
+                + " 个店铺的默认物流产品，请先修改店铺默认物流产品后再停用");
+        }
         entity.setStatus(status);
         this.updateById(entity);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void deleteProduct(Long id) {
-        WmsLogisticsProduct entity = loadOwned(id, currentOperatorId());
-        this.removeById(entity.getId());
+        Long wmsTenantId = currentOperatorId();
+        loadOwned(id, wmsTenantId);
+        throw new BusinessException(400, "物流产品不能删除，请使用停用功能保留历史业务记录");
     }
 
     // ==================== 货主端（建单选项） ====================
@@ -159,6 +180,43 @@ public class WmsLogisticsProductService extends ExtendServiceImpl<WmsLogisticsPr
         Long wmsTenantId = WmsTenantContext.getCurrentWmsTenant();
         Assert.notNull(wmsTenantId, "服务商上下文缺失");
         return wmsTenantId;
+    }
+
+    private static long nz(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private void assertPricingIdentityEditable(WmsLogisticsProduct entity, LogisticsProductDTO dto,
+            Long wmsTenantId) {
+        if (orderReferenceCount(wmsTenantId, entity.getId()) == 0) {
+            return;
+        }
+        String requestedCode = dto.getProductCode() == null ? null
+            : dto.getProductCode().trim().toUpperCase(Locale.ROOT);
+        String requestedCurrency = dto.getCurrency() == null ? null
+            : dto.getCurrency().trim().toUpperCase(Locale.ROOT);
+        boolean codeChanged = !Objects.equals(entity.getProductCode(), requestedCode);
+        boolean currencyChanged = !Objects.equals(entity.getCurrency(), requestedCurrency);
+        boolean priceChanged = entity.getUnitPrice() == null || dto.getUnitPrice() == null
+            || entity.getUnitPrice().compareTo(dto.getUnitPrice()) != 0;
+        Assert.isTrue(!codeChanged && !currencyChanged && !priceChanged,
+            "该物流产品已产生业务数据，产品编码、默认费用和币种不能修改；如需调价请使用复制调价");
+    }
+
+    private long orderReferenceCount(Long wmsTenantId, Long productId) {
+        return nz(baseMapper.countFulfillmentReferences(wmsTenantId, productId))
+            + nz(baseMapper.countLegacyOutboundReferences(wmsTenantId, productId));
+    }
+
+    private LogisticsProductVO toManagementVo(WmsLogisticsProduct entity) {
+        LogisticsProductVO vo = toVo(entity);
+        Long wmsTenantId = entity.getWmsTenantId();
+        long shopCount = nz(baseMapper.countShopReferences(wmsTenantId, entity.getId()));
+        long orderCount = orderReferenceCount(wmsTenantId, entity.getId());
+        vo.setShopReferenceCount(shopCount);
+        vo.setOrderReferenceCount(orderCount);
+        vo.setUsed(orderCount > 0);
+        return vo;
     }
 
     private LogisticsProductVO toVo(WmsLogisticsProduct entity) {

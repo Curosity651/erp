@@ -37,3 +37,10 @@ coverage
 /.agents
 /.cursor
 /docs/plans
+
+# Local runtime and database snapshots
+/runtime-logs/
+/backups/
+/*-before-*.sql
+/backup_*.sql
+/erp-frontend/vite.config.ts.timestamp-*.mjs

@@ -7,7 +7,8 @@ import type {
   GenerateBillDTO,
   GenerateBillResultVO,
   FeeRate,
-  ManualBillingDTO
+  ManualBillingDTO,
+  BillAdjustmentDTO
 } from './types'
 import { mockPageBills, mockGetBill, mockChangeStatus, mockGenerate } from './mock'
 
@@ -90,4 +91,8 @@ export function listEffectiveRates(wmsTenantId: number) {
 
 export function addManualCharge(data: ManualBillingDTO) {
   return httpClient.post<ApiResult<void>>(`${BASE}/manual-charge`, data)
+}
+
+export function addBillAdjustment(id: number, data: BillAdjustmentDTO) {
+  return httpClient.post<ApiResult<MonthlyBillVO>>(`${BASE}/${id}/adjustment`, data)
 }

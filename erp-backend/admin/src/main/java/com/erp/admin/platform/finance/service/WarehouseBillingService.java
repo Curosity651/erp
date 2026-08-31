@@ -4,7 +4,10 @@ import com.erp.admin.platform.finance.mapper.WmsBillingRecordMapper;
 import com.erp.admin.platform.finance.mapper.WmsFeeRateCardMapper;
 import com.erp.admin.platform.finance.model.entity.WmsBillingRecord;
 import com.erp.admin.platform.finance.model.entity.WmsFeeRateCard;
+import com.erp.admin.platform.finance.model.entity.WmsMonthlyBill;
+import com.erp.admin.platform.finance.model.dto.BillAdjustmentDTO;
 import com.erp.admin.platform.finance.model.dto.ManualBillingDTO;
+import com.erp.admin.platform.finance.model.enums.BillAdjustmentType;
 import com.erp.admin.tenant.mapper.SysTenantMapper;
 import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.wms.mapper.WmsPalletMapper;
@@ -122,6 +125,46 @@ public class WarehouseBillingService {
         record.setRateSnapshot(rate.getFeeName() + "|" + rate.getBillingUnit() + "|" + rate.getUnitPrice());
         record.setSourceRef(dto.getSourceRef().trim());
         record.setRemark(dto.getRemark().trim());
+        billingMapper.insert(record);
+        return record;
+    }
+
+    public WmsBillingRecord recordBillAdjustment(WmsMonthlyBill bill, BillAdjustmentDTO dto,
+            Long operatorId, String operatorName) {
+        Assert.notNull(bill, "账单不存在");
+        Assert.notNull(dto.getAdjustmentType(), "请选择调整类型");
+        Assert.isTrue(dto.getAmount() != null && dto.getAmount().compareTo(BigDecimal.ZERO) > 0,
+                "调整金额必须大于0");
+        WmsFeeRateCard rate = requireRate(bill.getWmsTenantId(), dto.getFeeCode());
+        BigDecimal signedAmount = dto.getAdjustmentType().apply(dto.getAmount())
+                .setScale(2, RoundingMode.HALF_UP);
+        String sourceRef = dto.getSourceRef().trim();
+        String bizId = "BILL_ADJUSTMENT:" + bill.getId() + ":" + sourceRef;
+        Assert.isNull(billingMapper.selectByBizId(bizId), "该业务凭证的账单调整已经登记");
+
+        WmsBillingRecord record = new WmsBillingRecord();
+        record.setMonthlyBillId(bill.getId());
+        record.setBizId(bizId);
+        record.setWmsTenantId(bill.getWmsTenantId());
+        record.setBillMonth(bill.getBillMonth());
+        record.setFeeType(rate.getFeeType());
+        record.setSourceType("BILL_ADJUSTMENT");
+        record.setSourceId(bill.getId());
+        record.setFeeCode(rate.getFeeCode());
+        record.setBillingUnit("ACTUAL");
+        record.setQuantity(1);
+        record.setBillingQuantity(BigDecimal.ONE);
+        record.setUnitPrice(signedAmount);
+        record.setBaseAmount(signedAmount);
+        record.setAmount(signedAmount);
+        record.setCurrency(bill.getCurrency());
+        record.setChargeStatus("POSTED");
+        record.setRateSnapshot(rate.getFeeName() + "|ACTUAL|" + signedAmount);
+        record.setSourceRef(sourceRef);
+        record.setRemark("[" + (dto.getAdjustmentType() == BillAdjustmentType.SUPPLEMENT ? "补收" : "冲减")
+                + "] " + dto.getRemark().trim());
+        record.setOperatorId(operatorId);
+        record.setOperatorName(operatorName);
         billingMapper.insert(record);
         return record;
     }
@@ -324,6 +367,8 @@ public class WarehouseBillingService {
         if (rate == null) {
             throw new BusinessException(400, "未配置有效仓储费率: " + feeCode);
         }
+        Assert.isTrue("CNY".equalsIgnoreCase(rate.getCurrency()),
+                "平台应收账单仅支持人民币费率，请修正收费标准: " + feeCode);
         return rate;
     }
 

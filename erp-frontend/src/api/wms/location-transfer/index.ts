@@ -1,12 +1,9 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult, PageResult } from '@/api/types'
 import type {
-  LocationTransferCreateDTO,
   LocationTransferPageParam,
   LocationTransferPageVO,
   LocationTransferDetailVO,
-  LocationTransferPlanDTO,
-  LocationTransferBatchCreateDTO,
   LogicalLocationTransferCreateDTO,
   LogicalTransferLocationVO,
   LogicalTransferSourceVO,
@@ -30,11 +27,6 @@ export function getLocationTransferDetail(id: number) {
   return httpClient.get<ApiResult<LocationTransferDetailVO>>('/wms/location-transfer/detail', {
     params: { id }
   })
-}
-
-/** 新建库位调整单 */
-export function createLocationTransfer(dto: LocationTransferCreateDTO) {
-  return httpClient.post<ApiResult<number>>('/wms/location-transfer', dto)
 }
 
 export function createLogicalLocationTransfer(dto: LogicalLocationTransferCreateDTO) {
@@ -63,10 +55,6 @@ export function listLogicalTransferTargets(params: {
   )
 }
 
-export function createLocationTransferBatch(dto: LocationTransferBatchCreateDTO) {
-  return httpClient.post<ApiResult<number[]>>('/wms/location-transfer/batch', dto)
-}
-
 export function listLocationTransferSources(params: {
   warehouseId: number
   locationCode?: string
@@ -93,12 +81,6 @@ export function listSelectableTransferLocations(params: {
 /** 调整完成（执行移库） */
 export function completeLocationTransfer(id: number) {
   return httpClient.patch<ApiResult<void>>('/wms/location-transfer/logical-complete', null, {
-    params: { id }
-  })
-}
-
-export function completeLocationTransferPlan(id: number, dto: LocationTransferPlanDTO) {
-  return httpClient.patch<ApiResult<void>>('/wms/location-transfer/plan', dto, {
     params: { id }
   })
 }

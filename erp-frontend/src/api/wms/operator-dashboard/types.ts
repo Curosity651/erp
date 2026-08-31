@@ -1,68 +1,74 @@
-/**
- * WMS 服务商运营数据分析看板（900400）类型契约。
- * A 经营总览 / B 收支趋势(按月) / C 产品分析 / D 货主分析 / E 服务规模。
- */
-
-/** 查询入参 */
 export interface OperatorDashboardParams {
-  // 账期起止 YYYY-MM（缺省=最近6个月）
   monthStart?: string
   monthEnd?: string
-  // 名下货主过滤（多选，空=全部）
   erpTenantIds?: number[]
 }
 
-/** A 经营总览 */
+export interface CurrencyAmountVO {
+  currency: string
+  amount: number
+}
+
+export interface ExpenseSummaryVO {
+  currency: string
+  draftEstimate: number
+  confirmedPayable: number
+  disputedAmount: number
+  paidAmount: number
+}
+
+export interface CurrencySeriesVO {
+  currency: string
+  amounts: number[]
+}
+
 export interface OverviewVO {
-  income: number
+  incomeByCurrency: CurrencyAmountVO[]
   incomeCount: number
-  expense: number
-  netProfit: number
+  expenseByCurrency: ExpenseSummaryVO[]
+  balanceByCurrency: CurrencyAmountVO[]
   ownerTotal: number
   ownerEnabled: number
   productTotal: number
   productEnabled: number
 }
 
-/** B 收支趋势（按月，数组与 months 对齐） */
 export interface TrendVO {
   months: string[]
-  income: number[]
-  expense: number[]
-  net: number[]
+  incomeSeries: CurrencySeriesVO[]
+  confirmedExpenseSeries: CurrencySeriesVO[]
+  paidExpenseSeries: CurrencySeriesVO[]
 }
 
-/** C 产品统计（柱图取 usageCount，环形取 amount） */
 export interface ProductStatVO {
   productId: number
   productName: string
+  currency: string
   usageCount: number
   amount: number
 }
 
-/** D 货主收入贡献 */
 export interface OwnerStatVO {
   erpTenantId: number
   ownerName: string
+  currency: string
   amount: number
   usageCount: number
 }
 
-/** D 货主出库吞吐 */
 export interface OwnerOrderStatVO {
   erpTenantId: number
   ownerName: string
   orders: number
 }
 
-/** E 服务规模 */
 export interface ScaleVO {
   onHandQty: number
   rackCount: number
   rackMonthlyFee: number
+  rackMonthlyFeeCurrency: string
 }
 
-/** 看板总返回 */
 export interface OperatorDashboardVO {
   overview: OverviewVO
   trend: TrendVO

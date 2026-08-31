@@ -24,6 +24,7 @@ public class LogisticsProductDTO {
     @Schema(title = "产品名称")
     private String productName;
 
+    @NotBlank(message = "产品编码不能为空")
     @Schema(title = "产品编码")
     private String productCode;
 

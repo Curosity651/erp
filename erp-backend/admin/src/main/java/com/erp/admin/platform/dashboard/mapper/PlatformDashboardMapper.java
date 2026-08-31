@@ -15,7 +15,7 @@ import java.util.List;
  */
 public interface PlatformDashboardMapper {
 
-    /** A 在库总量：件数 / SKU 数 / 货主数（wms_inventory 现存桶合计） */
+    /** A 在库总量：件数 / SKU 数 / 货主数（新版逻辑库位库存合计） */
     DashboardRowVO.StockRow selectOnHand(@Param("qo") PlatformDashboardQO qo);
 
     /** A 今日入库：件数(实收) + 单数（采购入库单，按 inbound_date=今日 且已收货/完成） */
@@ -36,7 +36,7 @@ public interface PlatformDashboardMapper {
     /** A 待出库单数（销售出库 PICKED/PACKED） */
     long countPendingOutbound(@Param("qo") PlatformDashboardQO qo);
 
-    /** B 各仓库容占用：total=库位数, used=已落位库位数 */
+    /** B 各仓库容占用：total=逻辑库位数, used=存在库存的库位数 */
     List<PlatformDashboardDataVO.WarehouseCapacity> selectWarehouseCapacity(@Param("qo") PlatformDashboardQO qo);
 
     /** B 分区占用：locationCount=该分区库位数, invQty=该分区库存件数 */

@@ -68,13 +68,18 @@
           :text="RETURN_STATUS_TEXT[record.status as ReturnStatus] || record.status"
         />
       </template>
+      <template v-else-if="column.key === 'operatorUser'">
+        {{ operationInfo(record).name }}
+      </template>
+      <template v-else-if="column.key === 'operationTime'">
+        {{ operationInfo(record).time }}
+      </template>
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a v-if="record.status === 'RETURN_PENDING'" @click="openReceive(record)">收货</a>
           <a v-if="record.status === 'RETURN_PENDING'" class="danger-link" @click="handleCloseReturn(record)">关闭</a>
           <a v-else-if="record.status === 'QC_PENDING'" @click="openQc(record)">质检</a>
           <a v-else-if="record.status === 'COMPLETED'" @click="openQc(record, true)">查看</a>
-          <a v-if="record.status === 'COMPLETED'" @click="handlePrint(record)">打印</a>
           <span v-if="record.status === 'CLOSED'" style="color: rgba(0, 0, 0, 0.25)">—</span>
         </operation-group>
       </template>
@@ -100,9 +105,8 @@ import { SearchActions } from '@/components/Search'
 import WmsOperatorSelect from '@/components/Lov/WmsOperatorSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
 import { mergePageParam } from '@/utils/page-utils'
-import { closeReturn, getReturnQcPallets, pageReturns } from '@/api/wms/return-qc'
+import { closeReturn, pageReturns } from '@/api/wms/return-qc'
 import { isSuccess } from '@/api'
-import { printPalletLabels } from '@/views/platform/pallet/pallet-label-print'
 import type { ReturnOrderVO, ReturnQO, ReturnStatus } from '@/api/wms/return-qc/types'
 import { RETURN_STATUS_TEXT, RETURN_STATUS_BADGE, RETURN_STATUS_OPTIONS } from './constants'
 import ReturnReceiveModal from './ReturnReceiveModal.vue'
@@ -157,9 +161,18 @@ const columns: ProColumns[] = [
   { title: '仓库', dataIndex: 'warehouseName', key: 'warehouseName', width: 140 },
   { title: 'SKU/件数', key: 'skuSummary', width: 120 },
   { title: '状态', key: 'status', width: 120 },
+  { title: '操作人', key: 'operatorUser', width: 120, ellipsis: true },
+  { title: '操作时间', key: 'operationTime', width: 170 },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
   { title: '操作', key: 'operate', width: 130, align: 'center', fixed: 'right' }
 ]
+
+const operationInfo = (record: ReturnOrderVO) => {
+  if (record.status === 'COMPLETED') return { name: record.qcByName || '-', time: record.qcTime || '-' }
+  if (record.status === 'CLOSED') return { name: record.closedByName || '-', time: record.closedTime || '-' }
+  if (record.status === 'QC_PENDING') return { name: record.receivedByName || '-', time: record.receivedTime || '-' }
+  return { name: '-', time: '-' }
+}
 
 const receiveOpen = ref(false)
 const qcOpen = ref(false)
@@ -191,28 +204,6 @@ const handleCloseReturn = (record: ReturnOrderVO) => {
   })
 }
 
-const handlePrint = async (record: ReturnOrderVO) => {
-  const printPage = window.open('', '_blank', 'width=760,height=680')
-  if (!printPage) {
-    message.warning('打印窗口被浏览器拦截，请允许弹出窗口后重试')
-    return
-  }
-  printPage.document.write('<!doctype html><title>正在准备托盘标签...</title><p>正在准备托盘标签...</p>')
-  printPage.document.close()
-  try {
-    const response = await getReturnQcPallets(record.id)
-    const pallets = isSuccess(response) ? response.data || [] : []
-    if (!pallets.length) {
-      printPage.close()
-      message.warning('该退货质检单没有可打印的托盘标签')
-      return
-    }
-    await printPalletLabels(pallets, printPage)
-  } catch (error: any) {
-    printPage.close()
-    message.error(error?.message || '托盘标签加载失败')
-  }
-}
 </script>
 
 <script lang="ts">

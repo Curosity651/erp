@@ -1,6 +1,5 @@
 package com.erp.admin.wms.service;
 
-import com.erp.admin.wms.mapper.InventoryMapper;
 import com.erp.admin.wms.model.dto.RegionSkuStockDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,8 +20,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RegionStockDataProvider {
 
-    private final InventoryMapper inventoryMapper;
-    private final ErpOwnerScopeService erpOwnerScopeService;
+    private final OwnerInventoryQueryService ownerInventoryQueryService;
 
     /**
      * 批量查询区域 SKU 库存聚合数据
@@ -33,16 +31,16 @@ public class RegionStockDataProvider {
      */
     public List<RegionSkuStockDTO> getRegionSkuStocks(Collection<Long> regionIds, String skuKeyword) {
         // 数据级可见性：按当前身份货主作用域过滤（平台=null 看全部；货主=自身；服务商=名下）
-        return inventoryMapper.selectAggregateByRegionsAndKeyword(regionIds, skuKeyword,
-                erpOwnerScopeService.readScope());
+        return ownerInventoryQueryService.getRegionSkuStocks(regionIds, skuKeyword);
     }
 
     /**
      * 查询单个区域单个 SKU 的库存聚合
      */
     public RegionSkuStockDTO getRegionSkuStock(Long regionId, String skuCode) {
-        RegionSkuStockDTO dto = inventoryMapper.selectAggregateByRegionAndSku(regionId, skuCode,
-                erpOwnerScopeService.readScope());
+        RegionSkuStockDTO dto = ownerInventoryQueryService.getRegionSkuStocks(
+                Collections.singleton(regionId), skuCode).stream()
+                .filter(row -> skuCode.equals(row.getSkuCode())).findFirst().orElse(null);
         return dto != null ? dto : RegionSkuStockDTO.empty(regionId, skuCode);
     }
 
@@ -58,8 +56,7 @@ public class RegionStockDataProvider {
             return Collections.emptyMap();
         }
 
-        List<RegionSkuStockDTO> list = inventoryMapper.selectAggregateByRegionsAndKeyword(
-                regionIds, null, erpOwnerScopeService.readScope());
+        List<RegionSkuStockDTO> list = ownerInventoryQueryService.getRegionSkuStocks(regionIds, null);
         return list.stream()
                 .filter(row -> skuCodes.contains(row.getSkuCode()))
                 .collect(Collectors.toMap(

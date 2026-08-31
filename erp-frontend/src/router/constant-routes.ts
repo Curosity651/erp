@@ -158,30 +158,6 @@ export const HOME_ROUTE: RouteRecordRaw = {
         keepAlive: true
       }
     },
-    // 销售出库单单表单路由
-    {
-      path: 'wms/sales-outbound/form/:mode/:id?',
-      name: 'SalseIOutboundForm',
-      component: () => import('@/views/wms/sales-outbound/SalesOutboundFormPage.vue'),
-      meta: {
-        name: '销售出库单表单',
-        hideInMenu: true,
-        hideInTab: false,
-        keepAlive: true
-      }
-    },
-    // 自定义出库单表单路由
-    {
-      path: 'wms/custom-outbound/form/:mode/:id?',
-      name: 'CustomOutboundForm',
-      component: () => import('@/views/wms/custom-outbound/CustomOutboundFormPage.vue'),
-      meta: {
-        name: '自定义出库单表单',
-        hideInMenu: true,
-        hideInTab: false,
-        keepAlive: true
-      }
-    }
   ]
 }
 

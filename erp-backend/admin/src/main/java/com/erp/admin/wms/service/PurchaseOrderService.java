@@ -236,7 +236,7 @@ public class PurchaseOrderService extends ExtendServiceImpl<PurchaseOrderMapper,
 			order.setTaxIncluded(1);
 		}
 		if (order.getPrepayRatio() == null) {
-			order.setPrepayRatio(new BigDecimal("0.40"));
+			order.setPrepayRatio(new BigDecimal("30"));
 		}
 
 		// 初始化状态
@@ -303,11 +303,10 @@ public class PurchaseOrderService extends ExtendServiceImpl<PurchaseOrderMapper,
 		// 校验付款信息
 		purchaseOrderValidator.validatePaymentInfo(dto.getPaymentInfo());
 
-		// 校验质检数据
-		purchaseOrderValidator.validateQcData(dto.getQcData());
-
-		// 校验合同信息
-		purchaseOrderValidator.validateContractInfo(dto.getContractInfo());
+		if (status != PurchaseOrderStatus.COMPLETED) {
+			purchaseOrderValidator.validateQcData(dto.getQcData());
+			purchaseOrderValidator.validateContractInfo(dto.getContractInfo());
+		}
 
 		if (status.canEditAll()) {
 			// 草稿状态：可编辑全部字段（除采购单号外）
@@ -327,21 +326,19 @@ public class PurchaseOrderService extends ExtendServiceImpl<PurchaseOrderMapper,
 			// 非草稿状态：校验是否修改了不可编辑的字段
 			purchaseOrderValidator.validateFieldEditable(order, dto);
 
-			// 仅可编辑备注
-			order.setRemark(dto.getRemark());
+			if (status != PurchaseOrderStatus.COMPLETED) {
+				order.setRemark(dto.getRemark());
+			}
 		}
 
 		// 处理付款信息（所有可编辑状态都允许）
 		paymentHandler.handlePaymentChange(order, dto.getPaymentInfo());
 
-		// 处理合同附件（所有可编辑状态都允许）
-		contractHandler.handleContractChange(order, dto.getContractInfo());
-
-		// 处理质检数据（所有可编辑状态都允许）
-		qcDataHandler.handleQcDataChange(order, dto.getQcData());
-
-		// 处理其他附件（所有可编辑状态都允许）
-		otherFileHandler.handleOtherFilesChange(order, dto.getOtherFileIds());
+		if (status != PurchaseOrderStatus.COMPLETED) {
+			contractHandler.handleContractChange(order, dto.getContractInfo());
+			qcDataHandler.handleQcDataChange(order, dto.getQcData());
+			otherFileHandler.handleOtherFilesChange(order, dto.getOtherFileIds());
+		}
 
 		this.updateById(order);
 		log.info("Updated purchase order, id={}, status={}", order.getId(), status);
@@ -451,8 +448,7 @@ public class PurchaseOrderService extends ExtendServiceImpl<PurchaseOrderMapper,
 				&& !Integer.valueOf(1).equals(order.getBalanceStatus()),
 				"已付款的采购单不允许取消，请先走退款或冲销流程");
 
-		// TODO: 校验是否存在关联物流单，如有则不允许取消
-		// Assert.isTrue(!hasAssociatedLogisticsOrder(id), "存在关联物流单，无法取消");
+		Assert.isTrue(!baseMapper.existsAssociatedShippingOrder(id), "存在关联物流单，无法取消");
 
 		order.setOrderStatus(PurchaseOrderStatus.CANCELLED.name());
 		boolean updated = this.updateById(order);
