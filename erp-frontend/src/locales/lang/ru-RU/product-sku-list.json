@@ -107,5 +107,8 @@
   "product.sku.search.unrestricted": "Без ограничений",
   "product.sku.search.mustInclude": "Должно присутствовать",
   "product.sku.search.mustExclude": "Не должно присутствовать",
-  "product.sku.search.glass": "Стекло"
+  "product.sku.search.glass": "Стекло",
+  "product.sku.copyDataNotFound": "Скопированные данные не найдены. Открыта новая форма.",
+  "product.sku.copyParseFailed": "Не удалось обработать скопированные данные",
+  "product.sku.copyParseFailedWithReason": "Не удалось обработать скопированные данные: {reason}"
 }

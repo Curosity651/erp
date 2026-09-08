@@ -14,11 +14,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { emitter } from '@/hooks/mitt'
 import SkuFormPanel from './SkuFormPanel.vue'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'SkuFormPage' })
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 // 表单模式
 const formMode = ref(route.params.mode as 'create' | 'edit' | 'view' | 'copy')
@@ -37,7 +39,7 @@ if (formMode.value === 'copy' && route.query.copyKey) {
 
     // 先检查 sessionStorage 是否可用
     if (typeof Storage === 'undefined') {
-      throw new Error('浏览器不支持 sessionStorage')
+      throw new Error(t('product.sku.storageUnsupported'))
     }
 
     const copyDataStr = sessionStorage.getItem(copyKey)
@@ -48,12 +50,12 @@ if (formMode.value === 'copy' && route.query.copyKey) {
       // 使用后立即清除，避免内存泄漏
       sessionStorage.removeItem(copyKey)
     } else {
-      message.warning('未找到复制数据，将以新建模式打开')
+      message.warning(t('product.sku.copyDataNotFound'))
     }
   } catch (error) {
-    console.error('解析复制数据失败:', error)
-    const errorMessage = error instanceof Error ? error.message : '未知错误'
-    message.error(`复制数据解析失败: ${errorMessage}`)
+    console.error(t('product.sku.copyParseFailed'), error)
+    const errorMessage = error instanceof Error ? error.message : t('product.sku.unknownError')
+    message.error(t('product.sku.copyParseFailedWithReason', { reason: errorMessage }))
   }
 }
 

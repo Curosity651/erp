@@ -107,5 +107,8 @@
   "product.sku.search.unrestricted": "不限制",
   "product.sku.search.mustInclude": "必须包含",
   "product.sku.search.mustExclude": "必须不含",
-  "product.sku.search.glass": "玻璃"
+  "product.sku.search.glass": "玻璃",
+  "product.sku.copyDataNotFound": "未找到复制数据，将以新建模式打开",
+  "product.sku.copyParseFailed": "复制数据解析失败",
+  "product.sku.copyParseFailedWithReason": "复制数据解析失败：{reason}"
 }

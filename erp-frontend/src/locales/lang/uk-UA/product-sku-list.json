@@ -107,5 +107,8 @@
   "product.sku.search.unrestricted": "Без обмежень",
   "product.sku.search.mustInclude": "Має містити",
   "product.sku.search.mustExclude": "Не має містити",
-  "product.sku.search.glass": "Скло"
+  "product.sku.search.glass": "Скло",
+  "product.sku.copyDataNotFound": "Скопійовані дані не знайдено. Відкрито нову форму.",
+  "product.sku.copyParseFailed": "Не вдалося обробити скопійовані дані",
+  "product.sku.copyParseFailedWithReason": "Не вдалося обробити скопійовані дані: {reason}"
 }

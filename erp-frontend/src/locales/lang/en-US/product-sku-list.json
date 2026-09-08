@@ -107,5 +107,8 @@
   "product.sku.search.unrestricted": "No restriction",
   "product.sku.search.mustInclude": "Must include",
   "product.sku.search.mustExclude": "Must exclude",
-  "product.sku.search.glass": "Glass"
+  "product.sku.search.glass": "Glass",
+  "product.sku.copyDataNotFound": "Copied data was not found. Opening a new form instead.",
+  "product.sku.copyParseFailed": "Failed to parse copied data",
+  "product.sku.copyParseFailedWithReason": "Failed to parse copied data: {reason}"
 }
