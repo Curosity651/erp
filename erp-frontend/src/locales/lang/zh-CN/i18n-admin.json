@@ -1,0 +1,11 @@
+{
+  "i18nAdmin.code": "国际化标识",
+  "i18nAdmin.languageTag": "语言标签",
+  "i18nAdmin.textValue": "文本值",
+  "i18nAdmin.availableLanguages": "可用语言",
+  "i18nAdmin.selectedLanguages": "已选语言",
+  "i18nAdmin.addLanguage": "添加语言",
+  "i18nAdmin.createTitle": "新建国际化信息",
+  "i18nAdmin.editTitle": "编辑国际化信息",
+  "i18nAdmin.importTitle": "导入国际化信息"
+}

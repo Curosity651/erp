@@ -1,0 +1,11 @@
+{
+  "i18nAdmin.code": "Translation Key",
+  "i18nAdmin.languageTag": "Language Tag",
+  "i18nAdmin.textValue": "Text Value",
+  "i18nAdmin.availableLanguages": "Available Languages",
+  "i18nAdmin.selectedLanguages": "Selected Languages",
+  "i18nAdmin.addLanguage": "Add Language",
+  "i18nAdmin.createTitle": "New Translation",
+  "i18nAdmin.editTitle": "Edit Translation",
+  "i18nAdmin.importTitle": "Import Translations"
+}

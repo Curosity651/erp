@@ -3,13 +3,13 @@
     <template v-if="targetLangTags.includes(language.languageTag)">
       <a-input
         v-model:value="language.languageTag"
-        placeholder="语言标签"
+        :placeholder="t('i18nAdmin.languageTag')"
         style="width: 25%; margin-right: 8px"
         :disabled="true"
       />
       <a-input
         v-model:value="language.message"
-        placeholder="文本值"
+        :placeholder="t('i18nAdmin.textValue')"
         style="width: 60%; margin-right: 8px"
       />
       <span
@@ -27,14 +27,14 @@
         :target-keys="targetLangTags"
         :data-source="transferDataSource"
         :render="(item: TransferItem) => item.title"
-        :titles="['Source', 'Target']"
+        :titles="[t('i18nAdmin.availableLanguages'), t('i18nAdmin.selectedLanguages')]"
         :lazy="false"
         @change="handleChange"
       />
     </template>
     <a-button type="dashed" style="width: 100%">
       <PlusOutlined />
-      Add field
+      {{ t('i18nAdmin.addLanguage') }}
     </a-button>
   </a-popover>
 </template>
@@ -43,6 +43,9 @@
 import type { LanguageText } from '@/api/i18n/types'
 import { supportLanguage } from '@/config'
 import type { TransferItem } from 'ant-design-vue/es/transfer'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 支持的语言 tags
 const supportLanguageTags = Object.keys(supportLanguage)

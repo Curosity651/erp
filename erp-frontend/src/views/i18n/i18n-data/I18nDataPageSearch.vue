@@ -3,18 +3,21 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="国际化标识">
-            <a-input v-model:value="formModel.code" placeholder="请输入" />
+          <a-form-item :label="t('i18nAdmin.code')">
+            <a-input v-model:value="formModel.code" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="文本值">
-            <a-input v-model:value="formModel.message" placeholder="请输入" />
+          <a-form-item :label="t('i18nAdmin.textValue')">
+            <a-input v-model:value="formModel.message" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="语言标签">
-            <a-input v-model:value="formModel.languageTag" placeholder="请输入" />
+          <a-form-item :label="t('i18nAdmin.languageTag')">
+            <a-input
+              v-model:value="formModel.languageTag"
+              :placeholder="t('message.pleaseEnter')"
+            />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
@@ -28,7 +31,9 @@
 <script lang="ts" setup>
 import type { I18nDataQO } from '@/api/i18n/types'
 import { Form } from 'ant-design-vue'
+import { useI18n } from 'vue-i18n'
 const { useForm } = Form
+const { t } = useI18n()
 
 const labelCol = { md: { span: 6 } }
 

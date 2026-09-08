@@ -49,8 +49,10 @@ import type { UploadFile } from 'ant-design-vue/lib/upload/interface'
 import { doRequest } from '@/utils/axios/request'
 import type { I18nImportData } from '@/api/i18n/types'
 import { useAdminI18n } from '@/hooks/i18n'
+import { useI18n } from 'vue-i18n'
 
 const { rawI18nText } = useAdminI18n()
+const { t } = useI18n()
 
 const emits = defineEmits<{
   (e: 'submit-success'): void
@@ -58,7 +60,7 @@ const emits = defineEmits<{
 
 const formRef = ref()
 
-const { title, visible, openModal, closeModal } = useModal('导入国际化信息')
+const { title, visible, openModal, closeModal } = useModal()
 
 const fileList = ref<UploadFile[]>([])
 
@@ -105,6 +107,7 @@ const handleClose = () => {
 
 defineExpose({
   open() {
+    title.value = t('i18nAdmin.importTitle')
     openModal()
     fileList.value = []
     formModel.importMode = ImportMode.SKIP_EXISTING

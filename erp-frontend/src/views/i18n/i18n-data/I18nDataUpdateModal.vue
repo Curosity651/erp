@@ -51,16 +51,18 @@ import type { I18nData, I18nDataPageVO } from '@/api/i18n/types'
 import { updateI18nData } from '@/api/i18n/i18n-data'
 import { overrideProperties } from '@/utils/bean-utils'
 import { useAdminI18n } from '@/hooks/i18n'
+import { useI18n } from 'vue-i18n'
 
 const emits = defineEmits<{
   (e: 'submit-success'): void
 }>()
 
-const { title, visible, openModal, closeModal } = useModal('编辑国际化信息')
+const { title, visible, openModal, closeModal } = useModal()
 
 const { formAction } = useFormAction(FormAction.UPDATE)
 
 const { rawI18nText } = useAdminI18n()
+const { t } = useI18n()
 
 const formModel = reactive<I18nData>({
   code: '',
@@ -107,6 +109,7 @@ const handleClose = () => {
 
 defineExpose({
   open(record: I18nDataPageVO) {
+    title.value = t('i18nAdmin.editTitle')
     openModal()
     resetFields()
     overrideProperties(formModel, record)

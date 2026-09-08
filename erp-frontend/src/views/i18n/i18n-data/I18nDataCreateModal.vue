@@ -39,14 +39,16 @@ import type { I18nDataDTO } from '@/api/i18n/types'
 import { createI18nData } from '@/api/i18n/i18n-data'
 import LanguageText from '../LanguageText.vue'
 import { useAdminI18n } from '@/hooks/i18n'
+import { useI18n } from 'vue-i18n'
 
 const { rawI18nText } = useAdminI18n()
+const { t } = useI18n()
 
 const emits = defineEmits<{
   (e: 'submit-success'): void
 }>()
 
-const { title, visible, openModal, closeModal } = useModal('新建国际化信息')
+const { title, visible, openModal, closeModal } = useModal()
 
 const { formAction } = useFormAction(FormAction.CREATE)
 
@@ -96,6 +98,7 @@ const handleClose = () => {
 
 defineExpose({
   open() {
+    title.value = t('i18nAdmin.createTitle')
     openModal()
     resetFields()
   }

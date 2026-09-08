@@ -1,0 +1,11 @@
+{
+  "i18nAdmin.code": "Ключ перевода",
+  "i18nAdmin.languageTag": "Языковой тег",
+  "i18nAdmin.textValue": "Текстовое значение",
+  "i18nAdmin.availableLanguages": "Доступные языки",
+  "i18nAdmin.selectedLanguages": "Выбранные языки",
+  "i18nAdmin.addLanguage": "Добавить язык",
+  "i18nAdmin.createTitle": "Новый перевод",
+  "i18nAdmin.editTitle": "Редактировать перевод",
+  "i18nAdmin.importTitle": "Импорт переводов"
+}
