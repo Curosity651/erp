@@ -13,24 +13,31 @@
       <a-form-item v-if="isUpdateForm" style="display: none">
         <a-input v-model:value="formModel.id" />
       </a-form-item>
-      <a-form-item label="岗位名称" v-bind="validateInfos.name">
-        <a-input v-model:value="formModel.name" placeholder="请输入岗位名称" />
+      <a-form-item :label="t('system.position.name')" v-bind="validateInfos.name">
+        <a-input
+          v-model:value="formModel.name"
+          :placeholder="t('system.position.namePlaceholder')"
+        />
       </a-form-item>
-      <a-form-item label="岗位编码" v-bind="validateInfos.code">
+      <a-form-item :label="t('system.position.code')" v-bind="validateInfos.code">
         <a-input
           v-model:value="formModel.code"
-          placeholder="请输入岗位编码"
+          :placeholder="t('system.position.codePlaceholder')"
           :disabled="isUpdateForm"
         />
       </a-form-item>
-      <a-form-item label="显示顺序">
-        <a-input-number v-model:value="formModel.sort" placeholder="请输入" :min="0" />
+      <a-form-item :label="t('system.position.sort')">
+        <a-input-number
+          v-model:value="formModel.sort"
+          :placeholder="t('message.pleaseEnter')"
+          :min="0"
+        />
       </a-form-item>
-      <a-form-item label="状态">
+      <a-form-item :label="t('system.position.status')">
         <dict-radio-group v-model:value="formModel.status" dict-code="enable_status" />
       </a-form-item>
-      <a-form-item label="岗位描述">
-        <a-textarea v-model:value="formModel.description" placeholder="请输入" />
+      <a-form-item :label="t('system.position.description')">
+        <a-textarea v-model:value="formModel.description" :placeholder="t('message.pleaseEnter')" />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -45,6 +52,9 @@ import { createPosition, updatePosition } from '@/api/system/position'
 import { overrideProperties } from '@/utils/bean-utils'
 import type { ColProps } from 'ant-design-vue'
 import { DictRadioGroup } from '@/components/Dict'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const labelCol: ColProps = {
   sm: { span: 24 },
@@ -81,21 +91,21 @@ const formModel = reactive<PositionDTO>({
 })
 
 // 表单的校验规则
-const formRule = reactive({
+const formRule = computed(() => ({
   name: [
-    { required: true, message: '请输入岗位名称', trigger: 'blur' },
-    { max: 50, message: '岗位名称长度不能超过50个字符', trigger: 'blur' }
+    { required: true, message: t('system.position.validation.name'), trigger: 'blur' },
+    { max: 50, message: t('system.position.validation.nameLength'), trigger: 'blur' }
   ],
   code: [
-    { required: true, message: '请输入岗位编码', trigger: 'blur' },
-    { max: 30, message: '岗位编码长度不能超过30个字符', trigger: 'blur' },
+    { required: true, message: t('system.position.validation.code'), trigger: 'blur' },
+    { max: 30, message: t('system.position.validation.codeLength'), trigger: 'blur' },
     {
       pattern: /^[a-zA-Z0-9_-]+$/,
-      message: '岗位编码只能包含字母、数字、下划线和横线',
+      message: t('system.position.validation.codePattern'),
       trigger: 'blur'
     }
   ]
-})
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<PositionDTO> = {
@@ -132,9 +142,9 @@ defineExpose({
     openModal()
     resetFields()
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建岗位'
+      title.value = t('system.position.createTitle')
     } else {
-      title.value = '编辑岗位'
+      title.value = t('system.position.editTitle')
       overrideProperties(formModel, record)
     }
     formAction.value = newFormAction

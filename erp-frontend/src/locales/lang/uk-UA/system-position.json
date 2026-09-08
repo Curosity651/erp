@@ -1,0 +1,17 @@
+{
+  "system.position.pageTitle": "Керування посадами",
+  "system.position.name": "Назва посади",
+  "system.position.code": "Код посади",
+  "system.position.description": "Опис посади",
+  "system.position.sort": "Порядок відображення",
+  "system.position.status": "Статус",
+  "system.position.namePlaceholder": "Введіть назву посади",
+  "system.position.codePlaceholder": "Введіть код посади",
+  "system.position.createTitle": "Нова посада",
+  "system.position.editTitle": "Редагувати посаду",
+  "system.position.validation.name": "Введіть назву посади",
+  "system.position.validation.nameLength": "Назва посади не може перевищувати 50 символів",
+  "system.position.validation.code": "Введіть код посади",
+  "system.position.validation.codeLength": "Код посади не може перевищувати 30 символів",
+  "system.position.validation.codePattern": "Код посади може містити лише літери, цифри, підкреслення та дефіси"
+}

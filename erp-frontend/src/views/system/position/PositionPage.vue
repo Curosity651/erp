@@ -4,7 +4,7 @@
 
   <pro-table
     ref="tableRef"
-    header-title="岗位管理"
+    :header-title="t('system.position.pageTitle')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -22,7 +22,9 @@
       </template>
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="hasPermission('system:position:edit')" @click="handleEdit(record)">编辑</a>
+          <a v-if="hasPermission('system:position:edit')" @click="handleEdit(record)">{{
+            t('action.edit')
+          }}</a>
           <delete-text-button
             v-if="hasPermission('system:position:del')"
             @confirm="() => handleDelete(record)"
@@ -51,11 +53,13 @@ import { pagePosition, deletePosition } from '@/api/system/position'
 import type { PositionPageVO, PositionQO } from '@/api/system/position/types'
 import { FormAction } from '@/hooks/form'
 import { DictTag } from '@/components/Dict'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'PositionPage' })
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -94,47 +98,47 @@ const handleEdit = (record: PositionPageVO) => {
 /* 删除岗位管理 */
 const handleDelete = (record: PositionPageVO) => {
   doRequest(deletePosition(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('message.removeSuccess'),
     onSuccess: () => reloadTable()
   })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
     title: '#',
     dataIndex: 'id'
   },
   {
-    title: '岗位名称',
+    title: t('system.position.name'),
     dataIndex: 'name'
   },
   {
-    title: '岗位编码',
+    title: t('system.position.code'),
     dataIndex: 'code'
   },
   {
-    title: '岗位描述',
+    title: t('system.position.description'),
     dataIndex: 'description'
   },
   {
-    title: '显示顺序',
+    title: t('system.position.sort'),
     dataIndex: 'sort'
   },
   {
-    title: '状态',
+    title: t('system.position.status'),
     dataIndex: 'status'
   },
   {
-    title: '创建时间',
+    title: t('common.createTime'),
     dataIndex: 'createTime',
     width: 150,
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 100
   }
-]
+])
 </script>

@@ -3,13 +3,19 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="岗位名称">
-            <a-input v-model:value="formModel.name" placeholder="请输入岗位名称" />
+          <a-form-item :label="t('system.position.name')">
+            <a-input
+              v-model:value="formModel.name"
+              :placeholder="t('system.position.namePlaceholder')"
+            />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="岗位编码">
-            <a-input v-model:value="formModel.code" placeholder="请输入岗位编码" />
+          <a-form-item :label="t('system.position.code')">
+            <a-input
+              v-model:value="formModel.code"
+              :placeholder="t('system.position.codePlaceholder')"
+            />
           </a-form-item>
         </a-col>
         <a-col :xl="8" :md="12" :sm="24">
@@ -23,7 +29,9 @@
 <script setup lang="ts">
 import { Form } from 'ant-design-vue'
 import type { PositionQO } from '@/api/system/position/types'
+import { useI18n } from 'vue-i18n'
 const useForm = Form.useForm
+const { t } = useI18n()
 
 // 表单 label 全局配置
 const labelCol = { md: { span: 6 } }

@@ -1,0 +1,17 @@
+{
+  "system.position.pageTitle": "Position Management",
+  "system.position.name": "Position Name",
+  "system.position.code": "Position Code",
+  "system.position.description": "Description",
+  "system.position.sort": "Display Order",
+  "system.position.status": "Status",
+  "system.position.namePlaceholder": "Enter the position name",
+  "system.position.codePlaceholder": "Enter the position code",
+  "system.position.createTitle": "New Position",
+  "system.position.editTitle": "Edit Position",
+  "system.position.validation.name": "Enter the position name",
+  "system.position.validation.nameLength": "Position name cannot exceed 50 characters",
+  "system.position.validation.code": "Enter the position code",
+  "system.position.validation.codeLength": "Position code cannot exceed 30 characters",
+  "system.position.validation.codePattern": "Position code may contain only letters, numbers, underscores, and hyphens"
+}

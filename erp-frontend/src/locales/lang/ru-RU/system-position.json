@@ -1,0 +1,17 @@
+{
+  "system.position.pageTitle": "Управление должностями",
+  "system.position.name": "Название должности",
+  "system.position.code": "Код должности",
+  "system.position.description": "Описание должности",
+  "system.position.sort": "Порядок отображения",
+  "system.position.status": "Статус",
+  "system.position.namePlaceholder": "Введите название должности",
+  "system.position.codePlaceholder": "Введите код должности",
+  "system.position.createTitle": "Новая должность",
+  "system.position.editTitle": "Редактировать должность",
+  "system.position.validation.name": "Введите название должности",
+  "system.position.validation.nameLength": "Название должности не может превышать 50 символов",
+  "system.position.validation.code": "Введите код должности",
+  "system.position.validation.codeLength": "Код должности не может превышать 30 символов",
+  "system.position.validation.codePattern": "Код должности может содержать только буквы, цифры, подчёркивания и дефисы"
+}
