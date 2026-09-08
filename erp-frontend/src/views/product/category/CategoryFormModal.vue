@@ -13,22 +13,25 @@
       <a-form-item v-if="isUpdateForm" style="display: none">
         <a-input v-model:value="formModel.id" />
       </a-form-item>
-      <a-form-item label="品类名称" v-bind="validateInfos.name">
-        <a-input v-model:value="formModel.name" placeholder="请输入品类名称" />
+      <a-form-item :label="t('product.category.name')" v-bind="validateInfos.name">
+        <a-input
+          v-model:value="formModel.name"
+          :placeholder="t('product.category.namePlaceholder')"
+        />
       </a-form-item>
-      <a-form-item label="品类编码" v-bind="validateInfos.code">
+      <a-form-item :label="t('product.category.code')" v-bind="validateInfos.code">
         <a-input
           v-model:value="formModel.code"
-          placeholder="请输入品类编码"
+          :placeholder="t('product.category.codePlaceholder')"
           :disabled="isUpdateForm"
         />
       </a-form-item>
-      <a-form-item label="上级品类">
+      <a-form-item :label="t('product.category.parent')">
         <a-tree-select
           v-model:value="formModel.parentId"
           :tree-data="categoryTreeData"
           :field-names="{ label: 'name', value: 'id', children: 'children' }"
-          placeholder="请选择上级品类（不选则为顶级品类）"
+          :placeholder="t('product.category.parentPlaceholder')"
           allow-clear
           tree-default-expand-all
           style="width: 100%"
@@ -41,19 +44,19 @@
           </template>
         </a-tree-select>
         <div v-if="isUpdateForm" style="color: #999; font-size: 12px; margin-top: 4px">
-          提示：修改上级品类会自动更新该品类及其所有子品类的层级。清空选择可将品类设为顶级品类。
+          {{ t('product.category.parentTip') }}
         </div>
       </a-form-item>
 
-      <a-form-item label="排序">
+      <a-form-item :label="t('product.category.sort')">
         <a-input-number
           v-model:value="formModel.sort"
-          placeholder="请输入排序值"
+          :placeholder="t('product.category.sortPlaceholder')"
           :min="0"
           style="width: 100%"
         />
       </a-form-item>
-      <a-form-item label="状态">
+      <a-form-item :label="t('product.category.status')">
         <dict-radio-group v-model:value="formModel.status" dict-code="enable_status" />
       </a-form-item>
     </a-form>
@@ -70,6 +73,9 @@ import { overrideProperties } from '@/utils/bean-utils'
 import type { ColProps } from 'ant-design-vue'
 import { DictRadioGroup } from '@/components/Dict'
 import { message } from 'ant-design-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 扩展CategoryPageVO以支持树形结构
 interface CategoryTreeVO extends CategoryPageVO {
@@ -119,21 +125,21 @@ const formModel = reactive<Partial<CategoryDTO>>({
 })
 
 // 表单的校验规则
-const formRule = reactive({
+const formRule = computed(() => ({
   name: [
-    { required: true, message: '请输入品类名称', trigger: 'blur' },
-    { max: 50, message: '品类名称长度不能超过50个字符', trigger: 'blur' }
+    { required: true, message: t('product.category.validation.name'), trigger: 'blur' },
+    { max: 50, message: t('product.category.validation.nameLength'), trigger: 'blur' }
   ],
   code: [
-    { required: true, message: '请输入品类编码', trigger: 'blur' },
-    { max: 30, message: '品类编码长度不能超过30个字符', trigger: 'blur' },
+    { required: true, message: t('product.category.validation.code'), trigger: 'blur' },
+    { max: 30, message: t('product.category.validation.codeLength'), trigger: 'blur' },
     {
       pattern: /^[a-zA-Z0-9_-]+$/,
-      message: '品类编码只能包含字母、数字、下划线和横线',
+      message: t('product.category.validation.codePattern'),
       trigger: 'blur'
     }
   ]
-})
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<CategoryDTO> = {
@@ -198,8 +204,8 @@ const loadCategoryTree = async () => {
 
     categoryTreeData.value = buildTree(allCategories)
   } catch (error) {
-    message.error('加载品类数据失败')
-    console.error('加载品类数据失败:', error)
+    message.error(t('product.category.loadFailed'))
+    console.error(t('product.category.loadFailed'), error)
   }
 }
 
@@ -233,14 +239,14 @@ defineExpose({
     if (newFormAction === FormAction.CREATE) {
       currentCategoryId.value = undefined
       if (parentRecord) {
-        title.value = `添加子品类 - ${parentRecord.name}`
+        title.value = t('product.category.addChildTitle', { name: parentRecord.name })
         formModel.parentId = parentRecord.id
       } else {
-        title.value = '新建品类'
+        title.value = t('product.category.createTitle')
         formModel.parentId = undefined // 使用 undefined 表示顶级品类
       }
     } else {
-      title.value = '编辑品类'
+      title.value = t('product.category.editTitle')
       overrideProperties(formModel, record)
       currentCategoryId.value = record?.id
       // 将 parentId 为 0 的转换为 undefined，以便树形选择器正确显示

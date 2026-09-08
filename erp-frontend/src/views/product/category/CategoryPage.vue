@@ -27,7 +27,7 @@
     <!-- 操作按钮区域 -->
     <template #toolBarRender>
       <new-button v-if="hasPermission('product:category:add')" @click="handleNew">
-        新建顶级品类
+        {{ t('product.category.createTop') }}
       </new-button>
     </template>
 
@@ -78,9 +78,11 @@
             style="color: #1890ff"
             @click="handleAddChild(record)"
           >
-            添加子品类
+            {{ t('product.category.addChild') }}
           </a>
-          <a v-if="hasPermission('product:category:edit')" @click="handleEdit(record)">编辑</a>
+          <a v-if="hasPermission('product:category:edit')" @click="handleEdit(record)">{{
+            t('action.edit')
+          }}</a>
           <delete-text-button
             v-if="hasPermission('product:category:del')"
             @confirm="() => handleDelete(record)"
@@ -115,11 +117,13 @@ import { FormAction } from '@/hooks/form'
 import { DictTag } from '@/components/Dict'
 import { CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons-vue'
 import type { Key } from '@/utils/tree-utils'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'CategoryPage' })
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -172,7 +176,9 @@ const tableRequest: TableRequest = async () => {
   if (
     searchParams.name ||
     searchParams.code ||
-    (searchParams.status !== undefined && searchParams.status !== null && (searchParams.status as unknown) !== '')
+    (searchParams.status !== undefined &&
+      searchParams.status !== null &&
+      (searchParams.status as unknown) !== '')
   ) {
     expandedRowKeys.value = getExpandedKeys(filteredData, searchParams)
   } else if (expandedRowKeys.value.length === 0) {
@@ -193,7 +199,9 @@ const searchTable = (params: CategoryQO) => {
 const filterTreeData = (tree: CategoryTreeVO[], searchParams: CategoryQO): CategoryTreeVO[] => {
   // status 可能为 0（停用），不能用 !status 判断是否启用了状态筛选
   const statusActive =
-    searchParams.status !== undefined && searchParams.status !== null && (searchParams.status as unknown) !== ''
+    searchParams.status !== undefined &&
+    searchParams.status !== null &&
+    (searchParams.status as unknown) !== ''
   if (!searchParams.name && !searchParams.code && !statusActive) {
     return tree
   }
@@ -235,7 +243,9 @@ const getExpandedKeys = (tree: CategoryTreeVO[], searchParams: CategoryQO): Key[
   }
 
   const statusActive =
-    searchParams.status !== undefined && searchParams.status !== null && (searchParams.status as unknown) !== ''
+    searchParams.status !== undefined &&
+    searchParams.status !== null &&
+    (searchParams.status as unknown) !== ''
   if (searchParams.name || searchParams.code || statusActive) {
     traverse(tree)
   }
@@ -261,7 +271,7 @@ const handleEdit = (record: CategoryTreeVO) => {
 /* 删除商品品类 */
 const handleDelete = (record: CategoryTreeVO) => {
   doRequest(deleteCategory(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('message.removeSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -274,51 +284,51 @@ const getLevelColor = (level: number) => {
 
 /* 获取层级文本 */
 const getLevelText = (level: number) => {
-  return `${level}级`
+  return t('product.category.levelValue', { level })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '品类名称',
+    title: t('product.category.name'),
     dataIndex: 'name',
     width: 250
   },
   {
-    title: '品类编码',
+    title: t('product.category.code'),
     dataIndex: 'code',
     width: 150
   },
   {
-    title: '层级',
+    title: t('product.category.level'),
     dataIndex: 'level',
     width: 80,
     align: 'center'
   },
   {
-    title: '排序',
+    title: t('product.category.sort'),
     dataIndex: 'sort',
     width: 80,
     align: 'center'
   },
   {
-    title: '状态',
+    title: t('product.category.status'),
     dataIndex: 'status',
     key: 'status',
     width: 100,
     align: 'center'
   },
   {
-    title: '创建时间',
+    title: t('common.createTime'),
     dataIndex: 'createTime',
     width: 150
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 160
   }
-]
+])
 </script>
 
 <style scoped lang="less">
