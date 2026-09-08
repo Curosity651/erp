@@ -64,22 +64,22 @@
                       <InfoCircleOutlined />
                     </div>
                     <div class="section-title">
-                      <h3>基本信息</h3>
-                      <p>SKU的基础标识、分类信息、产品名称和特性</p>
+                      <h3>{{ t('product.sku.form.basicInfo') }}</h3>
+                      <p>{{ t('product.sku.form.basicInfoDescription') }}</p>
                     </div>
                   </div>
                   <div class="section-content">
                     <a-row :gutter="16">
                       <a-col :span="8">
                         <a-form-item
-                          label="SKU编码"
+                          :label="t('product.sku.search.skuCode')"
                           name="skuCode"
                           :validate-status="getFieldStatus('skuCode')"
                           :help="getFieldError('skuCode')"
                         >
                           <a-input
                             v-model:value="formData.skuCode"
-                            placeholder="请输入SKU编码（大写字母、数字、下划线、中划线，3-50位）"
+                            :placeholder="t('product.sku.form.skuCodePlaceholder')"
                             :disabled="(isUpdateMode && mode !== 'copy') || mode === 'view'"
                             size="large"
                             @blur="validateSkuCode"
@@ -100,14 +100,14 @@
                       </a-col>
                       <a-col :span="8">
                         <a-form-item
-                          label="SKU序号"
+                          :label="t('product.sku.search.skuNo')"
                           name="skuNo"
                           :validate-status="getFieldStatus('skuNo')"
                           :help="getFieldError('skuNo')"
                         >
                           <a-input-number
                             v-model:value="formData.skuNo"
-                            placeholder="请输入SKU序号"
+                            :placeholder="t('product.sku.search.skuNoPlaceholder')"
                             :min="1"
                             :max="999999"
                             style="width: 100%"
@@ -127,10 +127,10 @@
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="SPU编码" name="spuCode">
+                        <a-form-item :label="t('product.sku.search.spuCode')" name="spuCode">
                           <a-input
                             v-model:value="formData.spuCode"
-                            placeholder="请输入SPU编码（大写字母、数字、下划线、中划线，3-50位）"
+                            :placeholder="t('product.sku.form.spuCodePlaceholder')"
                             size="large"
                           />
                         </a-form-item>
@@ -140,16 +140,16 @@
                     <a-row :gutter="16">
                       <a-col :span="24">
                         <a-form-item
-                          label="商品条码"
+                          :label="t('product.sku.form.barcodes')"
                           name="barcodes"
-                          extra="可录入多个EAN、UPC或内部商品条码；仓库扫描时均可识别为当前ERP SKU。"
+                          :extra="t('product.sku.form.barcodesExtra')"
                         >
                           <a-select
                             v-model:value="formData.barcodes"
                             mode="tags"
                             :max-tag-count="8"
                             :token-separators="[',', ' ', '\n']"
-                            placeholder="扫描或输入条码后按回车，最多20个"
+                            :placeholder="t('product.sku.form.barcodesPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
@@ -158,19 +158,19 @@
 
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="销售国家" name="salesCountry">
+                        <a-form-item :label="t('product.sku.salesCountry')" name="salesCountry">
                           <country-select
                             v-model:value="formData.salesCountry"
-                            placeholder="请选择销售国家"
+                            :placeholder="t('product.sku.search.countryPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="12">
-                        <a-form-item label="品类" name="categoryId">
+                        <a-form-item :label="t('product.sku.search.category')" name="categoryId">
                           <category-tree-select
                             v-model:value="formData.categoryId"
-                            placeholder="请选择品类"
+                            :placeholder="t('product.sku.search.categoryPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
@@ -179,31 +179,37 @@
 
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="产品状态" name="productStatus">
+                        <a-form-item
+                          :label="t('product.sku.search.productStatus')"
+                          name="productStatus"
+                        >
                           <dict-select
                             v-model:value="formData.productStatus"
                             dict-code="product_status"
-                            placeholder="请选择产品状态"
+                            :placeholder="t('product.sku.search.statusPlaceholder')"
                             size="large"
                           >
                           </dict-select>
                         </a-form-item>
                       </a-col>
                       <a-col :span="12">
-                        <a-form-item label="品牌" name="brandCode">
+                        <a-form-item :label="t('product.sku.search.brand')" name="brandCode">
                           <brand-select
                             v-model:value="formData.brandCode"
-                            placeholder="请选择品牌"
+                            :placeholder="t('product.sku.search.brandPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                     </a-row>
 
-                    <a-form-item label="项目组" name="projectGroupCode">
+                    <a-form-item
+                      :label="t('product.sku.search.projectGroup')"
+                      name="projectGroupCode"
+                    >
                       <project-group-select
                         v-model:value="formData.projectGroupCode"
-                        placeholder="请选择项目组"
+                        :placeholder="t('product.sku.search.projectGroupPlaceholder')"
                         size="large"
                       />
                     </a-form-item>
@@ -211,29 +217,29 @@
                     <!-- 产品名称信息 -->
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="中文名" name="chineseName">
+                        <a-form-item :label="t('product.sku.form.chineseName')" name="chineseName">
                           <a-input
                             v-model:value="formData.chineseName"
-                            placeholder="请输入中文名"
+                            :placeholder="t('product.sku.form.chineseNamePlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="12">
-                        <a-form-item label="俄文名" name="russianName">
+                        <a-form-item :label="t('product.sku.form.russianName')" name="russianName">
                           <a-input
                             v-model:value="formData.russianName"
-                            placeholder="请输入俄文名"
+                            :placeholder="t('product.sku.form.russianNamePlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                     </a-row>
 
-                    <a-form-item label="产品描述" name="description">
+                    <a-form-item :label="t('product.sku.description')" name="description">
                       <a-textarea
                         v-model:value="formData.description"
-                        placeholder="请输入产品描述"
+                        :placeholder="t('product.sku.form.descriptionPlaceholder')"
                         :rows="4"
                         show-count
                         :maxlength="1000"
@@ -244,19 +250,25 @@
                     <!-- 海关申报信息 -->
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="海关申报名" name="customsDeclarationName">
+                        <a-form-item
+                          :label="t('product.sku.form.customsName')"
+                          name="customsDeclarationName"
+                        >
                           <a-input
                             v-model:value="formData.customsDeclarationName"
-                            placeholder="请输入海关申报名"
+                            :placeholder="t('product.sku.form.customsNamePlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="12">
-                        <a-form-item label="海关申报代码" name="customsDeclarationCode">
+                        <a-form-item
+                          :label="t('product.sku.form.customsCode')"
+                          name="customsDeclarationCode"
+                        >
                           <a-input
                             v-model:value="formData.customsDeclarationCode"
-                            placeholder="请输入海关申报代码"
+                            :placeholder="t('product.sku.form.customsCodePlaceholder')"
                             size="large"
                           />
                         </a-form-item>
@@ -264,7 +276,7 @@
                     </a-row>
 
                     <!-- 产品特性 -->
-                    <a-form-item label="产品特性">
+                    <a-form-item :label="t('product.sku.search.features')">
                       <a-space direction="vertical" size="middle">
                         <a-checkbox
                           :checked="!!formData.needsPower"
@@ -272,9 +284,9 @@
                         >
                           <span style="margin-left: 8px">
                             <ThunderboltOutlined style="color: #faad14; margin-right: 4px" />
-                            排插
+                            {{ t('product.sku.search.powerStrip') }}
                             <span style="color: #8c8c8c; font-size: 12px; margin-left: 8px">
-                              (产品具有排插功能)
+                              ({{ t('product.sku.form.powerStripDescription') }})
                             </span>
                           </span>
                         </a-checkbox>
@@ -284,9 +296,9 @@
                         >
                           <span style="margin-left: 8px">
                             <CalendarOutlined style="color: #52c41a; margin-right: 4px" />
-                            季节性产品
+                            {{ t('product.sku.form.seasonalProduct') }}
                             <span style="color: #8c8c8c; font-size: 12px; margin-left: 8px">
-                              (销售具有季节性特征)
+                              ({{ t('product.sku.form.seasonalDescription') }})
                             </span>
                           </span>
                         </a-checkbox>
@@ -296,9 +308,9 @@
                         >
                           <span style="margin-left: 8px">
                             <span style="color: #722ed1; margin-right: 4px">🌈</span>
-                            RGB灯带
+                            {{ t('product.sku.form.rgbLight') }}
                             <span style="color: #8c8c8c; font-size: 12px; margin-left: 8px">
-                              (产品具有RGB彩色灯带功能)
+                              ({{ t('product.sku.form.rgbDescription') }})
                             </span>
                           </span>
                         </a-checkbox>
@@ -308,9 +320,9 @@
                         >
                           <span style="margin-left: 8px">
                             <span style="color: #0958d9; margin-right: 4px">🔍</span>
-                            玻璃材质
+                            {{ t('product.sku.featureGlass') }}
                             <span style="color: #8c8c8c; font-size: 12px; margin-left: 8px">
-                              (产品包含玻璃材质部件)
+                              ({{ t('product.sku.form.glassDescription') }})
                             </span>
                           </span>
                         </a-checkbox>
@@ -330,38 +342,44 @@
                       <CarOutlined />
                     </div>
                     <div class="section-title">
-                      <h3>物流包装</h3>
-                      <p>运输方式和包装规格信息</p>
+                      <h3>{{ t('product.sku.form.logisticsPackaging') }}</h3>
+                      <p>{{ t('product.sku.form.logisticsPackagingDescription') }}</p>
                     </div>
                   </div>
                   <div class="section-content">
                     <a-row :gutter="16">
                       <a-col :span="8">
-                        <a-form-item label="头程类型" name="shippingType">
+                        <a-form-item
+                          :label="t('product.sku.search.shippingType')"
+                          name="shippingType"
+                        >
                           <dict-select
                             v-model:value="formData.shippingType"
                             dict-code="shipping_type"
-                            placeholder="请选择头程类型"
+                            :placeholder="t('product.sku.search.shippingTypePlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="包裹类型" name="packageType">
+                        <a-form-item :label="t('product.sku.packageType')" name="packageType">
                           <dict-select
                             v-model:value="formData.packageType"
                             dict-code="package_type"
-                            placeholder="请选择包裹类型"
+                            :placeholder="t('product.sku.search.packageTypePlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="计费重类型" name="billingWeightType">
+                        <a-form-item
+                          :label="t('product.sku.search.billingWeightType')"
+                          name="billingWeightType"
+                        >
                           <dict-select
                             v-model:value="formData.billingWeightType"
                             dict-code="billing_weight_type"
-                            placeholder="请选择计费重类型"
+                            :placeholder="t('product.sku.search.billingWeightPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
@@ -371,37 +389,40 @@
                     <!-- 物理属性 -->
                     <a-row :gutter="16">
                       <a-col :span="8">
-                        <a-form-item label="表面颜色" name="surfaceColor">
+                        <a-form-item :label="t('product.sku.surfaceColor')" name="surfaceColor">
                           <a-input
                             v-model:value="formData.surfaceColor"
-                            placeholder="请输入表面颜色，如：黑色、白色、红色等"
+                            :placeholder="t('product.sku.form.surfaceColorPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="钢架颜色" name="frameColor">
+                        <a-form-item :label="t('product.sku.search.frameColor')" name="frameColor">
                           <a-input
                             v-model:value="formData.frameColor"
-                            placeholder="请输入钢架颜色，如：黑色、银色、白色等"
+                            :placeholder="t('product.sku.form.frameColorPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="材质" name="material">
+                        <a-form-item :label="t('product.sku.search.material')" name="material">
                           <a-input
                             v-model:value="formData.material"
-                            placeholder="请输入材质，如：塑料、金属、木材等"
+                            :placeholder="t('product.sku.form.materialPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="BC纸箱最低耐破" name="bcBoxMinBreakage">
+                        <a-form-item
+                          :label="t('product.sku.form.bcBoxStrength')"
+                          name="bcBoxMinBreakage"
+                        >
                           <a-input
                             v-model:value="formData.bcBoxMinBreakage"
-                            placeholder="请输入耐破强度"
+                            :placeholder="t('product.sku.form.bcBoxStrengthPlaceholder')"
                             size="large"
                           >
                             <template #suffix>
@@ -411,10 +432,10 @@
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="分箱信息" name="packaging">
+                        <a-form-item :label="t('product.sku.form.splitBoxInfo')" name="packaging">
                           <a-input
                             v-model:value="formData.packaging"
-                            placeholder="请输入分箱信息，如：12个/箱"
+                            :placeholder="t('product.sku.form.splitBoxPlaceholder')"
                             size="large"
                           />
                         </a-form-item>
@@ -425,15 +446,19 @@
                     <div class="dimensions-section">
                       <h4 class="subsection-title">
                         <BoxPlotOutlined style="margin-right: 8px; color: #1890ff" />
-                        外箱尺寸与单箱毛重
+                        {{ t('product.sku.form.outerBoxDimensions') }}
                       </h4>
 
                       <a-row :gutter="16">
                         <a-col :xs="24" :sm="12" :lg="6">
-                          <a-form-item label="外箱长度" name="outerLengthMm" required>
+                          <a-form-item
+                            :label="t('product.sku.form.outerLength')"
+                            name="outerLengthMm"
+                            required
+                          >
                             <a-input-number
                               v-model:value="outerLengthCm"
-                              placeholder="请输入长度"
+                              :placeholder="t('product.sku.form.lengthPlaceholder')"
                               :min="0.1"
                               :precision="1"
                               style="width: 100%"
@@ -444,10 +469,14 @@
                           </a-form-item>
                         </a-col>
                         <a-col :xs="24" :sm="12" :lg="6">
-                          <a-form-item label="外箱宽度" name="outerWidthMm" required>
+                          <a-form-item
+                            :label="t('product.sku.form.outerWidth')"
+                            name="outerWidthMm"
+                            required
+                          >
                             <a-input-number
                               v-model:value="outerWidthCm"
-                              placeholder="请输入宽度"
+                              :placeholder="t('product.sku.form.widthPlaceholder')"
                               :min="0.1"
                               :precision="1"
                               style="width: 100%"
@@ -458,10 +487,14 @@
                           </a-form-item>
                         </a-col>
                         <a-col :xs="24" :sm="12" :lg="6">
-                          <a-form-item label="外箱高度" name="outerHeightMm" required>
+                          <a-form-item
+                            :label="t('product.sku.form.outerHeight')"
+                            name="outerHeightMm"
+                            required
+                          >
                             <a-input-number
                               v-model:value="outerHeightCm"
-                              placeholder="请输入高度"
+                              :placeholder="t('product.sku.form.heightPlaceholder')"
                               :min="0.1"
                               :precision="1"
                               style="width: 100%"
@@ -472,10 +505,14 @@
                           </a-form-item>
                         </a-col>
                         <a-col :xs="24" :sm="12" :lg="6">
-                          <a-form-item label="单箱毛重" name="outerGrossWeightG" required>
+                          <a-form-item
+                            :label="t('product.sku.form.grossWeight')"
+                            name="outerGrossWeightG"
+                            required
+                          >
                             <a-input-number
                               v-model:value="outerGrossWeightKg"
-                              placeholder="请输入毛重"
+                              :placeholder="t('product.sku.form.grossWeightPlaceholder')"
                               :min="0.001"
                               :precision="3"
                               style="width: 100%"
@@ -492,8 +529,8 @@
                     <div class="calculated-results">
                       <h4 class="subsection-title">
                         <CalculatorOutlined style="margin-right: 8px; color: #52c41a" />
-                        自动计算结果
-                        <a-tooltip title="基于上述输入的重量和尺寸自动计算">
+                        {{ t('product.sku.form.calculatedResults') }}
+                        <a-tooltip :title="t('product.sku.form.calculatedResultsTip')">
                           <InfoCircleOutlined
                             style="margin-left: 8px; color: #8c8c8c; font-size: 14px"
                           />
@@ -502,7 +539,7 @@
 
                       <a-row :gutter="16">
                         <a-col :xs="24" :sm="12" :md="6">
-                          <a-form-item label="包装体积(m³)">
+                          <a-form-item :label="t('product.sku.form.packageVolume')">
                             <a-input
                               :value="getFormattedValue('packageVolume')"
                               disabled
@@ -516,7 +553,7 @@
                           </a-form-item>
                         </a-col>
                         <a-col :xs="24" :sm="12" :md="6">
-                          <a-form-item label="密度(kg/m³)">
+                          <a-form-item :label="t('product.sku.form.densityKg')">
                             <a-input
                               :value="getFormattedValue('densityKgM3')"
                               disabled
@@ -530,7 +567,7 @@
                           </a-form-item>
                         </a-col>
                         <a-col :xs="24" :sm="12" :md="6">
-                          <a-form-item label="密度(g/cm³)">
+                          <a-form-item :label="t('product.sku.form.densityG')">
                             <a-input
                               :value="getFormattedValue('densityGCm3')"
                               disabled
@@ -544,7 +581,7 @@
                           </a-form-item>
                         </a-col>
                         <a-col :xs="24" :sm="12" :md="6">
-                          <a-form-item label="装柜量">
+                          <a-form-item :label="t('product.sku.containerCapacity')">
                             <a-input
                               :value="getFormattedValue('containerCapacity')"
                               disabled
@@ -555,7 +592,9 @@
                                 <ContainerOutlined style="color: #faad14" />
                               </template>
                               <template #suffix>
-                                <span style="color: #8c8c8c">个</span>
+                                <span style="color: #8c8c8c">{{
+                                  t('product.sku.form.unitPiece')
+                                }}</span>
                               </template>
                             </a-input>
                           </a-form-item>
@@ -576,15 +615,18 @@
                       <AppstoreOutlined />
                     </div>
                     <div class="section-title">
-                      <h3>产品规格</h3>
-                      <p>产品的功能性能要求和技术规格</p>
+                      <h3>{{ t('product.sku.form.productSpecs') }}</h3>
+                      <p>{{ t('product.sku.form.productSpecsDescription') }}</p>
                     </div>
                   </div>
                   <div class="section-content">
-                    <a-form-item label="功能性能要求" name="functionalRequirements">
+                    <a-form-item
+                      :label="t('product.sku.functionalRequirements')"
+                      name="functionalRequirements"
+                    >
                       <a-textarea
                         v-model:value="formData.functionalRequirements"
-                        placeholder="请输入功能性能要求"
+                        :placeholder="t('product.sku.form.functionalRequirementsPlaceholder')"
                         :rows="3"
                         size="large"
                       />
@@ -603,15 +645,18 @@
                       <DollarOutlined />
                     </div>
                     <div class="section-title">
-                      <h3>采购信息</h3>
-                      <p>供应商和价格相关信息</p>
+                      <h3>{{ t('product.sku.purchaseInfo') }}</h3>
+                      <p>{{ t('product.sku.form.purchaseDescription') }}</p>
                     </div>
                   </div>
                   <div class="section-content">
                     <!-- 供应商信息 -->
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="生产供应商名称" name="supplierCode">
+                        <a-form-item
+                          :label="t('product.sku.form.supplierName')"
+                          name="supplierCode"
+                        >
                           <supplier-select
                             v-model:value="formData.supplierCode"
                             size="large"
@@ -622,10 +667,10 @@
                       </a-col>
                       <a-col :span="12">
                         <!-- 展示型只读框，不参与表单校验，故不设 name，避免与上方 supplierCode 重复注册 -->
-                        <a-form-item label="生产供应商编码">
+                        <a-form-item :label="t('product.sku.form.supplierCode')">
                           <a-input
                             v-model:value="formData.supplierCode"
-                            placeholder="供应商编码（自动填充）"
+                            :placeholder="t('product.sku.form.supplierCodePlaceholder')"
                             size="large"
                             disabled
                             style="background-color: #f5f5f5"
@@ -637,7 +682,7 @@
                     <!-- 价格信息 -->
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="价格类型" name="includeTax">
+                        <a-form-item :label="t('product.sku.form.priceType')" name="includeTax">
                           <a-button-group size="large" style="width: 100%">
                             <a-button
                               :type="!formData.includeTax ? 'primary' : 'default'"
@@ -658,7 +703,7 @@
                                 "
                               >
                                 <span style="font-size: 16px">💰</span>
-                                不含税价格
+                                {{ t('product.sku.form.priceExcludingTax') }}
                               </span>
                             </a-button>
                             <a-button
@@ -680,17 +725,21 @@
                                 "
                               >
                                 <span style="font-size: 16px">🧾</span>
-                                含税价格
+                                {{ t('product.sku.form.priceIncludingTax') }}
                               </span>
                             </a-button>
                           </a-button-group>
                         </a-form-item>
                       </a-col>
                       <a-col :span="12">
-                        <a-form-item v-if="formData.includeTax" label="税率" name="taxRate">
+                        <a-form-item
+                          v-if="formData.includeTax"
+                          :label="t('product.sku.taxRate')"
+                          name="taxRate"
+                        >
                           <a-input-number
                             v-model:value="formData.taxRate"
-                            placeholder="请输入税率"
+                            :placeholder="t('product.sku.form.taxRatePlaceholder')"
                             :precision="2"
                             style="width: 100%"
                             size="large"
@@ -705,13 +754,19 @@
                     <a-row :gutter="16">
                       <a-col :span="24">
                         <a-form-item
-                          :label="formData.includeTax ? '含税采购价' : '不含税采购价'"
+                          :label="
+                            formData.includeTax
+                              ? t('product.sku.form.purchasePriceIncludingTax')
+                              : t('product.sku.form.purchasePriceExcludingTax')
+                          "
                           name="purchasePrice"
                         >
                           <a-input-number
                             v-model:value="formData.purchasePrice"
                             :placeholder="
-                              formData.includeTax ? '请输入含税采购价' : '请输入不含税采购价'
+                              formData.includeTax
+                                ? t('product.sku.form.purchasePriceIncludingTaxPlaceholder')
+                                : t('product.sku.form.purchasePriceExcludingTaxPlaceholder')
                             "
                             :min="0"
                             :precision="2"
@@ -726,10 +781,13 @@
                     <!-- 订购信息 -->
                     <a-row :gutter="16">
                       <a-col :span="8">
-                        <a-form-item label="起订量" name="minimumOrderQuantity">
+                        <a-form-item
+                          :label="t('product.sku.minimumOrder')"
+                          name="minimumOrderQuantity"
+                        >
                           <a-input-number
                             v-model:value="formData.minimumOrderQuantity"
-                            placeholder="请输入起订量"
+                            :placeholder="t('product.sku.form.minimumOrderPlaceholder')"
                             :min="1"
                             style="width: 100%"
                             size="large"
@@ -737,15 +795,18 @@
                         </a-form-item>
                       </a-col>
                       <a-col :span="8">
-                        <a-form-item label="生产周期" name="productionCycle">
+                        <a-form-item
+                          :label="t('product.sku.productionCycle')"
+                          name="productionCycle"
+                        >
                           <a-input-number
                             v-model:value="formData.productionCycle"
-                            placeholder="请输入生产周期"
+                            :placeholder="t('product.sku.form.productionCyclePlaceholder')"
                             :min="1"
                             style="width: 100%"
                             size="large"
                           >
-                            <template #addonAfter>天</template>
+                            <template #addonAfter>{{ t('product.sku.form.unitDay') }}</template>
                           </a-input-number>
                         </a-form-item>
                       </a-col>
@@ -764,17 +825,17 @@
                       <TeamOutlined />
                     </div>
                     <div class="section-title">
-                      <h3>人员分配</h3>
-                      <p>负责该SKU的相关人员信息</p>
+                      <h3>{{ t('product.sku.form.staffAssignment') }}</h3>
+                      <p>{{ t('product.sku.form.staffAssignmentDescription') }}</p>
                     </div>
                   </div>
                   <div class="section-content">
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="开发人员" name="developerId">
+                        <a-form-item :label="t('product.sku.roleDeveloper')" name="developerId">
                           <user-select
                             v-model:value="formData.developerId"
-                            placeholder="请选择开发人员"
+                            :placeholder="t('product.sku.search.developerPlaceholder')"
                             size="large"
                             :loading="userDataLoading"
                             :options="allUsers"
@@ -782,10 +843,10 @@
                         </a-form-item>
                       </a-col>
                       <a-col :span="12">
-                        <a-form-item label="运营人员" name="operatorId">
+                        <a-form-item :label="t('product.sku.roleOperator')" name="operatorId">
                           <user-select
                             v-model:value="formData.operatorId"
-                            placeholder="请选择运营人员"
+                            :placeholder="t('product.sku.search.operatorPlaceholder')"
                             size="large"
                             :loading="userDataLoading"
                             :options="allUsers"
@@ -796,10 +857,10 @@
 
                     <a-row :gutter="16">
                       <a-col :span="12">
-                        <a-form-item label="质检人员" name="qcId">
+                        <a-form-item :label="t('product.sku.roleQc')" name="qcId">
                           <user-select
                             v-model:value="formData.qcId"
-                            placeholder="请选择质检人员"
+                            :placeholder="t('product.sku.search.qcPlaceholder')"
                             size="large"
                             :loading="userDataLoading"
                             :options="allUsers"
@@ -807,10 +868,10 @@
                         </a-form-item>
                       </a-col>
                       <a-col :span="12">
-                        <a-form-item label="采购人员" name="purchaserId">
+                        <a-form-item :label="t('product.sku.rolePurchaser')" name="purchaserId">
                           <user-select
                             v-model:value="formData.purchaserId"
-                            placeholder="请选择采购人员"
+                            :placeholder="t('product.sku.search.purchaserPlaceholder')"
                             size="large"
                             :loading="userDataLoading"
                             :options="allUsers"
@@ -832,8 +893,8 @@
                       <PictureOutlined />
                     </div>
                     <div class="section-title">
-                      <h3>产品图片</h3>
-                      <p>上传产品的实物图片和平台展示图片（实图和平台图片至少需要上传一类）</p>
+                      <h3>{{ t('product.sku.productImage') }}</h3>
+                      <p>{{ t('product.sku.form.imagesDescription') }}</p>
                     </div>
                   </div>
                   <div class="section-content">
@@ -844,8 +905,11 @@
                         :show-icon="true"
                         :message="
                           imageValidationStatus.isValid
-                            ? `已上传图片：实图 ${imageValidationStatus.actualCount} 张，平台图片 ${imageValidationStatus.platformCount} 张`
-                            : '请至少上传一张实图图片或平台图片'
+                            ? t('product.sku.form.imagesUploaded', {
+                                actual: imageValidationStatus.actualCount,
+                                platform: imageValidationStatus.platformCount
+                              })
+                            : t('product.sku.form.imageRequired')
                         "
                         style="margin-bottom: 16px"
                       />
@@ -872,8 +936,8 @@
                       <FolderOpenOutlined />
                     </div>
                     <div class="section-title">
-                      <h3>工程文件</h3>
-                      <p>产品相关的技术文档和工程资料</p>
+                      <h3>{{ t('product.sku.form.engineeringFiles') }}</h3>
+                      <p>{{ t('product.sku.form.engineeringFilesDescription') }}</p>
                     </div>
                   </div>
                   <div class="section-content">
