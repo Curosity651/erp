@@ -1,0 +1,10 @@
+{
+  "common.confirm": "Підтвердити",
+  "common.cancel": "Скасувати",
+  "common.search": "Пошук",
+  "common.reset": "Скинути",
+  "common.refresh": "Оновити",
+  "common.loading": "Завантаження",
+  "common.noData": "Немає даних",
+  "locale.switchFailed": "Не вдалося змінити мову"
+}

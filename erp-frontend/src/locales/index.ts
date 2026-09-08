@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { localMapping } from '@/locales/dayjs'
 import type { App } from 'vue'
 import { defaultLanguage } from '@/config'
+import { isSupportedLocale, resolveInitialLocale, type SupportedLocale } from './locale-contract'
 
 export const i18n = createI18n({
   legacy: false,
@@ -33,22 +34,27 @@ function setI18nLanguage(lang: Locale) {
   return lang
 }
 
-export async function loadLanguageAsync(lang: string): Promise<Locale> {
+export async function loadLanguageAsync(lang: string): Promise<SupportedLocale> {
+  const locale = resolveInitialLocale(lang)
   // If the same language
-  if (i18n.global.locale.value === lang) return setI18nLanguage(lang)
+  if (i18n.global.locale.value === locale) return setI18nLanguage(locale) as SupportedLocale
 
   // If the language was already loaded
-  if (loadedLanguages.includes(lang)) return setI18nLanguage(lang)
+  if (loadedLanguages.includes(locale)) return setI18nLanguage(locale) as SupportedLocale
 
   // If the language hasn't been loaded yet
-  const messages = await localesMap[lang]()
-  i18n.global.setLocaleMessage(lang, messages.default)
-  loadedLanguages.push(lang)
-  return setI18nLanguage(lang)
+  const loader = localesMap[locale]
+  if (!loader || !isSupportedLocale(locale)) return setI18nLanguage(defaultLanguage) as SupportedLocale
+  const messages = await loader()
+  i18n.global.setLocaleMessage(locale, messages.default)
+  loadedLanguages.push(locale)
+  return setI18nLanguage(locale) as SupportedLocale
 }
 
 export const install = (app: App<Element>) => {
   app.use(i18n)
-  useI18nStore().setLanguage(defaultLanguage)
-  return loadLanguageAsync(defaultLanguage)
+  const store = useI18nStore()
+  const locale = resolveInitialLocale(store.language)
+  store.setLanguage(locale)
+  return loadLanguageAsync(locale)
 }

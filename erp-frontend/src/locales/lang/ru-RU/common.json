@@ -1,0 +1,10 @@
+{
+  "common.confirm": "Подтвердить",
+  "common.cancel": "Отмена",
+  "common.search": "Поиск",
+  "common.reset": "Сбросить",
+  "common.refresh": "Обновить",
+  "common.loading": "Загрузка",
+  "common.noData": "Нет данных",
+  "locale.switchFailed": "Не удалось сменить язык"
+}

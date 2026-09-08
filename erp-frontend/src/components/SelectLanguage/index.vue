@@ -25,23 +25,28 @@ import { generatorDynamicRouter } from '@/router/dynamic-routes'
 import router, { resetRouter } from '@/router'
 import { emitter } from '@/hooks/mitt'
 import { supportLanguage } from '@/config'
+import { message } from 'ant-design-vue'
+import { i18n } from '@/locales'
+import { isSupportedLocale } from '@/locales/locale-contract'
 
 const i18nStore = useI18nStore()
 const userStore = useUserStore()
 
-const switchLanguage = (local: string) => {
-  // 切换语言
-  i18nStore.setLanguage(local)
-  // 加载语言文件
-  loadLanguageAsync(local)
-  // 刷新用户菜单
-  userStore.fetchUserMenus().then(userMenus => {
+const switchLanguage = async (locale: string) => {
+  if (!isSupportedLocale(locale) || locale === i18nStore.language) return
+  const previousLocale = i18nStore.language
+  try {
+    await loadLanguageAsync(locale)
+    i18nStore.setLanguage(locale)
+    const userMenus = await userStore.fetchUserMenus()
     const dynamicRouter = generatorDynamicRouter(userMenus)
     resetRouter()
     router.addRoute(dynamicRouter)
-    // 发送切换语言事件，多页签会接收此事件，进行多语言切换
-    emitter.emit('switch-language', local)
-  })
+    emitter.emit('switch-language', locale)
+  } catch {
+    await loadLanguageAsync(previousLocale)
+    message.error(i18n.global.t('locale.switchFailed'))
+  }
 }
 </script>
 

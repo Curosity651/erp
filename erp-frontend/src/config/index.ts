@@ -1,4 +1,5 @@
 import type { ProSettings } from '#/layout/defaultSettings'
+import { DEFAULT_LOCALE } from '../locales/locale-contract'
 
 export type LanguageInfo = {
   lang: string
@@ -57,9 +58,9 @@ export const enableLayoutSetting = false
 export const enableLoginCaptcha = false
 
 // 是否开启国际化
-export const enableI18n = false
+export const enableI18n = true
 // 项目默认语言
-export const defaultLanguage = 'zh-CN'
+export const defaultLanguage = DEFAULT_LOCALE
 // 支持的语言信息
 export const supportLanguage: SupportLanguage = {
   'zh-CN': {
@@ -71,6 +72,16 @@ export const supportLanguage: SupportLanguage = {
     lang: 'en-US',
     title: 'English',
     symbol: '🇺🇸'
+  },
+  'uk-UA': {
+    lang: 'uk-UA',
+    title: 'Українська',
+    symbol: '🇺🇦'
+  },
+  'ru-RU': {
+    lang: 'ru-RU',
+    title: 'Русский',
+    symbol: '🇷🇺'
   }
 }
 
