@@ -6,5 +6,13 @@
   "common.refresh": "Refresh",
   "common.loading": "Loading",
   "common.noData": "No data",
-  "locale.switchFailed": "Failed to switch language"
+  "locale.switchFailed": "Failed to switch language",
+  "common.expand": "Expand",
+  "common.collapse": "Collapse",
+  "common.expandAdvanced": "Advanced search",
+  "common.collapseAdvanced": "Hide advanced search",
+  "common.select": "Select",
+  "common.save": "Save",
+  "common.close": "Close",
+  "common.download": "Download"
 }

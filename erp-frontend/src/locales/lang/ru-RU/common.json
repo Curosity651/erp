@@ -6,5 +6,13 @@
   "common.refresh": "Обновить",
   "common.loading": "Загрузка",
   "common.noData": "Нет данных",
-  "locale.switchFailed": "Не удалось сменить язык"
+  "locale.switchFailed": "Не удалось сменить язык",
+  "common.expand": "Развернуть",
+  "common.collapse": "Свернуть",
+  "common.expandAdvanced": "Расширенный поиск",
+  "common.collapseAdvanced": "Скрыть расширенный поиск",
+  "common.select": "Выбрать",
+  "common.save": "Сохранить",
+  "common.close": "Закрыть",
+  "common.download": "Скачать"
 }

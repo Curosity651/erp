@@ -4,16 +4,20 @@
       <a-space>
         <!-- 自定义内容位置 -->
         <slot />
-        <a-button type="primary" :loading="props.loading" @click="emits('search')">查询</a-button>
-        <a-button @click="emits('reset')">重置</a-button>
+        <a-button type="primary" :loading="props.loading" @click="emits('search')">
+          {{ t('common.search') }}
+        </a-button>
+        <a-button @click="emits('reset')">{{ t('common.reset') }}</a-button>
       </a-space>
       <a v-if="props.collapsible" @click="() => toggleCollapsed()">
-        {{ innerCollapsed ? '展开' : '收起' }}
+        {{ innerCollapsed ? t('common.expand') : t('common.collapse') }}
         <DownOutlined v-if="innerCollapsed" />
         <UpOutlined v-else />
       </a>
       <a v-if="props.showAdvancedToggle" @click="() => toggleAdvanced()">
-        {{ props.showAdvanced ? '收起高级搜索' : '展开高级搜索' }}
+        {{
+          props.showAdvanced ? t('common.collapseAdvanced') : t('common.expandAdvanced')
+        }}
         <DownOutlined v-if="!props.showAdvanced" />
         <UpOutlined v-else />
       </a>
@@ -23,6 +27,9 @@
 
 <script setup lang="ts">
 import { useVModel } from '@vueuse/core'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{

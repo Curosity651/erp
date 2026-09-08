@@ -6,5 +6,13 @@
   "common.refresh": "刷新",
   "common.loading": "加载中",
   "common.noData": "暂无数据",
-  "locale.switchFailed": "语言切换失败"
+  "locale.switchFailed": "语言切换失败",
+  "common.expand": "展开",
+  "common.collapse": "收起",
+  "common.expandAdvanced": "展开高级搜索",
+  "common.collapseAdvanced": "收起高级搜索",
+  "common.select": "选择",
+  "common.save": "保存",
+  "common.close": "关闭",
+  "common.download": "下载"
 }

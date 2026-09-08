@@ -31,7 +31,7 @@
 
         <a-menu-item key="logout">
           <LogoutOutlined />
-          退出登录
+          {{ t('auth.logout') }}
         </a-menu-item>
       </a-menu>
     </template>
@@ -46,6 +46,9 @@ import { authenticationManagers, loginStateManagers } from '@/api/auth'
 import { useUserStore } from '@/stores/user-store'
 import { authenticationType, authenticationMethod, loginPath } from '@/config'
 import { fileAbsoluteUrl } from '@/utils/file-utils'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 目前不支持接口导入: https://github.com/vuejs/core/issues/4294
 type GlobalHeaderRightProps = {
@@ -65,13 +68,19 @@ const currentUser = computed(() => {
   let identityText = ''
   let identityColor = 'blue'
   if (identityType === 'OVERSEAS_PLATFORM') {
-    identityText = userInfo?.tenantName ? `海外仓平台 · ${userInfo.tenantName}` : '海外仓平台'
+    identityText = userInfo?.tenantName
+      ? `${t('auth.platform')} · ${userInfo.tenantName}`
+      : t('auth.platform')
     identityColor = 'red'
   } else if (identityType === 'WMS_OPERATOR') {
-    identityText = userInfo?.tenantName ? `WMS服务商 · ${userInfo.tenantName}` : 'WMS服务商'
+    identityText = userInfo?.tenantName
+      ? `${t('auth.provider')} · ${userInfo.tenantName}`
+      : t('auth.provider')
     identityColor = 'gold'
   } else if (identityType === 'ERP_USER') {
-    identityText = userInfo?.tenantName ? `货主 · ${userInfo.tenantName}` : '货主'
+    identityText = userInfo?.tenantName
+      ? `${t('auth.owner')} · ${userInfo.tenantName}`
+      : t('auth.owner')
     identityColor = 'blue'
   }
   return {
@@ -86,10 +95,10 @@ const router = useRouter()
 
 const loginOut = () => {
   Modal.confirm({
-    title: '提示',
-    content: '确定要退出登录吗 ?',
-    okText: '确认',
-    cancelText: '取消',
+    title: t('auth.logoutTitle'),
+    content: t('auth.logoutConfirm'),
+    okText: t('common.confirm'),
+    cancelText: t('common.cancel'),
     onOk: () => {
       // 如果判断已经登出了，直接跳转登录页
       const loginStateManager = loginStateManagers[authenticationMethod]

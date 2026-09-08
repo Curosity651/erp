@@ -10,12 +10,12 @@
         <span :class="getCls('title')"> {{ projectTitle }} </span>
       </div>
       <!-- 描述 -->
-      <div :class="getCls('desc')">{{ projectDesc }}</div>
+      <div :class="getCls('desc')">{{ t('auth.description') }}</div>
     </div>
 
     <div :class="getCls('main')" style="width: 368px">
       <a-tabs v-model:active-key="currentLoginType" class="login-tabs">
-        <a-tab-pane key="account" tab="账号密码登录"></a-tab-pane>
+        <a-tab-pane key="account" :tab="t('auth.accountLogin')"></a-tab-pane>
         <!-- <a-tab-pane key="mobile" tab="手机号登录"></a-tab-pane> -->
       </a-tabs>
 
@@ -27,12 +27,14 @@
         class="entry-selector"
         style="display: flex; margin-bottom: 20px"
       >
-        <a-radio-button value="ERP_USER" style="flex: 1; text-align: center"> 货主 </a-radio-button>
+        <a-radio-button value="ERP_USER" style="flex: 1; text-align: center">
+          {{ t('auth.owner') }}
+        </a-radio-button>
         <a-radio-button value="WMS_OPERATOR" style="flex: 1; text-align: center">
-          WMS服务商
+          {{ t('auth.provider') }}
         </a-radio-button>
         <a-radio-button value="OVERSEAS_PLATFORM" style="flex: 1; text-align: center">
-          海外仓平台
+          {{ t('auth.platform') }}
         </a-radio-button>
       </a-radio-group>
 
@@ -56,7 +58,9 @@
       <mobile-login-form v-show="currentLoginType === 'mobile'" ref="mobileLoginFormRef" />
 
       <div style="margin-bottom: 24px">
-        <a-checkbox v-model:checked="rememberMe" no-style name="autoLogin"> 自动登录</a-checkbox>
+        <a-checkbox v-model:checked="rememberMe" no-style name="autoLogin">
+          {{ t('auth.autoLogin') }}
+        </a-checkbox>
         <!-- <a style="float: right">忘记密码</a> -->
       </div>
 
@@ -93,13 +97,14 @@ import MobileLoginForm from '@/views/login/components/MobileLoginForm.vue'
 import type { LoginFormInstance, LoginType } from '@/views/login/components/types'
 import type { LoginResult } from '@/api/auth/types'
 import { useUserStore } from '@/stores/user-store'
-import { projectTitle, projectDesc, enableLoginCaptcha } from '@/config'
+import { projectTitle, enableLoginCaptcha } from '@/config'
 import { SliderCaptcha as LoginCaptcha } from '@/components/Captcha'
 import { useAdminI18n } from '@/hooks/i18n'
 import { getCurrentTenantIdentity } from '@/api/tenant'
 import { isSuccess } from '@/api'
 
 const { rawI18nText } = useAdminI18n()
+const { t } = useI18n()
 
 const userStore = useUserStore()
 
@@ -184,7 +189,7 @@ async function handleSubmit(captchaId?: string) {
       // 入口不匹配 / 未绑定租户：清理登录态，停留在登录页
       userStore.clean()
       isLoginError.value = true
-      loginErrorMessage.value = identityRes.message || '请使用正确入口登录'
+      loginErrorMessage.value = identityRes.message || t('auth.wrongEntry')
       return
     }
     userStore.setTenantIdentity(identityRes.data)
@@ -195,7 +200,7 @@ async function handleSubmit(captchaId?: string) {
   } catch (err: any) {
     isLoginError.value = true
     loginErrorMessage.value =
-      ((err.response || {}).data || {}).message || '请求出现错误，请稍后再试'
+      ((err.response || {}).data || {}).message || t('auth.requestFailed')
   } finally {
     loginLoading.value = false
   }

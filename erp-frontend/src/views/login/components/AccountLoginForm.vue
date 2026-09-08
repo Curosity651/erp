@@ -4,7 +4,7 @@
       <a-input
         v-model:value="modelRef.username"
         size="large"
-        placeholder="账号"
+        :placeholder="t('auth.username')"
         @press-enter="trySubmit"
       >
         <template #prefix>
@@ -17,7 +17,7 @@
       <a-input-password
         v-model:value="modelRef.password"
         size="large"
-        placeholder="密码"
+        :placeholder="t('auth.password')"
         autocomplete="on"
         @press-enter="trySubmit"
       >
@@ -38,6 +38,9 @@ import type { LoginFormInstance } from './types'
 import { passEncrypt } from '@/utils/password-utils'
 
 import { authenticationType } from '@/config'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 登录表单参数
 const useForm = Form.useForm
@@ -46,10 +49,10 @@ const modelRef = reactive<AccountLoginParam>({
   username: '',
   password: ''
 })
-const rulesRef = reactive({
-  username: [{ required: true, message: '请输入账号!' }],
-  password: [{ required: true, message: '请输入密码!' }]
-})
+const rulesRef = computed(() => ({
+  username: [{ required: true, message: t('auth.usernameRequired') }],
+  password: [{ required: true, message: t('auth.passwordRequired') }]
+}))
 const { validate, validateInfos } = useForm(modelRef, rulesRef)
 
 // 定义事件

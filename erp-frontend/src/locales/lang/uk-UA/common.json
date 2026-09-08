@@ -6,5 +6,13 @@
   "common.refresh": "Оновити",
   "common.loading": "Завантаження",
   "common.noData": "Немає даних",
-  "locale.switchFailed": "Не вдалося змінити мову"
+  "locale.switchFailed": "Не вдалося змінити мову",
+  "common.expand": "Розгорнути",
+  "common.collapse": "Згорнути",
+  "common.expandAdvanced": "Розширений пошук",
+  "common.collapseAdvanced": "Сховати розширений пошук",
+  "common.select": "Вибрати",
+  "common.save": "Зберегти",
+  "common.close": "Закрити",
+  "common.download": "Завантажити"
 }

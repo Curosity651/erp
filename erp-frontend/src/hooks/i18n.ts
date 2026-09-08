@@ -6,7 +6,7 @@ export const useAdminI18n = () => {
 
   function rawI18nText(code: string, defaultText?: string) {
     if (enableI18n) {
-      return i18nGlobal.t(code)
+      return i18nGlobal.te(code) ? i18nGlobal.t(code) : (defaultText ?? code)
     }
     return defaultText ?? code
   }
