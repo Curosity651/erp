@@ -1,5 +1,11 @@
 <template>
-  <a-drawer title="角色授权" placement="right" :open="visible" :width="600" @close="closeModal">
+  <a-drawer
+    :title="t('system.role.grantTitle')"
+    placement="right"
+    :open="visible"
+    :width="600"
+    @close="closeModal"
+  >
     <div style="margin-bottom: 60px">
       <a-spin :spinning="submitLoading">
         <a-tree :checkable="true" v-bind="grantTreeState" />
@@ -19,10 +25,17 @@
         borderRadius: '0 0 4px 4px'
       }"
     >
-      <a-popconfirm title="确定放弃编辑？" ok-text="确定" cancel-text="取消" @confirm="closeModal">
-        <a-button style="margin-right: 0.8rem">取消</a-button>
+      <a-popconfirm
+        :title="t('system.role.abandonConfirm')"
+        :ok-text="t('common.confirm')"
+        :cancel-text="t('common.cancel')"
+        @confirm="closeModal"
+      >
+        <a-button style="margin-right: 0.8rem">{{ t('common.cancel') }}</a-button>
       </a-popconfirm>
-      <a-button type="primary" :loading="submitLoading" @click="handleSubmit">保存</a-button>
+      <a-button type="primary" :loading="submitLoading" @click="handleSubmit">{{
+        t('common.save')
+      }}</a-button>
     </div>
   </a-drawer>
 </template>
@@ -37,6 +50,9 @@ import type { SysRolePageVO } from '@/api/system/role/types'
 import { listRolePermissionIds, updateRolePermissionIds } from '@/api/system/role'
 import type { CheckInfo } from 'ant-design-vue/es/vc-tree/props'
 import { message } from 'ant-design-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 type SysMenuGrantTree = SysMenuGrantVO & {
   key: Key

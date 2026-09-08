@@ -10,10 +10,10 @@
   >
     <template #headerTitle>
       <a-space :size="24">
-        组织架构
+        {{ t('system.organization.title') }}
         <a-input-search
           v-model:value="searchName"
-          placeholder="组织名称"
+          :placeholder="t('system.organization.name')"
           allow-clear
           @search="searchTable"
         />
@@ -37,12 +37,14 @@
     <template #toolBarRender>
       <a-popconfirm
         v-if="hasPermission('system:organization:revised')"
-        title="是否确认进行校正操作?"
-        ok-text="Yes"
-        cancel-text="No"
+        :title="t('system.organization.reviseConfirm')"
+        :ok-text="t('common.confirm')"
+        :cancel-text="t('common.cancel')"
         @confirm="handleRevised"
       >
-        <a-button type="primary" danger> <InteractionOutlined />校正层级深度 </a-button>
+        <a-button type="primary" danger>
+          <InteractionOutlined />{{ t('system.organization.revise') }}
+        </a-button>
       </a-popconfirm>
       <new-button v-if="hasPermission('system:organization:add')" @click="handleNew" />
     </template>
@@ -61,7 +63,9 @@
       <!-- 操作栏 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="hasPermission('system:organization:edit')" @click="handleEdit(record)">编辑</a>
+          <a v-if="hasPermission('system:organization:edit')" @click="handleEdit(record)">{{
+            t('system.organization.edit')
+          }}</a>
           <delete-text-button
             v-if="hasPermission('system:organization:del')"
             @confirm="handleDelete(record)"
@@ -96,6 +100,9 @@ import { FormAction } from '@/hooks/form'
 import { doRequest } from '@/utils/axios/request'
 import { NewButton, DeleteTextButton } from '@/components/Button'
 import OperationGroup from '@/components/Operation/OperationGroup.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 defineOptions({ name: 'SysOrganizationPage' })
 
@@ -166,7 +173,7 @@ const handleEdit = (record: SysOrganizationVO) => {
 /* 删除组织 */
 const handleDelete = (record: SysOrganizationVO) => {
   doRequest(deleteOrganization(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('system.user.deleteSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -174,40 +181,40 @@ const handleDelete = (record: SysOrganizationVO) => {
 /** 校正层级深度 */
 const handleRevised = () => {
   doRequest(revisedOrganization(), {
-    successMessage: '层级校正成功',
+    successMessage: t('system.organization.reviseSuccess'),
     onSuccess: () => reloadTable()
   })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '组织架构层级',
+    title: t('system.organization.level'),
     width: 250,
     dataIndex: 'name'
   },
   {
-    title: '排序',
+    title: t('system.organization.sort'),
     width: 80,
     dataIndex: 'sort'
   },
   {
-    title: '备注信息',
+    title: t('system.organization.remarks'),
     dataIndex: 'remarks',
     width: 200,
     ellipsis: true
   },
   {
-    title: '创建时间',
+    title: t('system.organization.createTime'),
     dataIndex: 'createTime',
     width: 150
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('system.organization.operation'),
     align: 'center',
     width: 120
   }
-]
+])
 </script>
 
 <style scoped lang="less">

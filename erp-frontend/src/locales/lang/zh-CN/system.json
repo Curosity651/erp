@@ -35,6 +35,26 @@
       "passwordRequired": "请输入密码！",
       "nicknameRequired": "请输入昵称！"
     },
+    "organization": {
+      "title": "组织架构",
+      "name": "组织名称",
+      "level": "组织架构层级",
+      "sort": "排序",
+      "remarks": "备注信息",
+      "createTime": "创建时间",
+      "operation": "操作",
+      "edit": "编辑",
+      "reviseConfirm": "是否确认进行校正操作？",
+      "revise": "校正层级深度",
+      "reviseSuccess": "层级校正成功",
+      "parent": "父级组织",
+      "root": "根组织",
+      "sortHint": "按数值由小到大升序",
+      "new": "新建组织",
+      "editTitle": "编辑组织",
+      "parentRequired": "请选择父级组织",
+      "nameRequired": "请输入组织名称！"
+    },
     "role": {
       "title": "角色管理",
       "name": "角色名称",
@@ -63,7 +83,14 @@
       "nameRequired": "请输入角色名！",
       "typeRequired": "请选择角色类型！",
       "permissionRequired": "请选择数据权限！",
-      "scopeRequired": "请选择权限范围！"
+      "scopeRequired": "请选择权限范围！",
+      "grantTitle": "角色授权",
+      "abandonConfirm": "确定放弃编辑？",
+      "boundUsers": "角色已绑用户",
+      "unbindConfirm": "确认要解绑吗？",
+      "unbind": "解绑",
+      "unbindSuccess": "解绑成功！",
+      "userId": "用户ID"
     }
   }
 }

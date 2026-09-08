@@ -13,32 +13,32 @@
         <a-input v-model:value="formModel.id" />
       </a-form-item>
 
-      <a-form-item label="父级组织" v-bind="validateInfos.parentId">
+      <a-form-item :label="t('system.organization.parent')" v-bind="validateInfos.parentId">
         <sys-organization-tree-select
           v-model:value="formModel.parentId"
-          placeholder="父级组织"
+          :placeholder="t('system.organization.parent')"
           :tree-data="hasRootOrganizationTree"
           tree-default-expand-all
           allow-clear
         />
       </a-form-item>
 
-      <a-form-item label="组织名称" v-bind="validateInfos.name">
-        <a-input v-model:value="formModel.name" placeholder="组织名称" />
+      <a-form-item :label="t('system.organization.name')" v-bind="validateInfos.name">
+        <a-input v-model:value="formModel.name" :placeholder="t('system.organization.name')" />
       </a-form-item>
 
-      <a-form-item label="排序">
+      <a-form-item :label="t('system.organization.sort')">
         <a-input-number
           v-model:value="formModel.sort"
           style="width: 60%"
-          placeholder="按数值由小到大升序"
+          :placeholder="t('system.organization.sortHint')"
         />
       </a-form-item>
 
-      <a-form-item label="备注信息" v-bind="validateInfos.remarks">
+      <a-form-item :label="t('system.organization.remarks')" v-bind="validateInfos.remarks">
         <a-textarea
           v-model:value="formModel.remarks"
-          placeholder="备注信息"
+          :placeholder="t('system.organization.remarks')"
           :rows="3"
           :max-length="512"
         />
@@ -59,6 +59,9 @@ import type {
   SysOrganizationDTO
 } from '@/api/system/organization/types'
 import { createOrganization, updateOrganization } from '@/api/system/organization'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const emits = defineEmits<{
   (e: 'submit-success'): void
@@ -69,7 +72,12 @@ const props = defineProps<{
 }>()
 
 const hasRootOrganizationTree = computed<SysOrganizationTree[]>(() => [
-  { id: 0, key: 0, name: '根组织', children: props.organizationTree } as SysOrganizationTree
+  {
+    id: 0,
+    key: 0,
+    name: t('system.organization.root'),
+    children: props.organizationTree
+  } as SysOrganizationTree
 ])
 
 const { title, visible, openModal, closeModal } = useModal()
@@ -97,10 +105,10 @@ const formRule = reactive({
     {
       required: true,
       type: 'number',
-      message: '请选择父级组织'
+      message: t('system.organization.parentRequired')
     }
   ],
-  name: [{ required: true, message: '请输入组织名称!' }],
+  name: [{ required: true, message: t('system.organization.nameRequired') }],
   remarks: [{ max: 512 }]
 })
 
@@ -134,9 +142,9 @@ defineExpose({
     resetFields()
     formAction.value = newFormAction
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建组织'
+      title.value = t('system.organization.new')
     } else {
-      title.value = '编辑组织'
+      title.value = t('system.organization.editTitle')
       overrideProperties(formModel, record)
     }
   }

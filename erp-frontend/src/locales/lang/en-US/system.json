@@ -35,6 +35,26 @@
       "passwordRequired": "Enter a password",
       "nicknameRequired": "Enter a display name"
     },
+    "organization": {
+      "title": "Organization structure",
+      "name": "Organization name",
+      "level": "Organization hierarchy",
+      "sort": "Order",
+      "remarks": "Remarks",
+      "createTime": "Created at",
+      "operation": "Actions",
+      "edit": "Edit",
+      "reviseConfirm": "Recalculate hierarchy levels?",
+      "revise": "Recalculate hierarchy",
+      "reviseSuccess": "Hierarchy recalculated",
+      "parent": "Parent organization",
+      "root": "Root organization",
+      "sortHint": "Ascending numeric order",
+      "new": "New organization",
+      "editTitle": "Edit organization",
+      "parentRequired": "Select a parent organization",
+      "nameRequired": "Enter an organization name"
+    },
     "role": {
       "title": "Role management",
       "name": "Role name",
@@ -63,7 +83,14 @@
       "nameRequired": "Enter a role name",
       "typeRequired": "Select a role type",
       "permissionRequired": "Select data permission",
-      "scopeRequired": "Select a permission scope"
+      "scopeRequired": "Select a permission scope",
+      "grantTitle": "Role permissions",
+      "abandonConfirm": "Discard your changes?",
+      "boundUsers": "Assigned users",
+      "unbindConfirm": "Remove this user from the role?",
+      "unbind": "Remove",
+      "unbindSuccess": "User removed from role",
+      "userId": "User ID"
     }
   }
 }

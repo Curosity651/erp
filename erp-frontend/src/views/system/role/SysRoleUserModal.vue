@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    title="角色已绑用户"
+    :title="t('system.role.boundUsers')"
     :open="visible"
     :mask-closable="false"
     :body-style="{ padding: '16px 24px' }"
@@ -28,10 +28,10 @@
         <template v-if="column.key === 'operate'">
           <a-popconfirm
             v-if="hasPermission('system:user:grant')"
-            title="确认要解绑吗？"
+            :title="t('system.role.unbindConfirm')"
             @confirm="handleUnbind(record)"
           >
-            <a href="javascript:" class="ballcat-text-danger">解绑</a>
+            <a href="javascript:" class="ballcat-text-danger">{{ t('system.role.unbind') }}</a>
           </a-popconfirm>
         </template>
       </template>
@@ -51,6 +51,9 @@ import { pageRoleUsers, unbindRoleUser } from '@/api/system/role'
 import type { SysRolePageVO, SysRoleUserQO } from '@/api/system/role/types'
 import type { SysRoleUserVO } from '@/api/system/role/types'
 import { doRequest } from '@/utils/axios/request'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const { hasPermission } = useAuthorize()
 
@@ -86,39 +89,39 @@ const searchTable = (params: SysRoleUserQO) => {
 
 const handleUnbind = (record: SysRoleUserVO) => {
   doRequest(unbindRoleUser(record.userId, roleCode.value), {
-    successMessage: '解绑成功！',
+    successMessage: t('system.role.unbindSuccess'),
     onSuccess: () => reloadTable()
   })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '用户ID',
+    title: t('system.role.userId'),
     dataIndex: 'userId',
     width: '45px'
   },
   {
-    title: '用户名',
+    title: t('system.user.username'),
     dataIndex: 'username',
     width: '45px'
   },
   {
-    title: '昵称',
+    title: t('system.user.nickname'),
     dataIndex: 'nickname',
     width: '45px'
   },
   {
-    title: '组织机构',
+    title: t('system.user.organization'),
     dataIndex: 'organizationName',
     width: '45px'
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('system.role.operation'),
     align: 'center',
     width: 50
   }
-]
+])
 
 defineExpose({
   open(record: SysRolePageVO) {
