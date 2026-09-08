@@ -3,13 +3,13 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :md="8" :sm="24">
-          <a-form-item label="角色">
-            <a-input v-model:value="formModel.name" placeholder="请输入" />
+          <a-form-item :label="t('system.role.name')">
+            <a-input v-model:value="formModel.name" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :md="8" :sm="24">
-          <a-form-item label="标识">
-            <a-input v-model:value="formModel.code" placeholder="请输入" />
+          <a-form-item :label="t('system.role.code')">
+            <a-input v-model:value="formModel.code" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="8" :md="12" :sm="24">
@@ -23,6 +23,8 @@
 <script setup lang="ts">
 import { Form } from 'ant-design-vue'
 import type { SysRoleQO } from '@/api/system/role/types'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 const useForm = Form.useForm
 
 // 表单 label 全局配置

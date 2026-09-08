@@ -13,19 +13,19 @@
         <a-input v-model:value="formModel.id" />
       </a-form-item>
 
-      <a-form-item label="角色名" v-bind="validateInfos.name">
-        <a-input v-model:value="formModel.name" placeholder="请输入" />
+      <a-form-item :label="t('system.role.name')" v-bind="validateInfos.name">
+        <a-input v-model:value="formModel.name" :placeholder="t('message.pleaseEnter')" />
       </a-form-item>
 
-      <a-form-item label="角色标识" v-bind="validateInfos.code">
+      <a-form-item :label="t('system.role.code')" v-bind="validateInfos.code">
         <a-input
           v-model:value="formModel.code"
           :disabled="isUpdateForm"
-          placeholder="角色标识必须以ROLE_开头!"
+          :placeholder="t('system.role.codeHint')"
         />
       </a-form-item>
 
-      <a-form-item label="角色类型" v-bind="validateInfos.type">
+      <a-form-item :label="t('system.role.type')" v-bind="validateInfos.type">
         <dict-radio-group
           v-model:value="formModel.type"
           :disabled="isUpdateForm"
@@ -34,29 +34,33 @@
         />
       </a-form-item>
 
-      <a-form-item label="数据权限" v-bind="validateInfos.scopeType">
+      <a-form-item :label="t('system.role.dataPermission')" v-bind="validateInfos.scopeType">
         <a-select v-model:value="formModel.scopeType">
-          <a-select-option :value="0">全部</a-select-option>
-          <a-select-option :value="1">个人</a-select-option>
-          <a-select-option :value="2">本人及子级</a-select-option>
-          <a-select-option :value="3">本级</a-select-option>
-          <a-select-option :value="4">本级及子级</a-select-option>
-          <a-select-option :value="5">自定义</a-select-option>
+          <a-select-option :value="0">{{ t('system.role.all') }}</a-select-option>
+          <a-select-option :value="1">{{ t('system.role.personal') }}</a-select-option>
+          <a-select-option :value="2">{{ t('system.role.selfAndChildren') }}</a-select-option>
+          <a-select-option :value="3">{{ t('system.role.current') }}</a-select-option>
+          <a-select-option :value="4">{{ t('system.role.currentAndChildren') }}</a-select-option>
+          <a-select-option :value="5">{{ t('system.role.custom') }}</a-select-option>
         </a-select>
       </a-form-item>
 
-      <a-form-item v-if="isCustomScopeType" label="数据范围" v-bind="validateInfos.scopeResources">
+      <a-form-item
+        v-if="isCustomScopeType"
+        :label="t('system.role.dataScope')"
+        v-bind="validateInfos.scopeResources"
+      >
         <sys-organization-tree-select
           v-model:value="formModel.scopeResourceList"
           :multiple="true"
         />
       </a-form-item>
 
-      <a-form-item label="备注">
+      <a-form-item :label="t('system.role.remarks')">
         <a-textarea
           v-model:value="formModel.remarks"
           :auto-size="{ minRows: 4, maxRows: 8 }"
-          placeholder="备注信息"
+          :placeholder="t('system.role.remarksHint')"
         />
       </a-form-item>
     </a-form>
@@ -72,6 +76,9 @@ import { overrideProperties } from '@/utils/bean-utils'
 import type { Rule } from 'ant-design-vue/es/form'
 import { createRole, updateRole } from '@/api/system/role'
 import type { SysRoleDTO, SysRolePageVO } from '@/api/system/role/types'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const emits = defineEmits<{
   (e: 'submit-success'): void
@@ -84,10 +91,10 @@ const { formAction, isUpdateForm } = useFormAction()
 /** 校验密码 */
 const validateCode = async (_rule: Rule, value: string) => {
   if (value === '') {
-    return Promise.reject('请输入角色标识！')
+    return Promise.reject(t('system.role.codeRequired'))
   } else {
     if (value.indexOf('ROLE_') !== 0) {
-      return Promise.reject('角色标识必须以ROLE_开头！')
+      return Promise.reject(t('system.role.codeHint'))
     }
     return Promise.resolve()
   }
@@ -111,11 +118,11 @@ const isCustomScopeType = computed(() => formModel.scopeType === 5)
 
 // 表单的校验规则
 const formRule = reactive({
-  name: [{ required: true, message: '请输入角色名!' }],
+  name: [{ required: true, message: t('system.role.nameRequired') }],
   code: [{ validator: validateCode }],
-  type: [{ required: true, message: '请选择角色类型!' }],
-  scopeType: [{ required: true, message: '请选择数据权限!' }],
-  scopeResources: [{ required: isCustomScopeType, message: '请选择权限范围！' }]
+  type: [{ required: true, message: t('system.role.typeRequired') }],
+  scopeType: [{ required: true, message: t('system.role.permissionRequired') }],
+  scopeResources: [{ required: isCustomScopeType, message: t('system.role.scopeRequired') }]
 })
 
 // 表单的提交请求
@@ -155,9 +162,9 @@ defineExpose({
     openModal()
     resetFields()
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建角色'
+      title.value = t('system.role.newRole')
     } else {
-      title.value = '编辑角色'
+      title.value = t('system.role.editRole')
       overrideProperties(formModel, record)
       formModel.scopeResourceList = record?.scopeResources?.split(',').map(Number)
     }

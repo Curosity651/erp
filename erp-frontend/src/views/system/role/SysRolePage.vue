@@ -2,7 +2,7 @@
   <sys-role-page-search :loading="tableRef?.loading" @search="searchTable" />
   <pro-table
     ref="tableRef"
-    header-title="角色管理"
+    :header-title="t('system.role.title')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -16,9 +16,15 @@
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="hasPermission('system:role:edit')" @click="handleEdit(record)">编辑</a>
-          <a v-if="hasPermission('system:role:grant')" @click="handleGrant(record)">授权</a>
-          <a v-if="hasPermission('system:role:grant')" @click="handleBind(record)">绑定</a>
+          <a v-if="hasPermission('system:role:edit')" @click="handleEdit(record)">{{
+            t('system.role.edit')
+          }}</a>
+          <a v-if="hasPermission('system:role:grant')" @click="handleGrant(record)">{{
+            t('system.role.grant')
+          }}</a>
+          <a v-if="hasPermission('system:role:grant')" @click="handleBind(record)">{{
+            t('system.role.bind')
+          }}</a>
           <delete-text-button
             v-if="hasPermission('system:role:del')"
             @confirm="handleDelete(record)"
@@ -56,6 +62,9 @@ import { doRequest } from '@/utils/axios/request'
 import { DictTag } from '@/components/Dict'
 import { OperationGroup } from '@/components/Operation'
 import { NewButton, DeleteTextButton } from '@/components/Button'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 如果需要被多页签缓存，必须要设置组件名称
 defineOptions({ name: 'SysRolePage' })
@@ -102,7 +111,7 @@ const handleEdit = (record: SysRolePageVO) => {
 /* 删除角色 */
 const handleDelete = (record: SysRolePageVO) => {
   doRequest(deleteRole(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('system.user.deleteSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -117,23 +126,23 @@ const handleBind = (record: SysRolePageVO) => {
   sysRoleUserModalRef.value?.open(record)
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '角色名称',
+    title: t('system.role.name'),
     dataIndex: 'name',
     sorter: true,
     width: 150,
     ellipsis: true
   },
   {
-    title: '角色标识',
+    title: t('system.role.code'),
     dataIndex: 'code',
     sorter: true,
     width: 180,
     ellipsis: true
   },
   {
-    title: '类型',
+    title: t('system.role.type'),
     dataIndex: 'type',
     sorter: true,
     width: 80,
@@ -142,29 +151,29 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '备注',
+    title: t('system.role.remarks'),
     dataIndex: 'remarks',
     sorter: true,
     width: 150,
     ellipsis: true
   },
   {
-    title: '创建时间',
+    title: t('system.role.createTime'),
     dataIndex: 'createTime',
     width: 150,
     sorter: true
   },
   {
-    title: '更新时间',
+    title: t('system.role.updateTime'),
     dataIndex: 'updateTime',
     width: 150,
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('system.role.operation'),
     align: 'center',
     width: 180
   }
-]
+])
 </script>
