@@ -7,7 +7,7 @@
   <pro-table
     ref="tableRef"
     v-model:expanded-row-keys="expandedRowKeys"
-    header-title="菜单权限"
+    :header-title="t('system.menu.title')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -28,16 +28,20 @@
         <AntIcon v-if="record.icon" :type="record.icon" style="margin-right: 6px" />
         <a-tooltip placement="top">
           <template #title>
-            <span>{{ enableI18n ? record.i18nTitle : record.title }}</span>
+            <span>{{ enableI18n ? record.i18nTitle || record.title : record.title }}</span>
           </template>
-          {{ enableI18n ? record.i18nTitle : record.title }}
+          {{ enableI18n ? record.i18nTitle || record.title : record.title }}
         </a-tooltip>
       </template>
       <!-- 操作栏 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="hasPermission('system:menu:add')" @click="handleNew(record)">添加</a>
-          <a v-if="hasPermission('system:menu:edit')" @click="handleEdit(record)">编辑</a>
+          <a v-if="hasPermission('system:menu:add')" @click="handleNew(record)">{{
+            t('system.menu.add')
+          }}</a>
+          <a v-if="hasPermission('system:menu:edit')" @click="handleEdit(record)">{{
+            t('system.menu.edit')
+          }}</a>
           <delete-text-button
             v-if="hasPermission('system:menu:del')"
             @confirm="handleDelete(record)"
@@ -74,6 +78,9 @@ import { DictText } from '@/components/Dict'
 import { NewButton, DeleteTextButton } from '@/components/Button'
 import OperationGroup from '@/components/Operation/OperationGroup.vue'
 import { enableI18n } from '@/config'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 defineOptions({ name: 'SysMenuPage' })
 
@@ -94,7 +101,7 @@ const searchTitle = ref('')
 
 /* 菜单标题的匹配逻辑 */
 const titleMatcher = (node: SysMenuVOTree) => {
-  const title = enableI18n ? node.i18nTitle : node.title
+  const title = enableI18n ? node.i18nTitle || node.title : node.title
   return searchTitle.value ? title.indexOf(searchTitle.value) > -1 : true
 }
 
@@ -147,48 +154,48 @@ const handleEdit = (record: SysMenuVO) => {
 /* 删除菜单 */
 const handleDelete = (record: SysMenuVO) => {
   doRequest(deleteMenu(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('system.user.deleteSuccess'),
     onSuccess: () => reloadTable()
   })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
     title: 'ID',
     dataIndex: 'id',
     width: 80
   },
   {
-    title: '菜单名称',
+    title: t('system.menu.name'),
     dataIndex: 'title',
     width: 200,
     ellipsis: true
   },
   {
-    title: '权限标识',
+    title: t('system.menu.permission'),
     dataIndex: 'permission',
     width: 150,
     ellipsis: true
   },
   {
-    title: '路由地址',
+    title: t('system.menu.path'),
     dataIndex: 'path',
     width: 120,
     ellipsis: true
   },
   {
-    title: '资源路径',
+    title: t('system.menu.uri'),
     dataIndex: 'uri',
     width: 180,
     ellipsis: true
   },
   {
-    title: '排序',
+    title: t('system.menu.sort'),
     dataIndex: 'sort',
     width: 50
   },
   {
-    title: '可见',
+    title: t('system.menu.visible'),
     dataIndex: 'hidden',
     width: 50,
     customRender: function ({ value: hidden }) {
@@ -196,16 +203,16 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '创建时间',
+    title: t('system.menu.createTime'),
     dataIndex: 'createTime',
     width: 150
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('system.menu.operation'),
     align: 'center',
     width: 150,
     fixed: 'right'
   }
-]
+])
 </script>

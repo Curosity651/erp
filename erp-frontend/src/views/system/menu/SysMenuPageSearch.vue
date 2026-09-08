@@ -3,18 +3,18 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="菜单ID">
-            <a-input v-model:value="formModel.id" placeholder="请输入" />
+          <a-form-item :label="t('system.menu.id')">
+            <a-input v-model:value="formModel.id" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="菜单名称">
-            <a-input v-model:value="searchTitle" placeholder="请输入" />
+          <a-form-item :label="t('system.menu.name')">
+            <a-input v-model:value="searchTitle" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="路由地址">
-            <a-input v-model:value="formModel.path" placeholder="请输入" />
+          <a-form-item :label="t('system.menu.path')">
+            <a-input v-model:value="formModel.path" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
@@ -29,6 +29,8 @@
 import { Form } from 'ant-design-vue'
 import type { SysMenuQO } from '@/api/system/menu/types'
 import { useVModel } from '@vueuse/core'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 const useForm = Form.useForm
 
 // 表单 label 全局配置

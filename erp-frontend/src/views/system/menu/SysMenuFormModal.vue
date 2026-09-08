@@ -16,10 +16,10 @@
         <a-input v-model:value="formModel.originalId" />
       </a-form-item>
 
-      <a-form-item label="上级菜单">
+      <a-form-item :label="t('system.menu.parent')">
         <a-tree-select
           v-model:value="formModel.parentId"
-          placeholder="父菜单"
+          :placeholder="t('system.menu.parentHint')"
           :dropdown-style="{ maxHeight: '350px', overflow: 'auto' }"
           :tree-data="parentMenuTree"
           :tree-default-expanded-keys="[0]"
@@ -31,7 +31,7 @@
         </a-tree-select>
       </a-form-item>
 
-      <a-form-item label="菜单类型">
+      <a-form-item :label="t('system.menu.type')">
         <dict-radio-group v-model:value="formModel.type" class="menu-type" dict-code="menu_type" />
       </a-form-item>
 
@@ -43,36 +43,37 @@
             v-bind="validateInfos.id"
           >
             <template #label>
-              菜单ID
-              <a-tooltip
-                title="菜单ID的长度固定为 6，由三部分构成。前两位是目录序号，中间两位是菜单序号，最后两位是按钮序号。
-                例如目录的ID结构应为：XX0000，菜单结构为 XXXX00，按钮ID结构为 XXXXXX"
-              >
+              {{ t('system.menu.id') }}
+              <a-tooltip :title="t('system.menu.idHelp')">
                 <QuestionCircleOutlined />
               </a-tooltip>
             </template>
-            <a-input v-model:value="formModel.id" placeholder="请输入" />
+            <a-input v-model:value="formModel.id" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
 
         <a-col :xs="24" :sm="24" :md="12">
           <a-form-item
-            label="显示排序"
+            :label="t('system.menu.displaySort')"
             :label-col="rowLabelCol"
             :wrapper-col="rowWrapperCol"
             v-bind="validateInfos.sort"
           >
             <a-input-number
               v-model:value="formModel.sort"
-              placeholder="排序值(升序)"
+              :placeholder="t('system.menu.sortHint')"
               style="width: 100%"
             />
           </a-form-item>
         </a-col>
       </a-row>
 
-      <a-form-item label="菜单名称" v-bind="validateInfos.title">
-        <a-input v-model:value="formModel.title" placeholder="请输入" style="width: 65%" />
+      <a-form-item :label="t('system.menu.name')" v-bind="validateInfos.title">
+        <a-input
+          v-model:value="formModel.title"
+          :placeholder="t('message.pleaseEnter')"
+          style="width: 65%"
+        />
         <!--        <a v-if="enableI18n && isCreateForm" style="margin-left: 8px" @click="toggleI18nAdvanced">-->
         <!--          {{ i18nAdvanced ? '收起' : '展开' }}国际化名称-->
         <!--          <a-icon :type="i18nAdvanced ? 'up' : 'down'" />-->
@@ -93,8 +94,12 @@
       <template v-if="!isButton">
         <a-row :gutter="16">
           <a-col :xs="24" :sm="24" :md="12">
-            <a-form-item label="菜单图标" :label-col="rowLabelCol" :wrapper-col="rowWrapperCol">
-              <a-input v-model:value="formModel.icon" placeholder="请选择">
+            <a-form-item
+              :label="t('system.menu.icon')"
+              :label-col="rowLabelCol"
+              :wrapper-col="rowWrapperCol"
+            >
+              <a-input v-model:value="formModel.icon" :placeholder="t('common.select')">
                 <template #prefix>
                   <AntIcon v-if="formModel.icon" :type="formModel.icon" />
                 </template>
@@ -106,12 +111,12 @@
           </a-col>
           <a-col :xs="24" :sm="24" :md="12">
             <a-form-item
-              label="路由地址"
+              :label="t('system.menu.path')"
               :label-col="rowLabelCol"
               :wrapper-col="rowWrapperCol"
               v-bind="validateInfos.path"
             >
-              <a-input v-model:value="formModel.path" placeholder="请输入" />
+              <a-input v-model:value="formModel.path" :placeholder="t('message.pleaseEnter')" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -120,50 +125,58 @@
       <template v-if="isMenu">
         <a-row :gutter="16">
           <a-col :xs="24" :sm="24" :md="12">
-            <a-form-item label="打开方式" :label-col="rowLabelCol" :wrapper-col="rowWrapperCol">
+            <a-form-item
+              :label="t('system.menu.openMode')"
+              :label-col="rowLabelCol"
+              :wrapper-col="rowWrapperCol"
+            >
               <a-select v-model:value="formModel.targetType">
-                <a-select-option :value="1"> 内部组件 </a-select-option>
-                <a-select-option :value="2"> 内嵌页面 </a-select-option>
-                <a-select-option :value="3"> 外部链接 </a-select-option>
+                <a-select-option :value="1">{{ t('system.menu.internal') }}</a-select-option>
+                <a-select-option :value="2">{{ t('system.menu.embedded') }}</a-select-option>
+                <a-select-option :value="3">{{ t('system.menu.external') }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
           <a-col :xs="24" :sm="24" :md="12">
-            <a-form-item label="组件缓存" :label-col="rowLabelCol" :wrapper-col="rowWrapperCol">
+            <a-form-item
+              :label="t('system.menu.cache')"
+              :label-col="rowLabelCol"
+              :wrapper-col="rowWrapperCol"
+            >
               <a-radio-group v-model:value="formModel.keepAlive">
-                <a-radio :value="1"> 开启 </a-radio>
-                <a-radio :value="0"> 关闭 </a-radio>
+                <a-radio :value="1">{{ t('system.menu.enable') }}</a-radio>
+                <a-radio :value="0">{{ t('system.menu.disable') }}</a-radio>
               </a-radio-group>
             </a-form-item>
           </a-col>
         </a-row>
 
-        <a-form-item label="资源路径" v-bind="validateInfos.uri">
-          <a-input v-model:value="formModel.uri" placeholder="请输入" />
+        <a-form-item :label="t('system.menu.uri')" v-bind="validateInfos.uri">
+          <a-input v-model:value="formModel.uri" :placeholder="t('message.pleaseEnter')" />
         </a-form-item>
       </template>
 
       <!-- 按钮没有显示隐藏一说 -->
       <template v-if="!isButton">
-        <a-form-item label="是否可见">
+        <a-form-item :label="t('system.menu.visible')">
           <a-radio-group v-model:value="formModel.hidden">
-            <a-radio :value="0"> 显示 </a-radio>
-            <a-radio :value="1"> 隐藏 </a-radio>
+            <a-radio :value="0">{{ t('system.menu.show') }}</a-radio>
+            <a-radio :value="1">{{ t('system.menu.hide') }}</a-radio>
           </a-radio-group>
         </a-form-item>
       </template>
 
       <!-- 按钮才有授权标识 -->
       <template v-if="isButton">
-        <a-form-item label="授权标识" v-bind="validateInfos.permission">
-          <a-input v-model:value="formModel.permission" placeholder="请输入" />
+        <a-form-item :label="t('system.menu.authorization')" v-bind="validateInfos.permission">
+          <a-input v-model:value="formModel.permission" :placeholder="t('message.pleaseEnter')" />
         </a-form-item>
       </template>
 
-      <a-form-item label="备注信息">
+      <a-form-item :label="t('system.menu.remarks')">
         <a-textarea
           v-model:value="formModel.remarks"
-          placeholder="最多输入 200 个字符"
+          :placeholder="t('system.menu.remarksHint')"
           :auto-size="{ minRows: 3, maxRows: 6 }"
         />
       </a-form-item>
@@ -187,6 +200,9 @@ import { listToTree } from '@/utils/tree-utils'
 import { overrideProperties } from '@/utils/bean-utils'
 import IconSelectorModal from '@/components/IconSelector/IconSelectorModal.vue'
 import type { Icon } from '@/components/IconSelector/types'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   menuList: SysMenuVO[]
@@ -204,8 +220,9 @@ const rowWrapperCol: ColProps = { sm: { span: 24 }, md: { span: 16 } }
 type SysMenuTree = Partial<SysMenuVO> & { children?: SysMenuTree[] }
 
 // 有父目录的菜单树
-const parentMenuTree: SysMenuTree[] = [{ id: 0, title: '根目录' }]
+const parentMenuTree: SysMenuTree[] = [{ id: 0, title: t('system.menu.root') }]
 watchEffect(() => {
+  parentMenuTree[0].title = t('system.menu.root')
   parentMenuTree[0].children = props.menuList
     ? listToTree<SysMenuTree>(
         props.menuList.filter(x => x.type !== SysMenuType.BUTTON),
@@ -247,7 +264,7 @@ const checkMenuId = async (_rule: Rule, value: number) => {
   const idStr = String(value ?? '')
 
   if (!idStr) {
-    return Promise.reject('请输入菜单ID！')
+    return Promise.reject(t('system.menu.idRequired'))
   }
 
   // 更新态：菜单ID 为既有值、通常并不修改，且历史/平台菜单（如 170500 海外仓作业、170700 客户管理、
@@ -259,15 +276,13 @@ const checkMenuId = async (_rule: Rule, value: number) => {
   }
 
   if (idStr.length !== 6) {
-    return Promise.reject('菜单长度必须为 6 位！')
+    return Promise.reject(t('system.menu.idLength'))
   }
 
   if (formModel.type === SysMenuType.DIRECTORY && !idStr.endsWith('0000')) {
-    return Promise.reject('目录类型 ID 格式为 XX0000，xx 为目录编号')
+    return Promise.reject(t('system.menu.directoryId'))
   } else if (formModel.type === SysMenuType.MENU && !idStr.endsWith('00')) {
-    return Promise.reject(
-      '菜单类型 ID 格式为 XXXX00，前两位 XX 为所属目录编号，后两位 XX 为菜单编号'
-    )
+    return Promise.reject(t('system.menu.menuId'))
   }
 
   return Promise.resolve()
@@ -284,14 +299,14 @@ const handleIconChoose = (icon: Icon) => {
 // 表单的校验规则
 const formRule = reactive({
   id: [{ required: true, validator: checkMenuId }],
-  title: [{ required: true, message: '请输入菜单名称!' }],
-  sort: [{ required: true, message: '请输入一个排序值!' }],
+  title: [{ required: true, message: t('system.menu.nameRequired') }],
+  sort: [{ required: true, message: t('system.menu.sortRequired') }],
   path: [
-    { required: !isButton.value, message: '请输入路由地址!' },
-    { pattern: /^[a-z0-9-]+$/, message: '仅小写字母、中划线、数字' }
+    { required: !isButton.value, message: t('system.menu.pathRequired') },
+    { pattern: /^[a-z0-9-]+$/, message: t('system.menu.pathPattern') }
   ],
-  uri: [{ required: isMenu, message: '请输入资源路径!' }],
-  permission: [{ required: isButton, message: '请输入授权标识!' }]
+  uri: [{ required: isMenu, message: t('system.menu.uriRequired') }],
+  permission: [{ required: isButton, message: t('system.menu.permissionRequired') }]
 })
 
 // 表单的提交请求
@@ -328,10 +343,10 @@ defineExpose({
     openModal()
     resetFields()
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建菜单'
+      title.value = t('system.menu.new')
       formModel.parentId = record?.id || 0
     } else {
-      title.value = '编辑菜单'
+      title.value = t('system.menu.editTitle')
       overrideProperties(formModel, record)
       formModel.originalId = record?.id
     }
