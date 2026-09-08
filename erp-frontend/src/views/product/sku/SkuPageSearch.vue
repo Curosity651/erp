@@ -5,23 +5,23 @@
       <div class="search-header">
         <div class="search-title">
           <search-outlined class="search-icon" />
-          <span>产品搜索</span>
+          <span>{{ t('product.sku.search.title') }}</span>
         </div>
         <div class="search-actions-inline">
           <a-button type="primary" :loading="props.loading" @click="search">
             <template #icon><search-outlined /></template>
-            搜索
+            {{ t('action.search') }}
           </a-button>
           <a-button @click="reset">
             <template #icon><reload-outlined /></template>
-            重置
+            {{ t('action.reset') }}
           </a-button>
           <a-button type="link" @click="toggleAdvanced">
             <template #icon>
               <down-outlined v-if="!showAdvanced" />
               <up-outlined v-else />
             </template>
-            {{ showAdvanced ? '收起筛选' : '高级筛选' }}
+            {{ showAdvanced ? t('product.sku.search.collapse') : t('product.sku.search.advanced') }}
           </a-button>
         </div>
       </div>
@@ -31,51 +31,63 @@
         <a-row :gutter="16">
           <a-col v-bind="colConfig">
             <div class="search-group">
-              <label class="search-label">SKU编码</label>
-              <a-input v-model:value="formModel.skuCode" placeholder="输入SKU编码" allow-clear />
-            </div>
-          </a-col>
-          <a-col v-bind="colConfig">
-            <div class="search-group">
-              <label class="search-label">产品名称</label>
-              <a-input v-model:value="formModel.skuName" placeholder="中文名/俄文名" allow-clear />
-            </div>
-          </a-col>
-          <a-col v-bind="colConfig">
-            <div class="search-group">
-              <label class="search-label">产品状态</label>
-              <dict-select
-                v-model:value="formModel.productStatus"
-                dict-code="product_status"
-                placeholder="选择状态"
+              <label class="search-label">{{ t('product.sku.search.skuCode') }}</label>
+              <a-input
+                v-model:value="formModel.skuCode"
+                :placeholder="t('product.sku.search.skuCodePlaceholder')"
                 allow-clear
               />
             </div>
           </a-col>
           <a-col v-bind="colConfig">
             <div class="search-group">
-              <label class="search-label">创建时间</label>
-              <a-range-picker
-                v-model:value="formModel.createTimeRange"
-                format="YYYY-MM-DD"
-                :placeholder="['开始日期', '结束日期']"
+              <label class="search-label">{{ t('product.sku.search.productName') }}</label>
+              <a-input
+                v-model:value="formModel.skuName"
+                :placeholder="t('product.sku.search.productNamePlaceholder')"
+                allow-clear
               />
             </div>
           </a-col>
           <a-col v-bind="colConfig">
             <div class="search-group">
-              <label class="search-label">SKU序号</label>
+              <label class="search-label">{{ t('product.sku.search.productStatus') }}</label>
+              <dict-select
+                v-model:value="formModel.productStatus"
+                dict-code="product_status"
+                :placeholder="t('product.sku.search.statusPlaceholder')"
+                allow-clear
+              />
+            </div>
+          </a-col>
+          <a-col v-bind="colConfig">
+            <div class="search-group">
+              <label class="search-label">{{ t('common.createTime') }}</label>
+              <a-range-picker
+                v-model:value="formModel.createTimeRange"
+                format="YYYY-MM-DD"
+                :placeholder="[t('product.sku.search.startDate'), t('product.sku.search.endDate')]"
+              />
+            </div>
+          </a-col>
+          <a-col v-bind="colConfig">
+            <div class="search-group">
+              <label class="search-label">{{ t('product.sku.search.skuNo') }}</label>
               <a-input-number
                 v-model:value="formModel.skuNo"
-                placeholder="SKU序号"
+                :placeholder="t('product.sku.search.skuNoPlaceholder')"
                 style="width: 100%"
               />
             </div>
           </a-col>
           <a-col v-bind="colConfig">
             <div class="search-group">
-              <label class="search-label">SPU编码</label>
-              <a-input v-model:value="formModel.spuCode" placeholder="SPU编码" allow-clear />
+              <label class="search-label">{{ t('product.sku.search.spuCode') }}</label>
+              <a-input
+                v-model:value="formModel.spuCode"
+                :placeholder="t('product.sku.search.spuCodePlaceholder')"
+                allow-clear
+              />
             </div>
           </a-col>
         </a-row>
@@ -90,11 +102,11 @@
           <div class="filter-group">
             <label class="filter-label">
               <filter-outlined class="label-icon" />
-              品类
+              {{ t('product.sku.search.category') }}
             </label>
             <category-tree-select
               v-model:value="formModel.categoryId"
-              placeholder="选择品类"
+              :placeholder="t('product.sku.search.categoryPlaceholder')"
               allow-clear
             />
           </div>
@@ -103,20 +115,24 @@
           <div class="filter-group">
             <label class="filter-label">
               <filter-outlined class="label-icon" />
-              品牌
+              {{ t('product.sku.search.brand') }}
             </label>
-            <brand-select v-model:value="formModel.brandCode" placeholder="选择品牌" allow-clear />
+            <brand-select
+              v-model:value="formModel.brandCode"
+              :placeholder="t('product.sku.search.brandPlaceholder')"
+              allow-clear
+            />
           </div>
         </a-col>
         <a-col v-bind="colConfig">
           <div class="filter-group">
             <label class="filter-label">
               <filter-outlined class="label-icon" />
-              销售国家
+              {{ t('product.sku.salesCountry') }}
             </label>
             <country-select
               v-model:value="formModel.salesCountry"
-              placeholder="选择销售国家"
+              :placeholder="t('product.sku.search.countryPlaceholder')"
               allow-clear
             />
           </div>
@@ -125,11 +141,11 @@
           <div class="filter-group">
             <label class="filter-label">
               <filter-outlined class="label-icon" />
-              项目组
+              {{ t('product.sku.search.projectGroup') }}
             </label>
             <project-group-select
               v-model:value="formModel.projectGroupCode"
-              placeholder="选择项目组"
+              :placeholder="t('product.sku.search.projectGroupPlaceholder')"
               allow-clear
             />
           </div>
@@ -138,11 +154,11 @@
           <div class="filter-group">
             <label class="filter-label">
               <filter-outlined class="label-icon" />
-              供应商
+              {{ t('product.sku.supplier') }}
             </label>
             <supplier-select
               v-model:value="formModel.supplierCode"
-              placeholder="选择供应商"
+              :placeholder="t('product.sku.search.supplierPlaceholder')"
               allow-clear
             />
           </div>
@@ -151,12 +167,12 @@
           <div class="filter-group">
             <label class="filter-label">
               <setting-outlined class="label-icon" />
-              头程类型
+              {{ t('product.sku.search.shippingType') }}
             </label>
             <dict-select
               v-model:value="formModel.shippingType"
               dict-code="shipping_type"
-              placeholder="选择头程"
+              :placeholder="t('product.sku.search.shippingTypePlaceholder')"
               allow-clear
             />
           </div>
@@ -169,12 +185,12 @@
           <div class="filter-group">
             <label class="filter-label">
               <setting-outlined class="label-icon" />
-              包裹类型
+              {{ t('product.sku.packageType') }}
             </label>
             <dict-select
               v-model:value="formModel.packageType"
               dict-code="package_type"
-              placeholder="选择包裹类型"
+              :placeholder="t('product.sku.search.packageTypePlaceholder')"
               allow-clear
             />
           </div>
@@ -183,12 +199,12 @@
           <div class="filter-group">
             <label class="filter-label">
               <setting-outlined class="label-icon" />
-              计费重类型
+              {{ t('product.sku.search.billingWeightType') }}
             </label>
             <dict-select
               v-model:value="formModel.billingWeightType"
               dict-code="billing_weight_type"
-              placeholder="选择计费重"
+              :placeholder="t('product.sku.search.billingWeightPlaceholder')"
               allow-clear
             />
           </div>
@@ -197,11 +213,11 @@
           <div class="filter-group">
             <label class="filter-label">
               <appstore-outlined class="label-icon" />
-              表面颜色
+              {{ t('product.sku.surfaceColor') }}
             </label>
             <a-input
               v-model:value="formModel.surfaceColor"
-              placeholder="输入表面颜色"
+              :placeholder="t('product.sku.search.surfaceColorPlaceholder')"
               allow-clear
             />
           </div>
@@ -210,29 +226,37 @@
           <div class="filter-group">
             <label class="filter-label">
               <appstore-outlined class="label-icon" />
-              钢架颜色
+              {{ t('product.sku.search.frameColor') }}
             </label>
-            <a-input v-model:value="formModel.frameColor" placeholder="输入钢架颜色" allow-clear />
+            <a-input
+              v-model:value="formModel.frameColor"
+              :placeholder="t('product.sku.search.frameColorPlaceholder')"
+              allow-clear
+            />
           </div>
         </a-col>
         <a-col v-bind="colConfig">
           <div class="filter-group">
             <label class="filter-label">
               <appstore-outlined class="label-icon" />
-              材质
+              {{ t('product.sku.search.material') }}
             </label>
-            <a-input v-model:value="formModel.material" placeholder="输入材质" allow-clear />
+            <a-input
+              v-model:value="formModel.material"
+              :placeholder="t('product.sku.search.materialPlaceholder')"
+              allow-clear
+            />
           </div>
         </a-col>
         <a-col v-bind="colConfig">
           <div class="filter-group">
             <label class="filter-label">
               <team-outlined class="label-icon" />
-              开发人员
+              {{ t('product.sku.roleDeveloper') }}
             </label>
             <user-select
               v-model:value="formModel.developerId"
-              placeholder="选择开发人员"
+              :placeholder="t('product.sku.search.developerPlaceholder')"
               :options="allUsers"
               :loading="usersLoading"
               allow-clear
@@ -247,11 +271,11 @@
           <div class="filter-group">
             <label class="filter-label">
               <team-outlined class="label-icon" />
-              运营人员
+              {{ t('product.sku.roleOperator') }}
             </label>
             <user-select
               v-model:value="formModel.operatorId"
-              placeholder="选择运营人员"
+              :placeholder="t('product.sku.search.operatorPlaceholder')"
               :options="allUsers"
               :loading="usersLoading"
               allow-clear
@@ -262,11 +286,11 @@
           <div class="filter-group">
             <label class="filter-label">
               <team-outlined class="label-icon" />
-              质检人员
+              {{ t('product.sku.roleQc') }}
             </label>
             <user-select
               v-model:value="formModel.qualityInspectorId"
-              placeholder="选择质检人员"
+              :placeholder="t('product.sku.search.qcPlaceholder')"
               :options="allUsers"
               :loading="usersLoading"
               allow-clear
@@ -277,11 +301,11 @@
           <div class="filter-group">
             <label class="filter-label">
               <team-outlined class="label-icon" />
-              采购人员
+              {{ t('product.sku.rolePurchaser') }}
             </label>
             <user-select
               v-model:value="formModel.purchaserId"
-              placeholder="选择采购人员"
+              :placeholder="t('product.sku.search.purchaserPlaceholder')"
               :options="allUsers"
               :loading="usersLoading"
               allow-clear
@@ -293,7 +317,7 @@
             <label class="features-label">
               <span>
                 <appstore-outlined class="label-icon" />
-                产品特性
+                {{ t('product.sku.search.features') }}
               </span>
               <a-button size="small" type="link" class="inline-clear-btn" @click="clearAllFeatures">
                 <close-outlined />
@@ -303,10 +327,10 @@
               <div class="feature-horizontal-item">
                 <span class="feature-name-label">
                   <span class="feature-icon power">⚡</span>
-                  排插
+                  {{ t('product.sku.search.powerStrip') }}
                 </span>
                 <div class="feature-state-controls">
-                  <a-tooltip title="不限制">
+                  <a-tooltip :title="t('product.sku.search.unrestricted')">
                     <a-button
                       size="small"
                       :type="formModel.needsPower === undefined ? 'primary' : 'default'"
@@ -316,7 +340,7 @@
                       —
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须包含">
+                  <a-tooltip :title="t('product.sku.search.mustInclude')">
                     <a-button
                       size="small"
                       :type="formModel.needsPower === 1 ? 'primary' : 'default'"
@@ -326,7 +350,7 @@
                       ✓
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须不含">
+                  <a-tooltip :title="t('product.sku.search.mustExclude')">
                     <a-button
                       size="small"
                       :type="formModel.needsPower === 0 ? 'primary' : 'default'"
@@ -341,10 +365,10 @@
               <div class="feature-horizontal-item">
                 <span class="feature-name-label">
                   <span class="feature-icon seasonal">🌟</span>
-                  季节性
+                  {{ t('product.sku.featureSeasonal') }}
                 </span>
                 <div class="feature-state-controls">
-                  <a-tooltip title="不限制">
+                  <a-tooltip :title="t('product.sku.search.unrestricted')">
                     <a-button
                       size="small"
                       :type="formModel.seasonal === undefined ? 'primary' : 'default'"
@@ -354,7 +378,7 @@
                       —
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须包含">
+                  <a-tooltip :title="t('product.sku.search.mustInclude')">
                     <a-button
                       size="small"
                       :type="formModel.seasonal === 1 ? 'primary' : 'default'"
@@ -364,7 +388,7 @@
                       ✓
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须不含">
+                  <a-tooltip :title="t('product.sku.search.mustExclude')">
                     <a-button
                       size="small"
                       :type="formModel.seasonal === 0 ? 'primary' : 'default'"
@@ -382,7 +406,7 @@
                   RGB
                 </span>
                 <div class="feature-state-controls">
-                  <a-tooltip title="不限制">
+                  <a-tooltip :title="t('product.sku.search.unrestricted')">
                     <a-button
                       size="small"
                       :type="formModel.hasRgbLight === undefined ? 'primary' : 'default'"
@@ -392,7 +416,7 @@
                       —
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须包含">
+                  <a-tooltip :title="t('product.sku.search.mustInclude')">
                     <a-button
                       size="small"
                       :type="formModel.hasRgbLight === 1 ? 'primary' : 'default'"
@@ -402,7 +426,7 @@
                       ✓
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须不含">
+                  <a-tooltip :title="t('product.sku.search.mustExclude')">
                     <a-button
                       size="small"
                       :type="formModel.hasRgbLight === 0 ? 'primary' : 'default'"
@@ -417,10 +441,10 @@
               <div class="feature-horizontal-item">
                 <span class="feature-name-label">
                   <span class="feature-icon glass">🔍</span>
-                  玻璃
+                  {{ t('product.sku.search.glass') }}
                 </span>
                 <div class="feature-state-controls">
-                  <a-tooltip title="不限制">
+                  <a-tooltip :title="t('product.sku.search.unrestricted')">
                     <a-button
                       size="small"
                       :type="formModel.hasGlass === undefined ? 'primary' : 'default'"
@@ -430,7 +454,7 @@
                       —
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须包含">
+                  <a-tooltip :title="t('product.sku.search.mustInclude')">
                     <a-button
                       size="small"
                       :type="formModel.hasGlass === 1 ? 'primary' : 'default'"
@@ -440,7 +464,7 @@
                       ✓
                     </a-button>
                   </a-tooltip>
-                  <a-tooltip title="必须不含">
+                  <a-tooltip :title="t('product.sku.search.mustExclude')">
                     <a-button
                       size="small"
                       :type="formModel.hasGlass === 0 ? 'primary' : 'default'"
@@ -472,6 +496,7 @@ import DictSelect from '@/components/Dict/group/DictSelect.vue'
 import { useUserData } from '@/hooks/use-user-data'
 import type { SkuQO } from '@/api/product/sku/types'
 import type { Dayjs } from 'dayjs'
+import { useI18n } from 'vue-i18n'
 import {
   SearchOutlined,
   ReloadOutlined,
@@ -485,6 +510,7 @@ import {
 } from '@ant-design/icons-vue'
 
 const useForm = Form.useForm
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
