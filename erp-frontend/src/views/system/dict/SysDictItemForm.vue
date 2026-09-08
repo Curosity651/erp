@@ -4,48 +4,50 @@
       <a-input v-model:value="formModel.id" />
     </a-form-item>
 
-    <a-form-item label="字典标识" v-bind="validateInfos.dictCode">
+    <a-form-item :label="t('system.dict.code')" v-bind="validateInfos.dictCode">
       <a-input v-model:value="formModel.dictCode" :disabled="true" />
     </a-form-item>
 
-    <a-form-item label="文本值" v-bind="validateInfos.name">
-      <a-input v-model:value="formModel.name" placeholder="请输入" />
+    <a-form-item :label="t('system.dict.textValue')" v-bind="validateInfos.name">
+      <a-input v-model:value="formModel.name" :placeholder="t('message.pleaseEnter')" />
     </a-form-item>
 
-    <a-form-item label="数据值" v-bind="validateInfos.value">
+    <a-form-item :label="t('system.dict.dataValue')" v-bind="validateInfos.value">
       <a-input
         v-model:value="formModel.value"
-        placeholder="请输入数据值，注意：提交后不可修改"
+        :placeholder="t('system.dict.dataValuePlaceholder')"
         :disabled="isUpdateForm"
       />
     </a-form-item>
 
-    <a-form-item label="属性数据">
+    <a-form-item :label="t('system.dict.attributes')">
       <dic-item-attributes-editor v-model:value="formModel.attributes" />
     </a-form-item>
 
     <a-form-item v-bind="validateInfos.sort">
       <template #label>
         <span>
-          排序
-          <a-tooltip title="升序，数值越小优先级越高"> <exclamation-circle-outlined /> </a-tooltip>
+          {{ t('system.dict.sort') }}
+          <a-tooltip :title="t('system.dict.sortTip')"> <exclamation-circle-outlined /> </a-tooltip>
         </span>
       </template>
       <a-input-number
         v-model:value="formModel.sort"
-        placeholder="排序（升序）"
+        :placeholder="t('system.dict.sortPlaceholder')"
         :min="0"
         style="width: 70%"
       />
     </a-form-item>
 
-    <a-form-item label="备注">
+    <a-form-item :label="t('common.remarks')">
       <a-textarea v-model:value="formModel.remarks" :auto-size="{ minRows: 3, maxRows: 5 }" />
     </a-form-item>
 
     <a-form-item :wrapper-col="{ offset: 10 }">
-      <a-button type="primary" :loading="submitLoading" @click="handleSubmit">提交</a-button>
-      <a-button style="margin-left: 8px" @click="showTable">取消</a-button>
+      <a-button type="primary" :loading="submitLoading" @click="handleSubmit">{{
+        t('system.dict.submit')
+      }}</a-button>
+      <a-button style="margin-left: 8px" @click="showTable">{{ t('action.cancel') }}</a-button>
     </a-form-item>
   </a-form>
 </template>
@@ -60,6 +62,9 @@ import { overrideProperties } from '@/utils/bean-utils'
 import type { ColProps } from 'ant-design-vue'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import DicItemAttributesEditor from '@/views/system/dict/DicItemAttributesEditor.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const labelCol: ColProps = {
   sm: { span: 24 },
@@ -90,15 +95,15 @@ const formModel = reactive<SysDictItemDTO & { attributes: DictItemAttributes }>(
 })
 
 // 表单的校验规则
-const formRule = reactive({
-  dictCode: [{ required: true, message: '字典标识不能为空！' }],
-  name: [{ required: true, message: '请输入文本值!' }],
-  value: [{ required: true, message: '请输入数据值!' }],
+const formRule = computed(() => ({
+  dictCode: [{ required: true, message: t('system.dict.validation.codeRequired') }],
+  name: [{ required: true, message: t('system.dict.validation.textValue') }],
+  value: [{ required: true, message: t('system.dict.validation.dataValue') }],
   sort: [
-    { required: true, message: '请输入排序值!' },
-    { type: 'number', min: 0, message: '排序值不能小于 0 !' }
+    { required: true, message: t('system.dict.validation.sort') },
+    { type: 'number', min: 0, message: t('system.dict.validation.sortMin') }
   ]
-})
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<SysDictItemDTO> = {

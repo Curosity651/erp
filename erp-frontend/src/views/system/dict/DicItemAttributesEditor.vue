@@ -8,7 +8,9 @@
               <a-tag :color="tagColor" @click="presetTagColor(tagColor)">{{ tagColor }}</a-tag>
             </template>
           </template>
-          <a-tag :color="attributes.tagColor" style="margin: 0 0 0 5px">标签样式</a-tag>
+          <a-tag :color="attributes.tagColor" style="margin: 0 0 0 5px">{{
+            t('system.dict.tagStyle')
+          }}</a-tag>
         </a-popover>
 
         <a-popover trigger="click" placement="right">
@@ -24,7 +26,9 @@
 
     <a-col :md="12" :sm="24">
       <a-space>
-        <span :style="{ marginLeft: '5px', color: attributes.textColor }">文本样式</span>
+        <span :style="{ marginLeft: '5px', color: attributes.textColor }">{{
+          t('system.dict.textStyle')
+        }}</span>
         <a-popover trigger="click" placement="right">
           <template #content>
             <sketch v-model="textColorPicker" @update:model-value="onTextColorPicker" />
@@ -53,7 +57,7 @@
           <a-badge
             :status="attributes.badgeStatus"
             :color="attributes.badgeColor"
-            text="徽标样式"
+            :text="t('system.dict.badgeStyle')"
             style="margin: 0 0 0 5px"
           />
         </a-popover>
@@ -100,6 +104,9 @@ import { Sketch } from '@ckpack/vue-color'
 import { DeleteTwoTone, HighlightTwoTone } from '@ant-design/icons-vue'
 import type { DictItemAttributes } from '@/api/system/dict/types'
 import type { PresetColorType, PresetStatusColorType } from 'ant-design-vue/es/_util/colors'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const antdTagColor = [
   'pink',

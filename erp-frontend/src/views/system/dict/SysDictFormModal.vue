@@ -13,22 +13,26 @@
         <a-input v-model:value="formModel.id" />
       </a-form-item>
 
-      <a-form-item label="标识" v-bind="validateInfos.code">
-        <a-input v-model:value="formModel.code" placeholder="请输入" :disabled="isUpdateForm" />
+      <a-form-item :label="t('system.dict.code')" v-bind="validateInfos.code">
+        <a-input
+          v-model:value="formModel.code"
+          :placeholder="t('message.pleaseEnter')"
+          :disabled="isUpdateForm"
+        />
       </a-form-item>
 
-      <a-form-item label="名称" v-bind="validateInfos.title">
-        <a-input v-model:value="formModel.title" placeholder="请输入" />
+      <a-form-item :label="t('system.dict.name')" v-bind="validateInfos.title">
+        <a-input v-model:value="formModel.title" :placeholder="t('message.pleaseEnter')" />
       </a-form-item>
 
-      <a-form-item label="数据类型" v-bind="validateInfos.valueType">
+      <a-form-item :label="t('system.dict.valueType')" v-bind="validateInfos.valueType">
         <dict-radio-group v-model:value="formModel.valueType" dict-code="dict_value_type" />
       </a-form-item>
 
-      <a-form-item label="备注">
+      <a-form-item :label="t('common.remarks')">
         <a-textarea
           v-model:value="formModel.remarks"
-          placeholder="备注"
+          :placeholder="t('common.remarks')"
           :auto-size="{ minRows: 3, maxRows: 5 }"
         />
       </a-form-item>
@@ -45,6 +49,9 @@ import type { SysDictDTO, SysDictPageVO } from '@/api/system/dict/types'
 import { DictValueTypeEnum } from '@/api/system/dict/types'
 import { overrideProperties } from '@/utils/bean-utils'
 import type { ColProps } from 'ant-design-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 表单的标签布局
 const labelCol: ColProps = {
@@ -74,11 +81,11 @@ const formModel = reactive<SysDictDTO>({
 })
 
 // 表单的校验规则
-const formRule = reactive({
-  title: [{ required: true, message: '请输入字典名称!' }],
-  code: [{ required: true, message: '请输入字典标识!' }],
-  valueType: [{ required: true, message: '请选择字典数据类型!' }]
-})
+const formRule = computed(() => ({
+  title: [{ required: true, message: t('system.dict.validation.name') }],
+  code: [{ required: true, message: t('system.dict.validation.code') }],
+  valueType: [{ required: true, message: t('system.dict.validation.valueType') }]
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<SysDictDTO> = {
@@ -114,9 +121,9 @@ defineExpose({
     openModal()
     resetFields()
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建字典'
+      title.value = t('system.dict.createTitle')
     } else {
-      title.value = '编辑字典'
+      title.value = t('system.dict.editTitle')
       overrideProperties(formModel, record)
     }
     formAction.value = newFormAction

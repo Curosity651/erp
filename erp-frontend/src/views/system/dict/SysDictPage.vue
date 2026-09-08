@@ -5,7 +5,7 @@
   <!-- 表格区域 -->
   <pro-table
     ref="tableRef"
-    header-title="数据字典"
+    :header-title="t('system.dict.pageTitle')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -18,17 +18,17 @@
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'operate'">
         <a-dropdown :trigger="['click']">
-          <a class="ant-dropdown-link" @click.prevent> 操作 </a>
+          <a class="ant-dropdown-link" @click.prevent>{{ t('common.operation') }}</a>
           <template #overlay>
             <a-menu>
               <a-menu-item v-if="hasPermission('system:dict:edit')">
-                <a @click="handleEdit(record)">编辑</a>
+                <a @click="handleEdit(record)">{{ t('action.edit') }}</a>
               </a-menu-item>
               <a-menu-item v-if="hasPermission('system:dict:read')">
-                <a @click="openDictItemModal(record)">字典项</a>
+                <a @click="openDictItemModal(record)">{{ t('system.dict.items') }}</a>
               </a-menu-item>
               <a-menu-item v-if="hasPermission('system:dict:edit')">
-                <a @click="handleRefresh(record)">刷新Hash</a>
+                <a @click="handleRefresh(record)">{{ t('system.dict.refreshHash') }}</a>
               </a-menu-item>
               <a-menu-item v-if="hasPermission('system:dict:del')">
                 <delete-text-button @confirm="handleDelete(record)" />
@@ -64,11 +64,13 @@ import SysDictItemModal from '@/views/system/dict/SysDictItemModal.vue'
 import { DictTag } from '@/components/Dict'
 import { NewButton, DeleteTextButton } from '@/components/Button'
 import { OperationGroup } from '@/components/Operation'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'SysDictPage' })
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -108,7 +110,7 @@ const handleEdit = (record: SysDictPageVO) => {
 /* 编辑字典 */
 const handleRefresh = (record: SysDictPageVO) => {
   doRequest(refreshHash(record.id), {
-    successMessage: '刷新Hash成功！',
+    successMessage: t('system.dict.refreshSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -116,7 +118,7 @@ const handleRefresh = (record: SysDictPageVO) => {
 /* 删除字典 */
 const handleDelete = (record: SysDictPageVO) => {
   doRequest(deleteDict(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('message.removeSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -125,21 +127,21 @@ const openDictItemModal = (record: SysDictPageVO) => {
   sysDictItemModalRef.value?.open(record)
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '标识',
+    title: t('system.dict.code'),
     dataIndex: 'code',
     width: 180,
     ellipsis: true
   },
   {
-    title: '标题',
+    title: t('system.dict.title'),
     dataIndex: 'title',
     width: 180,
     ellipsis: true
   },
   {
-    title: '数据类型',
+    title: t('system.dict.valueType'),
     dataIndex: 'valueType',
     width: 180,
     customRender: function ({ value }) {
@@ -147,22 +149,22 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '备注',
+    title: t('common.remarks'),
     dataIndex: 'remarks',
     width: 250,
     ellipsis: true
   },
   {
-    title: '创建时间',
+    title: t('common.createTime'),
     dataIndex: 'createTime',
     width: 150,
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 80
   }
-]
+])
 </script>

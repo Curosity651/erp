@@ -33,7 +33,9 @@
         </template>
         <template v-else-if="column.key === 'operate'">
           <operation-group>
-            <a v-if="hasPermission('system:dict:edit')" @click="handleEdit(record)">编辑</a>
+            <a v-if="hasPermission('system:dict:edit')" @click="handleEdit(record)">{{
+              t('action.edit')
+            }}</a>
             <delete-text-button
               v-if="hasPermission('system:dict:del')"
               @confirm="handleDelete(record)"
@@ -67,9 +69,11 @@ import SysDictItemForm from '@/views/system/dict/SysDictItemForm.vue'
 import { useToggle } from '@vueuse/core'
 import { NewButton, DeleteTextButton } from '@/components/Button'
 import { OperationGroup } from '@/components/Operation'
+import { useI18n } from 'vue-i18n'
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 const tableRef = ref<ProTableInstanceExpose>()
 const sysDictItemFormRef = ref<InstanceType<typeof SysDictItemForm>>()
@@ -109,7 +113,7 @@ const handleEdit = (record: SysDictItemPageVO) => {
 /* 删除字典项 */
 const handleDelete = (record: SysDictItemPageVO) => {
   doRequest(removeDictItem(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('message.removeSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -128,59 +132,59 @@ const handleClose = () => {
   tableLoading.value = false
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
     title: '#',
     dataIndex: 'id',
     width: '45px'
   },
   {
-    title: '字典标识',
+    title: t('system.dict.code'),
     dataIndex: 'dictCode'
   },
   {
-    title: '文本值',
+    title: t('system.dict.textValue'),
     dataIndex: 'name'
   },
   {
-    title: '数据值',
+    title: t('system.dict.dataValue'),
     dataIndex: 'value'
   },
   {
-    title: '排序',
+    title: t('system.dict.sort'),
     dataIndex: 'sort',
     width: '45px',
     align: 'center'
   },
   {
-    title: '状态',
+    title: t('system.dict.status'),
     dataIndex: 'status',
     width: 80,
     align: 'center'
   },
   {
-    title: '备注',
+    title: t('common.remarks'),
     dataIndex: 'remarks',
     ellipsis: true
   },
   {
-    title: '创建时间',
+    title: t('common.createTime'),
     dataIndex: 'createTime',
     width: 150,
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 100
   }
-]
+])
 
 defineExpose({
   open: (record: SysDictPageVO) => {
     dictCode = record.code
-    title.value = `字典项：${record.title}`
+    title.value = t('system.dict.itemsTitle', { title: record.title })
     reloadTable(true)
     openModal()
   }
