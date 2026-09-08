@@ -5,7 +5,7 @@
 
     <pro-table
       ref="tableRef"
-      header-title="SKU管理"
+      :header-title="t('product.sku.pageTitle')"
       row-key="id"
       :request="tableRequest"
       :columns="columns"
@@ -15,7 +15,7 @@
       <template #toolBarRender>
         <a-space>
           <export-confirm-button
-            title="确认导出当前查询条件下的SKU?"
+            :title="t('product.sku.confirmExport')"
             :loading="exportLoading"
             :on-export="handleExport"
           />
@@ -44,7 +44,7 @@ import SkuPageSearch from './SkuPageSearch.vue'
 import SkuMappingBadge from '@/components/Sku/SkuMappingBadge.vue'
 import SkuMappingDetailModal from './components/SkuMappingDetailModal.vue'
 import { NewButton, ExportConfirmButton } from '@/components/Button'
-import { h, ref, reactive, onMounted, onUnmounted } from 'vue'
+import { h, ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import DictTag from '@/components/Dict/display/DictTag.vue'
 import { getCountryByCode } from '@/utils/countries'
 import { useAuthorize } from '@/hooks/permission'
@@ -60,6 +60,9 @@ import { Modal, message } from 'ant-design-vue'
 import { EditOutlined, CopyOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { remoteFileDownload } from '@/utils/file-utils'
 import { getSkuMainImage } from '@/utils/sku-utils'
+import { useI18n } from 'vue-i18n'
+import { formatLocaleDate, formatLocaleDateTime } from '@/utils/locale-format'
+import type { SupportedLocale } from '@/locales/locale-contract'
 
 defineOptions({ name: 'SkuPage' })
 
@@ -68,6 +71,7 @@ const router = useRouter()
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t, locale } = useI18n()
 
 // 使用SKU API钩子
 const { deleteSku } = useSkuApi()
@@ -104,10 +108,10 @@ const handleExport = async () => {
   try {
     const response = await exportSkusExcelByPost(searchParams || {})
     remoteFileDownload(response)
-    message.success('导出完成')
+    message.success(t('product.sku.exportSuccess'))
   } catch (error) {
-    console.error('SKU 导出失败:', error)
-    message.error('导出失败，请稍后重试')
+    console.error(t('product.sku.exportFailed'), error)
+    message.error(t('product.sku.exportRetry'))
   } finally {
     exportLoading.value = false
   }
@@ -117,7 +121,7 @@ const handleExport = async () => {
 const handleNew = () => {
   router.push({
     path: '/product/sku/form/create',
-    query: { _multiTab: `新建SKU` }
+    query: { _multiTab: t('product.sku.createTitle') }
   })
 }
 
@@ -125,7 +129,7 @@ const handleNew = () => {
 const handleEdit = (record: SkuPageVO) => {
   router.push({
     path: `/product/sku/form/edit/${record.id}`,
-    query: { _multiTab: `编辑SKU(${record.skuCode})` }
+    query: { _multiTab: t('product.sku.editTab', { sku: record.skuCode }) }
   })
 }
 
@@ -149,7 +153,7 @@ const handleCopy = (record: SkuPageVO) => {
   try {
     // 先检查 sessionStorage 是否可用
     if (typeof Storage === 'undefined') {
-      throw new Error('浏览器不支持 sessionStorage')
+      throw new Error(t('product.sku.storageUnsupported'))
     }
 
     // 安全序列化，处理可能的循环引用
@@ -163,7 +167,7 @@ const handleCopy = (record: SkuPageVO) => {
 
     // 检查数据大小，sessionStorage 通常限制为 5-10MB
     if (jsonString.length > 5 * 1024 * 1024) {
-      throw new Error('数据过大，超出存储限制')
+      throw new Error(t('product.sku.storageTooLarge'))
     }
 
     sessionStorage.setItem(copyKey, jsonString)
@@ -171,39 +175,39 @@ const handleCopy = (record: SkuPageVO) => {
     // 验证存储是否成功
     const stored = sessionStorage.getItem(copyKey)
     if (!stored) {
-      throw new Error('sessionStorage 存储验证失败')
+      throw new Error(t('product.sku.storageVerificationFailed'))
     }
 
     // 显示提示信息，提醒用户需要填写必要字段
-    message.info('复制创建SKU时，请重新填写SKU编码和SKU序号', 3)
+    message.info(t('product.sku.copyReminder'), 3)
 
     // 立即跳转，避免页面刷新导致数据丢失
     router.push({
       path: '/product/sku/form/copy',
       query: {
         copyKey,
-        _multiTab: '复制创建SKU'
+        _multiTab: t('product.sku.copyTitle')
       }
     })
   } catch (error) {
-    console.error('保存复制数据失败:', error)
-    const errorMessage = error instanceof Error ? error.message : '未知错误'
-    message.error(`保存复制数据失败: ${errorMessage}，请重试`)
+    console.error(t('product.sku.copySaveFailed'), error)
+    const errorMessage = error instanceof Error ? error.message : t('product.sku.unknownError')
+    message.error(t('product.sku.copySaveFailedWithReason', { reason: errorMessage }))
   }
 }
 
 /* 删除SKU */
 const handleDelete = (record: SkuPageVO) => {
   Modal.confirm({
-    title: '确认删除',
-    content: `确定要删除SKU "${record.skuCode}" 吗？`,
+    title: t('product.sku.confirmDelete'),
+    content: t('product.sku.confirmDeleteContent', { sku: record.skuCode }),
     onOk: async () => {
       try {
         await deleteSku(record.id)
-        message.success('删除成功')
+        message.success(t('message.removeSuccess'))
         reloadTable()
       } catch (error) {
-        console.error('删除失败:', error)
+        console.error(t('product.sku.deleteFailed'), error)
       }
     }
   })
@@ -215,12 +219,14 @@ const onMappingChanged = () => {
 }
 
 /* SKU 映射详情弹窗状态（M6：弹窗归业务视图层持有；每行 Badge 点击时用闭包捕获该行上下文打开） */
-const mappingModal = reactive<{ open: boolean; skuCode: string; skuName?: string; skuFiles?: any }>({
-  open: false,
-  skuCode: '',
-  skuName: undefined,
-  skuFiles: undefined
-})
+const mappingModal = reactive<{ open: boolean; skuCode: string; skuName?: string; skuFiles?: any }>(
+  {
+    open: false,
+    skuCode: '',
+    skuName: undefined,
+    skuFiles: undefined
+  }
+)
 const openMappingModal = (record: any) => {
   mappingModal.skuCode = record.skuCode
   mappingModal.skuName = record.chineseName
@@ -230,9 +236,9 @@ const openMappingModal = (record: any) => {
 
 const ossDomain = import.meta.env.VITE_OSS_DOMAIN
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '产品信息',
+    title: t('product.sku.productInfo'),
     key: 'productInfo',
     width: 260,
     fixed: 'left',
@@ -249,7 +255,7 @@ const columns: ProColumns[] = [
           h('div', { class: 'product-image' }, [
             h('img', {
               src: getProductImageUrl(),
-              alt: record.chineseName || '产品图片',
+              alt: record.chineseName || t('product.sku.productImage'),
               class: 'product-img',
               onClick: () => {
                 // 点击图片预览
@@ -257,11 +263,11 @@ const columns: ProColumns[] = [
                 if (imageUrl && imageUrl !== '/placeholder-product.svg') {
                   // 创建预览模态框
                   Modal.info({
-                    title: record.chineseName || '产品图片',
+                    title: record.chineseName || t('product.sku.productImage'),
                     content: h('div', { class: 'image-preview-modal' }, [
                       h('img', {
                         src: imageUrl,
-                        alt: record.chineseName || '产品图片',
+                        alt: record.chineseName || t('product.sku.productImage'),
                         style: {
                           width: '100%',
                           height: 'auto',
@@ -273,7 +279,7 @@ const columns: ProColumns[] = [
                     width: 800,
                     centered: true,
                     maskClosable: true,
-                    okText: '关闭'
+                    okText: t('product.sku.close')
                   })
                 }
               }
@@ -295,15 +301,15 @@ const columns: ProColumns[] = [
                 'span',
                 {
                   class: 'name-text',
-                  title: record.chineseName || record.russianName || '未命名产品'
+                  title: record.chineseName || record.russianName || t('product.sku.unnamedProduct')
                 },
-                record.chineseName || record.russianName || '未命名产品'
+                record.chineseName || record.russianName || t('product.sku.unnamedProduct')
               )
             ]),
             // 品牌和序号同行
             h('div', { class: 'brand-sequence-row' }, [
               h('div', { class: 'brand-info' }, [
-                h('span', { class: 'brand-tag' }, record.brandName || '无品牌')
+                h('span', { class: 'brand-tag' }, record.brandName || t('product.sku.noBrand'))
               ]),
               h('div', { class: 'sequence-info' }, [
                 h('span', { class: 'sequence-badge' }, `#${record.skuNo || '-'}`)
@@ -359,11 +365,11 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '产品描述',
+    title: t('product.sku.description'),
     key: 'productDescription',
     width: 200,
     customRender: ({ record }) => {
-      const description = record.description || '暂无描述'
+      const description = record.description || t('product.sku.noDescription')
       const isLong = description.length > 120
 
       return h('div', { class: 'description-cell table-cell' }, [
@@ -380,7 +386,7 @@ const columns: ProColumns[] = [
   },
 
   {
-    title: '采购信息',
+    title: t('product.sku.purchaseInfo'),
     key: 'purchaseInfo',
     width: 200,
     customRender: ({ record }) => {
@@ -391,7 +397,7 @@ const columns: ProColumns[] = [
         h('div', { class: 'price-section table-section' }, [
           h('div', { class: 'price-header table-row' }, [
             h('span', { class: 'price-icon table-icon' }, '💰'),
-            h('span', { class: 'price-label table-label' }, '采购价')
+            h('span', { class: 'price-label table-label' }, t('product.sku.purchasePrice'))
           ]),
           h('div', { class: 'price-main' }, [
             h('span', { class: 'currency' }, '¥'),
@@ -404,16 +410,16 @@ const columns: ProColumns[] = [
             [
               record.includeTax !== undefined &&
                 h('div', { class: 'tax-item' }, [
-                  h('span', { class: 'tax-label table-small-label' }, '含税'),
+                  h('span', { class: 'tax-label table-small-label' }, t('product.sku.taxIncluded')),
                   h(
                     'span',
                     { class: 'tax-value table-small-value' },
-                    record.includeTax ? '是' : '否'
+                    record.includeTax ? t('product.sku.yes') : t('product.sku.no')
                   )
                 ]),
               record.taxRate &&
                 h('div', { class: 'tax-item' }, [
-                  h('span', { class: 'tax-label table-small-label' }, '税率'),
+                  h('span', { class: 'tax-label table-small-label' }, t('product.sku.taxRate')),
                   h('span', { class: 'tax-value table-small-value' }, `${record.taxRate}%`)
                 ])
             ].filter(Boolean)
@@ -424,7 +430,7 @@ const columns: ProColumns[] = [
         h('div', { class: 'supplier-section table-section' }, [
           h('div', { class: 'supplier-row table-row' }, [
             h('span', { class: 'supplier-icon table-icon' }, '🏭'),
-            h('span', { class: 'supplier-label table-small-label' }, '供应商'),
+            h('span', { class: 'supplier-label table-small-label' }, t('product.sku.supplier')),
             h('span', { class: 'supplier-code' }, record.supplierCode || '-')
           ])
         ]),
@@ -438,11 +444,15 @@ const columns: ProColumns[] = [
               h('div', { class: 'condition-item table-row' }, [
                 h('span', { class: 'condition-icon table-icon' }, '📦'),
                 h('div', { class: 'condition-info table-info-row' }, [
-                  h('span', { class: 'condition-label table-small-label' }, '起订量'),
+                  h(
+                    'span',
+                    { class: 'condition-label table-small-label' },
+                    t('product.sku.minimumOrder')
+                  ),
                   h(
                     'span',
                     { class: 'condition-value table-small-value' },
-                    `${record.minimumOrderQuantity}件`
+                    t('product.sku.pieces', { count: record.minimumOrderQuantity })
                   )
                 ])
               ]),
@@ -450,11 +460,15 @@ const columns: ProColumns[] = [
               h('div', { class: 'condition-item table-row' }, [
                 h('span', { class: 'condition-icon table-icon' }, '⏱️'),
                 h('div', { class: 'condition-info table-info-row' }, [
-                  h('span', { class: 'condition-label table-small-label' }, '生产周期'),
+                  h(
+                    'span',
+                    { class: 'condition-label table-small-label' },
+                    t('product.sku.productionCycle')
+                  ),
                   h(
                     'span',
                     { class: 'condition-value table-small-value' },
-                    `${record.productionCycle}天`
+                    t('product.sku.days', { count: record.productionCycle })
                   )
                 ])
               ])
@@ -464,7 +478,7 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '规格物流',
+    title: t('product.sku.specsLogistics'),
     key: 'specsLogistics',
     width: 200,
     customRender: ({ record }) => {
@@ -491,7 +505,7 @@ const columns: ProColumns[] = [
         h('div', { class: 'package-specs table-section' }, [
           h('div', { class: 'spec-row table-row' }, [
             h('span', { class: 'spec-icon table-icon' }, '📦'),
-            h('span', { class: 'spec-title table-label' }, '包装规格'),
+            h('span', { class: 'spec-title table-label' }, t('product.sku.packageSpecs')),
             h('span', { class: 'spec-value table-value' }, dimensions)
           ])
         ]),
@@ -501,7 +515,7 @@ const columns: ProColumns[] = [
           h('div', { class: 'weight-section table-section' }, [
             h('div', { class: 'weight-row table-row' }, [
               h('span', { class: 'weight-icon table-icon' }, '⚖️'),
-              h('span', { class: 'weight-title table-label' }, '重量'),
+              h('span', { class: 'weight-title table-label' }, t('product.sku.weight')),
               h('span', { class: 'weight-value table-value' }, `${weight}${weightUnit || 'g'}`)
             ])
           ]),
@@ -511,7 +525,7 @@ const columns: ProColumns[] = [
           h('div', { class: 'volume-section table-section' }, [
             h('div', { class: 'volume-row table-row' }, [
               h('span', { class: 'volume-icon table-icon' }, '📐'),
-              h('span', { class: 'volume-title table-label' }, '体积'),
+              h('span', { class: 'volume-title table-label' }, t('product.sku.volume')),
               h('span', { class: 'volume-value table-value' }, `${packageVolume.toFixed(3)}m³`)
             ])
           ]),
@@ -521,7 +535,7 @@ const columns: ProColumns[] = [
           h('div', { class: 'density-section table-section' }, [
             h('div', { class: 'density-row table-row' }, [
               h('span', { class: 'density-icon table-icon' }, '📏'),
-              h('span', { class: 'density-title table-label' }, '密度(kg/m³)'),
+              h('span', { class: 'density-title table-label' }, t('product.sku.density')),
               h('span', { class: 'density-value table-value' }, `${densityKgM3.toFixed(3)}`)
             ])
           ]),
@@ -530,11 +544,13 @@ const columns: ProColumns[] = [
         h('div', { class: 'pallet-section table-section' }, [
           h('div', { class: 'pallet-row table-row' }, [
             h('span', { class: 'pallet-icon table-icon' }, '🏗️'),
-            h('span', { class: 'pallet-title table-label' }, '每托数量'),
+            h('span', { class: 'pallet-title table-label' }, t('product.sku.quantityPerPallet')),
             h(
               'span',
               { class: 'pallet-value table-value' },
-              record.quantityPerPallet ? `${record.quantityPerPallet}件` : '-'
+              record.quantityPerPallet
+                ? t('product.sku.pieces', { count: record.quantityPerPallet })
+                : '-'
             )
           ])
         ]),
@@ -544,11 +560,15 @@ const columns: ProColumns[] = [
           h('div', { class: 'container-section table-section' }, [
             h('div', { class: 'container-row table-row' }, [
               h('span', { class: 'container-icon table-icon' }, '📦'),
-              h('span', { class: 'container-title table-label' }, '装柜量'),
+              h(
+                'span',
+                { class: 'container-title table-label' },
+                t('product.sku.containerCapacity')
+              ),
               h(
                 'span',
                 { class: 'container-value table-value' },
-                `${containerCapacity.toFixed(3)}个`
+                t('product.sku.units', { count: containerCapacity.toFixed(3) })
               )
             ])
           ]),
@@ -561,21 +581,29 @@ const columns: ProColumns[] = [
             record.packageType &&
               h('div', { class: 'logistics-row package table-row' }, [
                 h('span', { class: 'logistics-icon table-icon-fixed' }, '📦'),
-                h('span', { class: 'package-label table-small-label' }, '包裹类型'),
+                h(
+                  'span',
+                  { class: 'package-label table-small-label' },
+                  t('product.sku.packageType')
+                ),
                 h(
                   'span',
                   { class: 'package-value table-small-value' },
                   record.packageType === 'normal'
-                    ? '普通包裹'
+                    ? t('product.sku.normalPackage')
                     : record.packageType === 'magnetic'
-                      ? '含磁包裹'
+                      ? t('product.sku.magneticPackage')
                       : record.packageType
                 )
               ]),
             record.packaging &&
               h('div', { class: 'logistics-row packaging table-row' }, [
                 h('span', { class: 'logistics-icon table-icon-fixed' }, '📋'),
-                h('span', { class: 'packaging-label table-small-label' }, '分箱'),
+                h(
+                  'span',
+                  { class: 'packaging-label table-small-label' },
+                  t('product.sku.splitBoxes')
+                ),
                 h('span', { class: 'packaging-value table-small-value' }, record.packaging)
               ])
           ].filter(Boolean)
@@ -584,7 +612,7 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '属性特性',
+    title: t('product.sku.attributes'),
     key: 'attributesFeatures',
     width: 200,
     customRender: ({ record }) => {
@@ -594,23 +622,27 @@ const columns: ProColumns[] = [
           'div',
           { class: 'product-features table-section' },
           [
-            record.needsPower && h('span', { class: 'feature-tag power' }, '⚡ 排插'),
-            record.seasonal && h('span', { class: 'feature-tag seasonal' }, '🌟 季节性'),
-            record.hasRgbLight && h('span', { class: 'feature-tag rgb-light' }, '🌈 RGB灯带'),
-            record.hasGlass && h('span', { class: 'feature-tag glass' }, '🔍 玻璃材质'),
+            record.needsPower &&
+              h('span', { class: 'feature-tag power' }, t('product.sku.featurePower')),
+            record.seasonal &&
+              h('span', { class: 'feature-tag seasonal' }, t('product.sku.featureSeasonal')),
+            record.hasRgbLight &&
+              h('span', { class: 'feature-tag rgb-light' }, t('product.sku.featureRgb')),
+            record.hasGlass &&
+              h('span', { class: 'feature-tag glass' }, t('product.sku.featureGlass')),
             record.packageType === 'magnetic' &&
-              h('span', { class: 'feature-tag magnetic' }, '🧲 含磁')
+              h('span', { class: 'feature-tag magnetic' }, t('product.sku.featureMagnetic'))
           ].filter(Boolean)
         ),
 
         // 产品属性
         h('div', { class: 'attributes-section table-section' }, [
           h('div', { class: 'attr-item' }, [
-            h('span', { class: 'attr-label table-small-label' }, '表面颜色'),
+            h('span', { class: 'attr-label table-small-label' }, t('product.sku.surfaceColor')),
             h('span', { class: 'attr-value table-small-value' }, record.surfaceColor || '-')
           ]),
           h('div', { class: 'attr-item' }, [
-            h('span', { class: 'attr-label table-small-label' }, '钢架颜色'),
+            h('span', { class: 'attr-label table-small-label' }, t('product.sku.frameColor')),
             h('span', { class: 'attr-value table-small-value' }, record.frameColor || '-')
           ])
         ]),
@@ -618,7 +650,7 @@ const columns: ProColumns[] = [
         // 销售国家
         h('div', { class: 'country-section table-section' }, [
           h('div', { class: 'attr-item' }, [
-            h('span', { class: 'attr-label table-small-label' }, '🌍 销售国家'),
+            h('span', { class: 'attr-label table-small-label' }, t('product.sku.salesCountry')),
             h(
               'span',
               { class: 'attr-value table-small-value' },
@@ -636,7 +668,11 @@ const columns: ProColumns[] = [
           h('div', { class: 'functional-requirements' }, [
             h('div', { class: 'functional-header table-row' }, [
               h('span', { class: 'functional-icon table-icon' }, '⚙️'),
-              h('span', { class: 'functional-title table-label' }, '功能要求')
+              h(
+                'span',
+                { class: 'functional-title table-label' },
+                t('product.sku.functionalRequirements')
+              )
             ]),
             h(
               'p',
@@ -653,15 +689,30 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '团队协作',
+    title: t('product.sku.team'),
     key: 'teamInfo',
     width: 170,
     customRender: ({ record }) => {
       const teamMembers = [
-        { role: '开发', name: record.developerName, icon: '👨‍💻', color: '#1890ff' },
-        { role: '运营', name: record.operatorName, icon: '👨‍💼', color: '#52c41a' },
-        { role: '质检', name: record.qcName, icon: '🔍', color: '#faad14' },
-        { role: '采购', name: record.purchaserName, icon: '🛒', color: '#722ed1' }
+        {
+          role: t('product.sku.roleDeveloper'),
+          name: record.developerName,
+          icon: '👨‍💻',
+          color: '#1890ff'
+        },
+        {
+          role: t('product.sku.roleOperator'),
+          name: record.operatorName,
+          icon: '👨‍💼',
+          color: '#52c41a'
+        },
+        { role: t('product.sku.roleQc'), name: record.qcName, icon: '🔍', color: '#faad14' },
+        {
+          role: t('product.sku.rolePurchaser'),
+          name: record.purchaserName,
+          icon: '🛒',
+          color: '#722ed1'
+        }
       ]
 
       return h('div', { class: 'team-cell table-cell' }, [
@@ -694,7 +745,7 @@ const columns: ProColumns[] = [
                     {
                       class: `member-name ${member.name ? 'has-name' : 'no-name'}`
                     },
-                    member.name || '待分配'
+                    member.name || t('product.sku.unassigned')
                   )
                 ])
               ]
@@ -705,14 +756,13 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '时间记录',
+    title: t('product.sku.timeRecords'),
     key: 'timeRecord',
     width: 140,
     customRender: ({ record }) => {
       const formatTime = (timeStr: string) => {
         if (!timeStr) return '-'
-        const date = new Date(timeStr)
-        return date.toLocaleDateString('zh-CN', {
+        return formatLocaleDate(timeStr, locale.value as SupportedLocale, {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit'
@@ -721,8 +771,7 @@ const columns: ProColumns[] = [
 
       const formatDateTime = (timeStr: string) => {
         if (!timeStr) return '-'
-        const date = new Date(timeStr)
-        return date.toLocaleString('zh-CN', {
+        return formatLocaleDateTime(timeStr, locale.value as SupportedLocale, {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
@@ -736,7 +785,7 @@ const columns: ProColumns[] = [
           h('div', { class: 'time-row table-row' }, [
             h('span', { class: 'time-icon table-icon-fixed' }, '📅'),
             h('div', { class: 'time-info' }, [
-              h('div', { class: 'time-label table-small-label' }, '创建时间'),
+              h('div', { class: 'time-label table-small-label' }, t('common.createTime')),
               h(
                 'div',
                 {
@@ -750,7 +799,7 @@ const columns: ProColumns[] = [
           h('div', { class: 'time-row table-row' }, [
             h('span', { class: 'time-icon table-icon-fixed' }, '🔄'),
             h('div', { class: 'time-info' }, [
-              h('div', { class: 'time-label table-small-label' }, '更新时间'),
+              h('div', { class: 'time-label table-small-label' }, t('common.updateTime')),
               h(
                 'div',
                 {
@@ -767,7 +816,7 @@ const columns: ProColumns[] = [
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 100,
     fixed: 'right',
@@ -785,7 +834,10 @@ const columns: ProColumns[] = [
                   class: 'operate-btn edit',
                   onClick: () => handleEdit(record)
                 },
-                [h(EditOutlined, { class: 'btn-icon' }), h('span', { class: 'btn-text' }, '编辑')]
+                [
+                  h(EditOutlined, { class: 'btn-icon' }),
+                  h('span', { class: 'btn-text' }, t('action.edit'))
+                ]
               ),
 
             // 复制按钮
@@ -795,7 +847,10 @@ const columns: ProColumns[] = [
                 class: 'operate-btn copy',
                 onClick: () => handleCopy(record)
               },
-              [h(CopyOutlined, { class: 'btn-icon' }), h('span', { class: 'btn-text' }, '复制')]
+              [
+                h(CopyOutlined, { class: 'btn-icon' }),
+                h('span', { class: 'btn-text' }, t('product.sku.copy'))
+              ]
             ),
 
             // 删除按钮
@@ -806,14 +861,17 @@ const columns: ProColumns[] = [
                   class: 'operate-btn delete',
                   onClick: () => handleDelete(record)
                 },
-                [h(DeleteOutlined, { class: 'btn-icon' }), h('span', { class: 'btn-text' }, '删除')]
+                [
+                  h(DeleteOutlined, { class: 'btn-icon' }),
+                  h('span', { class: 'btn-text' }, t('action.delete'))
+                ]
               )
           ].filter(Boolean)
         )
       ])
     }
   }
-]
+])
 
 // 事件监听处理
 onMounted(() => {
