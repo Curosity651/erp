@@ -20,9 +20,16 @@ export const resolveMenuTitle = (path: string, fallback: string, translate: Tran
   return translated === key ? fallback : translated
 }
 
-export const localizeRouterTitles = (router: Router, translate: Translate) => {
+export const localizeRouterTitles = (
+  router: Router,
+  translate: Translate,
+  hasTranslation: (key: string) => boolean
+) => {
   router.getRoutes().forEach(route => {
     const fallback = route.meta.originalName || route.meta.name
-    if (fallback) route.meta.name = resolveMenuTitle(route.path, fallback, translate)
+    if (!fallback) return
+    const key = menuLocaleKey(route.path)
+    route.meta.locale = hasTranslation(key) ? key : false
+    route.meta.name = resolveMenuTitle(route.path, fallback, translate)
   })
 }

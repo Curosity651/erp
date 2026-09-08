@@ -68,7 +68,7 @@ const menuToRoutes = (menuTree: SysMenuRouterTree[], parent?: RouteRecordRaw) =>
     const meta: RouteMeta = {
       name: resolveMenuTitle(path, item.title, key => i18n.global.t(key)),
       originalName: item.title,
-      locale: localeKey,
+      locale: i18n.global.te(localeKey) ? localeKey : false,
       icon: item.icon || undefined,
       targetType: targetType
     }

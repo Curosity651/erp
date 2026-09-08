@@ -35,7 +35,11 @@ const switchLanguage = async (locale: string) => {
   try {
     await loadLanguageAsync(locale)
     i18nStore.setLanguage(locale)
-    localizeRouterTitles(router, key => i18n.global.t(key))
+    localizeRouterTitles(
+      router,
+      key => i18n.global.t(key),
+      key => i18n.global.te(key)
+    )
     emitter.emit('switch-language', locale)
     const currentTitle = router.currentRoute.value.meta.name
     document.title = currentTitle ? `${currentTitle} - HYLDSys ERP` : 'HYLDSys ERP'
