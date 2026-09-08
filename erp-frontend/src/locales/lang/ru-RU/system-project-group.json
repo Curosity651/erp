@@ -1,0 +1,18 @@
+{
+  "system.projectGroup.pageTitle": "Управление проектными группами",
+  "system.projectGroup.name": "Название проектной группы",
+  "system.projectGroup.code": "Код",
+  "system.projectGroup.description": "Описание",
+  "system.projectGroup.status": "Статус",
+  "system.projectGroup.namePlaceholder": "Введите название проектной группы",
+  "system.projectGroup.codePlaceholder": "Введите код проектной группы",
+  "system.projectGroup.descriptionPlaceholder": "Введите описание проектной группы",
+  "system.projectGroup.statusPlaceholder": "Выберите статус",
+  "system.projectGroup.createTitle": "Новая проектная группа",
+  "system.projectGroup.editTitle": "Редактировать проектную группу",
+  "system.projectGroup.validation.name": "Введите название проектной группы",
+  "system.projectGroup.validation.nameLength": "Название проектной группы не может превышать 50 символов",
+  "system.projectGroup.validation.code": "Введите код проектной группы",
+  "system.projectGroup.validation.codeLength": "Код проектной группы не может превышать 30 символов",
+  "system.projectGroup.validation.codePattern": "Код может содержать только буквы, цифры, подчёркивания и дефисы"
+}

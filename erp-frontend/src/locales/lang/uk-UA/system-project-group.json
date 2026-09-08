@@ -1,0 +1,18 @@
+{
+  "system.projectGroup.pageTitle": "Керування проєктними групами",
+  "system.projectGroup.name": "Назва проєктної групи",
+  "system.projectGroup.code": "Код",
+  "system.projectGroup.description": "Опис",
+  "system.projectGroup.status": "Статус",
+  "system.projectGroup.namePlaceholder": "Введіть назву проєктної групи",
+  "system.projectGroup.codePlaceholder": "Введіть код проєктної групи",
+  "system.projectGroup.descriptionPlaceholder": "Введіть опис проєктної групи",
+  "system.projectGroup.statusPlaceholder": "Виберіть статус",
+  "system.projectGroup.createTitle": "Нова проєктна група",
+  "system.projectGroup.editTitle": "Редагувати проєктну групу",
+  "system.projectGroup.validation.name": "Введіть назву проєктної групи",
+  "system.projectGroup.validation.nameLength": "Назва проєктної групи не може перевищувати 50 символів",
+  "system.projectGroup.validation.code": "Введіть код проєктної групи",
+  "system.projectGroup.validation.codeLength": "Код проєктної групи не може перевищувати 30 символів",
+  "system.projectGroup.validation.codePattern": "Код може містити лише літери, цифри, підкреслення та дефіси"
+}

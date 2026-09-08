@@ -1,0 +1,18 @@
+{
+  "system.projectGroup.pageTitle": "项目组管理",
+  "system.projectGroup.name": "项目组名称",
+  "system.projectGroup.code": "编码",
+  "system.projectGroup.description": "描述",
+  "system.projectGroup.status": "状态",
+  "system.projectGroup.namePlaceholder": "请输入项目组名称",
+  "system.projectGroup.codePlaceholder": "请输入项目组编码",
+  "system.projectGroup.descriptionPlaceholder": "请输入项目组描述",
+  "system.projectGroup.statusPlaceholder": "请选择状态",
+  "system.projectGroup.createTitle": "新建项目组",
+  "system.projectGroup.editTitle": "编辑项目组",
+  "system.projectGroup.validation.name": "请输入项目组名称",
+  "system.projectGroup.validation.nameLength": "项目组名称长度不能超过 50 个字符",
+  "system.projectGroup.validation.code": "请输入项目组编码",
+  "system.projectGroup.validation.codeLength": "项目组编码长度不能超过 30 个字符",
+  "system.projectGroup.validation.codePattern": "项目组编码只能包含字母、数字、下划线和横线"
+}

@@ -1,0 +1,18 @@
+{
+  "system.projectGroup.pageTitle": "Project Group Management",
+  "system.projectGroup.name": "Project Group Name",
+  "system.projectGroup.code": "Code",
+  "system.projectGroup.description": "Description",
+  "system.projectGroup.status": "Status",
+  "system.projectGroup.namePlaceholder": "Enter the project group name",
+  "system.projectGroup.codePlaceholder": "Enter the project group code",
+  "system.projectGroup.descriptionPlaceholder": "Enter the project group description",
+  "system.projectGroup.statusPlaceholder": "Select a status",
+  "system.projectGroup.createTitle": "New Project Group",
+  "system.projectGroup.editTitle": "Edit Project Group",
+  "system.projectGroup.validation.name": "Enter the project group name",
+  "system.projectGroup.validation.nameLength": "Project group name cannot exceed 50 characters",
+  "system.projectGroup.validation.code": "Enter the project group code",
+  "system.projectGroup.validation.codeLength": "Project group code cannot exceed 30 characters",
+  "system.projectGroup.validation.codePattern": "Project group code may contain only letters, numbers, underscores, and hyphens"
+}

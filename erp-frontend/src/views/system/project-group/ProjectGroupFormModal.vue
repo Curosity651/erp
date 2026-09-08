@@ -13,20 +13,26 @@
       <a-form-item v-if="isUpdateForm" style="display: none">
         <a-input v-model:value="formModel.id" />
       </a-form-item>
-      <a-form-item label="名称" v-bind="validateInfos.name">
-        <a-input v-model:value="formModel.name" placeholder="请输入项目组名称" />
+      <a-form-item :label="t('system.projectGroup.name')" v-bind="validateInfos.name">
+        <a-input
+          v-model:value="formModel.name"
+          :placeholder="t('system.projectGroup.namePlaceholder')"
+        />
       </a-form-item>
-      <a-form-item label="编码" v-bind="validateInfos.code">
+      <a-form-item :label="t('system.projectGroup.code')" v-bind="validateInfos.code">
         <a-input
           v-model:value="formModel.code"
-          placeholder="请输入项目组编码"
+          :placeholder="t('system.projectGroup.codePlaceholder')"
           :disabled="isUpdateForm"
         />
       </a-form-item>
-      <a-form-item label="描述">
-        <a-textarea v-model:value="formModel.description" placeholder="请输入项目组描述" />
+      <a-form-item :label="t('system.projectGroup.description')">
+        <a-textarea
+          v-model:value="formModel.description"
+          :placeholder="t('system.projectGroup.descriptionPlaceholder')"
+        />
       </a-form-item>
-      <a-form-item label="状态">
+      <a-form-item :label="t('system.projectGroup.status')">
         <dict-radio-group v-model:value="formModel.status" dict-code="enable_status" />
       </a-form-item>
     </a-form>
@@ -42,6 +48,9 @@ import { createProjectGroup, updateProjectGroup } from '@/api/system/project-gro
 import { overrideProperties } from '@/utils/bean-utils'
 import type { ColProps } from 'ant-design-vue'
 import { DictRadioGroup } from '@/components/Dict'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const labelCol: ColProps = {
   sm: { span: 24 },
@@ -76,21 +85,21 @@ const formModel = reactive<ProjectGroupDTO>({
 })
 
 // 表单的校验规则
-const formRule = reactive({
+const formRule = computed(() => ({
   name: [
-    { required: true, message: '请输入项目组名称', trigger: 'blur' },
-    { max: 50, message: '项目组名称长度不能超过50个字符', trigger: 'blur' }
+    { required: true, message: t('system.projectGroup.validation.name'), trigger: 'blur' },
+    { max: 50, message: t('system.projectGroup.validation.nameLength'), trigger: 'blur' }
   ],
   code: [
-    { required: true, message: '请输入项目组编码', trigger: 'blur' },
-    { max: 30, message: '项目组编码长度不能超过30个字符', trigger: 'blur' },
+    { required: true, message: t('system.projectGroup.validation.code'), trigger: 'blur' },
+    { max: 30, message: t('system.projectGroup.validation.codeLength'), trigger: 'blur' },
     {
       pattern: /^[a-zA-Z0-9_-]+$/,
-      message: '项目组编码只能包含字母、数字、下划线和横线',
+      message: t('system.projectGroup.validation.codePattern'),
       trigger: 'blur'
     }
   ]
-})
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<ProjectGroupDTO> = {
@@ -127,9 +136,9 @@ defineExpose({
     openModal()
     resetFields()
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建项目组'
+      title.value = t('system.projectGroup.createTitle')
     } else {
-      title.value = '编辑项目组'
+      title.value = t('system.projectGroup.editTitle')
       overrideProperties(formModel, record)
     }
     formAction.value = newFormAction
