@@ -1,0 +1,9 @@
+{
+  "menu": {
+    "statistics": { "dashboard": "Аналітика" },
+    "warehouseMgmt": { "locationMgmt": "Керування місцями", "locationInventory": "Запаси за місцями", "rackAssignment": "Розподіл місць" },
+    "outboundOps": { "orderDispatch": "Зняття замовлень", "pickingTasks": "Завдання відбору", "fulfillment": "Вихідні операції" },
+    "platformFinance": { "receivableBill": "Рахунки до отримання", "warehouseContracts": "Контракти та кошти", "providerFunds": "Розрахунки з провайдерами" },
+    "platformDashboard": "Аналітика платформи"
+  }
+}

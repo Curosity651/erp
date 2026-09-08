@@ -12,6 +12,7 @@
     "preview": "vite preview --port 5050",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --ignore-path .gitignore",
     "lint:fix": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
+    "i18n:check": "node scripts/check-i18n-keys.mjs",
     "preinstall": "node ./scripts/preinstall.js"
   },
   "engines": {

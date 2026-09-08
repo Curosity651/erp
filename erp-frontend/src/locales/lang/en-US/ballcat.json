@@ -45,7 +45,8 @@
   "message": {
     "confirmDelete": "Are you sure delete?",
     "pleaseEnter": "Please enter",
-    "pleaseSelectFile": "Please Select File"
+    "pleaseSelectFile": "Please Select File",
+    "removeSuccess": "Remove Success!"
   },
 
   "import": {

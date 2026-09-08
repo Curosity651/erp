@@ -79,7 +79,8 @@
       "message": {
         "text": "文本值",
         "tips": "国际化信息的文本",
-        "required": "请输入文本值！"
+        "required": "请输入文本值！",
+        "removeSuccess": "删除成功！"
       }
     }
   }

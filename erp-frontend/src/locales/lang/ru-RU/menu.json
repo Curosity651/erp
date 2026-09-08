@@ -1,0 +1,9 @@
+{
+  "menu": {
+    "statistics": { "dashboard": "Аналитика" },
+    "warehouseMgmt": { "locationMgmt": "Управление ячейками", "locationInventory": "Запасы по ячейкам", "rackAssignment": "Распределение ячеек" },
+    "outboundOps": { "orderDispatch": "Снятие заказов", "pickingTasks": "Задания на отбор", "fulfillment": "Исходящие операции" },
+    "platformFinance": { "receivableBill": "Счета к получению", "warehouseContracts": "Контракты и средства", "providerFunds": "Расчёты с провайдерами" },
+    "platformDashboard": "Аналитика платформы"
+  }
+}

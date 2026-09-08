@@ -1,0 +1,19 @@
+{
+  "locale.ballcat": "BallCat uk-UA",
+  "user.login.submit": "Увійти",
+  "user.login.submit.retry": "Увійти знову",
+  "user.login.expired": "Сеанс завершено!",
+  "user.pemission.reject": "Доступ заборонено!",
+  "system.tip.title": "Системне повідомлення",
+  "system.tip.request.error": "Помилка запиту!",
+  "system.tip.request.error.message": "Код помилки запиту: {code}",
+  "system.tip.network.error": "Сервер недоступний!",
+  "system.tip.network.error.message": "Перевірте підключення до мережі.",
+  "system.tip.operate.error": "Помилка операції! {message}",
+  "lov": { "selectedData": "Вибрані дані" },
+  "action": { "query": "Пошук", "reset": "Скинути", "expand": "Розгорнути", "collapse": "Згорнути", "more": "Більше", "new": "Новий", "create": "Створити", "update": "Оновити", "remove": "Прибрати", "delete": "Видалити", "edit": "Редагувати", "export": "Експорт", "import": "Імпорт", "details": "Деталі", "selectFile": "Вибрати файл", "choose": "Вибрати", "cancel": "Скасувати" },
+  "common": { "operation": "Операція", "createTime": "Час створення", "updateTime": "Час оновлення", "remarks": "Примітки" },
+  "message": { "confirmDelete": "Підтвердити видалення?", "pleaseEnter": "Введіть значення", "pleaseSelectFile": "Виберіть файл", "removeSuccess": "Успішно видалено!" },
+  "import": { "batchImport": "Пакетний імпорт", "downloadTemplate": "Завантажити шаблон", "whenDataExisting": "Якщо дані вже існують", "skipExisting": "Пропустити", "overwriteExisting": "Перезаписати", "importSuccess": "Імпорт завершено" },
+  "i18n": { "i18nData": { "text": "Переклади", "languageTexts": "Тексти мов", "languageTag": { "text": "Код мови", "tips": "Код мови, наприклад uk-UA", "required": "Введіть код мови!" }, "code": { "text": "Ключ", "tips": "Унікальний ключ перекладу", "required": "Введіть ключ!" }, "message": { "text": "Текст", "tips": "Текст перекладу", "required": "Введіть текст!", "removeSuccess": "Успішно видалено!" } } }
+}

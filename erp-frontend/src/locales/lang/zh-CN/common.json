@@ -1,0 +1,10 @@
+{
+  "common.confirm": "确认",
+  "common.cancel": "取消",
+  "common.search": "查询",
+  "common.reset": "重置",
+  "common.refresh": "刷新",
+  "common.loading": "加载中",
+  "common.noData": "暂无数据",
+  "locale.switchFailed": "语言切换失败"
+}

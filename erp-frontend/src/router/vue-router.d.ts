@@ -13,6 +13,8 @@ declare module 'vue-router' {
     locale?: string | false
     /** 菜单的名字 */
     name?: string
+    /** 后端返回的原始中文菜单名，供缺少翻译时回退 */
+    originalName?: string
     /** disable 菜单选项 */
     disabled?: boolean
     /**

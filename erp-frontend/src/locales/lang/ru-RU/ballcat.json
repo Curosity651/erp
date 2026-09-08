@@ -1,0 +1,19 @@
+{
+  "locale.ballcat": "BallCat ru-RU",
+  "user.login.submit": "Войти",
+  "user.login.submit.retry": "Войти снова",
+  "user.login.expired": "Сеанс завершён!",
+  "user.pemission.reject": "Доступ запрещён!",
+  "system.tip.title": "Системное сообщение",
+  "system.tip.request.error": "Ошибка запроса!",
+  "system.tip.request.error.message": "Код ошибки запроса: {code}",
+  "system.tip.network.error": "Сервер недоступен!",
+  "system.tip.network.error.message": "Проверьте подключение к сети.",
+  "system.tip.operate.error": "Ошибка операции! {message}",
+  "lov": { "selectedData": "Выбранные данные" },
+  "action": { "query": "Поиск", "reset": "Сбросить", "expand": "Развернуть", "collapse": "Свернуть", "more": "Больше", "new": "Новый", "create": "Создать", "update": "Обновить", "remove": "Убрать", "delete": "Удалить", "edit": "Редактировать", "export": "Экспорт", "import": "Импорт", "details": "Подробнее", "selectFile": "Выбрать файл", "choose": "Выбрать", "cancel": "Отмена" },
+  "common": { "operation": "Операция", "createTime": "Время создания", "updateTime": "Время обновления", "remarks": "Примечания" },
+  "message": { "confirmDelete": "Подтвердить удаление?", "pleaseEnter": "Введите значение", "pleaseSelectFile": "Выберите файл", "removeSuccess": "Успешно удалено!" },
+  "import": { "batchImport": "Пакетный импорт", "downloadTemplate": "Скачать шаблон", "whenDataExisting": "Если данные уже существуют", "skipExisting": "Пропустить", "overwriteExisting": "Перезаписать", "importSuccess": "Импорт завершён" },
+  "i18n": { "i18nData": { "text": "Переводы", "languageTexts": "Тексты языков", "languageTag": { "text": "Код языка", "tips": "Код языка, например ru-RU", "required": "Введите код языка!" }, "code": { "text": "Ключ", "tips": "Уникальный ключ перевода", "required": "Введите ключ!" }, "message": { "text": "Текст", "tips": "Текст перевода", "required": "Введите текст!", "removeSuccess": "Успешно удалено!" } } }
+}
