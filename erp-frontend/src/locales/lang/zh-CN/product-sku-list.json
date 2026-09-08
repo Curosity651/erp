@@ -232,5 +232,22 @@
   "product.sku.form.imagesDescription": "上传产品的实物图片和平台展示图片（至少上传一类）",
   "product.sku.form.imagesUploaded": "已上传图片：实图 {actual} 张，平台图片 {platform} 张",
   "product.sku.form.engineeringFiles": "工程文件",
-  "product.sku.form.engineeringFilesDescription": "产品相关的技术文档和工程资料"
+  "product.sku.form.engineeringFilesDescription": "产品相关的技术文档和工程资料",
+  "product.sku.image.uploading": "上传中...",
+  "product.sku.image.upload": "上传{type}",
+  "product.sku.image.formats": "支持格式：{formats}",
+  "product.sku.image.dragTip": "拖拽图片可调整显示顺序",
+  "product.sku.image.url": "图片链接",
+  "product.sku.image.actual": "实物图片",
+  "product.sku.image.actualDescription": "产品实物拍摄图片，用于展示真实产品效果",
+  "product.sku.image.platform": "平台图片",
+  "product.sku.image.platformDescription": "用于平台展示的产品图片，经过优化处理",
+  "product.sku.image.uploadHint": "支持 JPG、PNG、GIF、WebP 格式",
+  "product.sku.image.uploadSuccess": "{type}上传成功",
+  "product.sku.image.uploadFailed": "{type}上传失败",
+  "product.sku.image.uploadFailedWithReason": "{type}上传失败：{reason}",
+  "product.sku.image.sizeLimit": "{type}大小不能超过 {size} MB",
+  "product.sku.image.formatInvalid": "{type}格式不正确，请选择 {formats} 格式的文件",
+  "product.sku.image.countLimit": "{type}最多只能上传 {count} 张",
+  "product.sku.image.deleteSuccess": "图片删除成功"
 }

@@ -232,5 +232,22 @@
   "product.sku.form.imagesDescription": "Загрузите фото товара и платформы (требуется хотя бы один тип)",
   "product.sku.form.imagesUploaded": "Загружено: фото товара {actual}, фото платформы {platform}",
   "product.sku.form.engineeringFiles": "Инженерные файлы",
-  "product.sku.form.engineeringFilesDescription": "Технические документы и инженерные материалы товара"
+  "product.sku.form.engineeringFilesDescription": "Технические документы и инженерные материалы товара",
+  "product.sku.image.uploading": "Загрузка...",
+  "product.sku.image.upload": "Загрузить: {type}",
+  "product.sku.image.formats": "Поддерживаемые форматы: {formats}",
+  "product.sku.image.dragTip": "Перетаскивайте изображения, чтобы изменить порядок",
+  "product.sku.image.url": "Ссылка на изображение",
+  "product.sku.image.actual": "Фото товара",
+  "product.sku.image.actualDescription": "Фотографии реального товара",
+  "product.sku.image.platform": "Фото для платформы",
+  "product.sku.image.platformDescription": "Оптимизированные изображения для страниц платформы",
+  "product.sku.image.uploadHint": "Поддерживаются JPG, PNG, GIF и WebP",
+  "product.sku.image.uploadSuccess": "{type} загружено",
+  "product.sku.image.uploadFailed": "Не удалось загрузить {type}",
+  "product.sku.image.uploadFailedWithReason": "Не удалось загрузить {type}: {reason}",
+  "product.sku.image.sizeLimit": "Размер {type} не может превышать {size} МБ",
+  "product.sku.image.formatInvalid": "Неверный формат {type}. Выберите файл {formats}.",
+  "product.sku.image.countLimit": "Можно загрузить не более {count}: {type}",
+  "product.sku.image.deleteSuccess": "Изображение удалено"
 }

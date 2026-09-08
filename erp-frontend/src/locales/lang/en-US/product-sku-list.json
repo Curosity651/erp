@@ -232,5 +232,22 @@
   "product.sku.form.imagesDescription": "Upload product and platform images (at least one type is required)",
   "product.sku.form.imagesUploaded": "Uploaded: {actual} product images, {platform} platform images",
   "product.sku.form.engineeringFiles": "Engineering Files",
-  "product.sku.form.engineeringFilesDescription": "Technical documents and engineering materials for the product"
+  "product.sku.form.engineeringFilesDescription": "Technical documents and engineering materials for the product",
+  "product.sku.image.uploading": "Uploading...",
+  "product.sku.image.upload": "Upload {type}",
+  "product.sku.image.formats": "Supported formats: {formats}",
+  "product.sku.image.dragTip": "Drag images to change their display order",
+  "product.sku.image.url": "Image URL",
+  "product.sku.image.actual": "Product Images",
+  "product.sku.image.actualDescription": "Photos of the physical product showing its actual appearance",
+  "product.sku.image.platform": "Platform Images",
+  "product.sku.image.platformDescription": "Optimized product images for platform listings",
+  "product.sku.image.uploadHint": "Supports JPG, PNG, GIF, and WebP",
+  "product.sku.image.uploadSuccess": "{type} uploaded",
+  "product.sku.image.uploadFailed": "Failed to upload {type}",
+  "product.sku.image.uploadFailedWithReason": "Failed to upload {type}: {reason}",
+  "product.sku.image.sizeLimit": "{type} cannot exceed {size} MB",
+  "product.sku.image.formatInvalid": "Invalid {type} format. Select a {formats} file.",
+  "product.sku.image.countLimit": "A maximum of {count} {type} can be uploaded",
+  "product.sku.image.deleteSuccess": "Image deleted"
 }

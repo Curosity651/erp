@@ -117,7 +117,11 @@
                 <PlusOutlined v-else />
               </div>
               <div class="upload-text">
-                {{ uploadingStateMap.get(config.fileType) ? '上传中...' : `上传${config.title}` }}
+                {{
+                  uploadingStateMap.get(config.fileType)
+                    ? t('product.sku.image.uploading')
+                    : t('product.sku.image.upload', { type: config.title })
+                }}
               </div>
               <div class="upload-hint">{{ config.uploadHint }}</div>
             </div>
@@ -128,11 +132,11 @@
         <div class="upload-tips">
           <div class="tip-item">
             <InfoCircleOutlined />
-            支持格式：{{ config.formats.join('、') }}
+            {{ t('product.sku.image.formats', { formats: config.formats.join(', ') }) }}
           </div>
           <div v-if="!readonly" class="tip-item">
             <HolderOutlined />
-            拖拽图片可调整显示顺序
+            {{ t('product.sku.image.dragTip') }}
           </div>
         </div>
       </div>
@@ -151,7 +155,7 @@
       <div class="preview-container">
         <img :src="previewImageData.url" :alt="previewImageData.name" />
         <div class="preview-url">
-          <div class="url-label">图片链接:</div>
+          <div class="url-label">{{ t('product.sku.image.url') }}:</div>
           <div class="url-text">{{ previewImageData.url }}</div>
         </div>
       </div>
@@ -177,6 +181,9 @@ import {
   InfoCircleOutlined,
   HolderOutlined
 } from '@ant-design/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 图片类型配置
 interface ImageConfig {
@@ -194,11 +201,11 @@ interface ImageConfig {
 }
 
 // 图片类型配置数据
-const IMAGE_CONFIGS: ImageConfig[] = [
+const imageConfigs = computed<ImageConfig[]>(() => [
   {
     fileType: 'actual_image',
-    title: '实物图片',
-    description: '产品实物拍摄图片，用于展示真实产品效果',
+    title: t('product.sku.image.actual'),
+    description: t('product.sku.image.actualDescription'),
     formats: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
     accept: '.jpg,.jpeg,.png,.gif,.webp',
     multiple: true,
@@ -206,12 +213,12 @@ const IMAGE_CONFIGS: ImageConfig[] = [
     maxSize: 999,
     color: '#1890ff',
     icon: CameraOutlined,
-    uploadHint: '支持 JPG、PNG、GIF、WebP 格式'
+    uploadHint: t('product.sku.image.uploadHint')
   },
   {
     fileType: 'platform_image',
-    title: '平台图片',
-    description: '用于平台展示的产品图片，经过优化处理',
+    title: t('product.sku.image.platform'),
+    description: t('product.sku.image.platformDescription'),
     formats: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
     accept: '.jpg,.jpeg,.png,.gif,.webp',
     multiple: true,
@@ -219,9 +226,9 @@ const IMAGE_CONFIGS: ImageConfig[] = [
     maxSize: 999,
     color: '#52c41a',
     icon: PictureOutlined,
-    uploadHint: '支持 JPG、PNG、GIF、WebP 格式'
+    uploadHint: t('product.sku.image.uploadHint')
   }
-]
+])
 
 // 组件属性
 interface Props {
@@ -241,9 +248,6 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
-
-// 图片配置
-const imageConfigs = computed(() => IMAGE_CONFIGS)
 
 // 使用 Map 管理图片状态
 const imageListMap = reactive(new Map<string, UploadFile[]>())
@@ -361,13 +365,18 @@ const handleCustomUpload = async (options: any, config: ImageConfig) => {
     imageListMap.set(config.fileType, [...currentList])
 
     onSuccess(uploadFile.response, file)
-    message.success(`${config.title}上传成功`)
+    message.success(t('product.sku.image.uploadSuccess', { type: config.title }))
 
     // 触发文件变化事件
     emitFilesChange()
   } catch (error: any) {
-    console.error(`${config.title}上传失败:`, error)
-    message.error(`${config.title}上传失败: ${error.message || '未知错误'}`)
+    console.error(t('product.sku.image.uploadFailed', { type: config.title }), error)
+    message.error(
+      t('product.sku.image.uploadFailedWithReason', {
+        type: config.title,
+        reason: error.message || t('product.sku.unknownError')
+      })
+    )
     onError(error)
   } finally {
     uploadingStateMap.set(config.fileType, false)
@@ -378,21 +387,26 @@ const handleCustomUpload = async (options: any, config: ImageConfig) => {
 const handleBeforeUpload = (file: File, config: ImageConfig) => {
   // 文件大小验证
   if (file.size / 1024 / 1024 > config.maxSize) {
-    message.error(`${config.title}大小不能超过 ${config.maxSize}MB`)
+    message.error(t('product.sku.image.sizeLimit', { type: config.title, size: config.maxSize }))
     return false
   }
 
   // 文件类型验证
   const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
   if (!config.formats.includes(fileExtension)) {
-    message.error(`${config.title}格式不正确，请选择 ${config.formats.join('、')} 格式的文件`)
+    message.error(
+      t('product.sku.image.formatInvalid', {
+        type: config.title,
+        formats: config.formats.join(', ')
+      })
+    )
     return false
   }
 
   // 数量验证
   const currentList = imageListMap.get(config.fileType) || []
   if (currentList.length >= config.maxCount) {
-    message.error(`${config.title}最多只能上传 ${config.maxCount} 张`)
+    message.error(t('product.sku.image.countLimit', { type: config.title, count: config.maxCount }))
     return false
   }
 
@@ -408,7 +422,7 @@ const removeImage = (fileType: string, fileUid: string) => {
   // 触发文件变化事件
   emitFilesChange()
 
-  message.success('图片删除成功')
+  message.success(t('product.sku.image.deleteSuccess'))
 }
 
 // 下载图片

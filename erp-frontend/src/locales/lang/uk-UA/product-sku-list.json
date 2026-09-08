@@ -232,5 +232,22 @@
   "product.sku.form.imagesDescription": "Завантажте фото товару та платформи (потрібен хоча б один тип)",
   "product.sku.form.imagesUploaded": "Завантажено: фото товару {actual}, фото платформи {platform}",
   "product.sku.form.engineeringFiles": "Інженерні файли",
-  "product.sku.form.engineeringFilesDescription": "Технічні документи та інженерні матеріали товару"
+  "product.sku.form.engineeringFilesDescription": "Технічні документи та інженерні матеріали товару",
+  "product.sku.image.uploading": "Завантаження...",
+  "product.sku.image.upload": "Завантажити: {type}",
+  "product.sku.image.formats": "Підтримувані формати: {formats}",
+  "product.sku.image.dragTip": "Перетягуйте зображення, щоб змінити порядок",
+  "product.sku.image.url": "Посилання на зображення",
+  "product.sku.image.actual": "Фото товару",
+  "product.sku.image.actualDescription": "Фотографії реального товару",
+  "product.sku.image.platform": "Фото для платформи",
+  "product.sku.image.platformDescription": "Оптимізовані зображення для сторінок платформи",
+  "product.sku.image.uploadHint": "Підтримуються JPG, PNG, GIF і WebP",
+  "product.sku.image.uploadSuccess": "{type} завантажено",
+  "product.sku.image.uploadFailed": "Не вдалося завантажити {type}",
+  "product.sku.image.uploadFailedWithReason": "Не вдалося завантажити {type}: {reason}",
+  "product.sku.image.sizeLimit": "Розмір {type} не може перевищувати {size} МБ",
+  "product.sku.image.formatInvalid": "Неправильний формат {type}. Виберіть файл {formats}.",
+  "product.sku.image.countLimit": "Можна завантажити не більше {count}: {type}",
+  "product.sku.image.deleteSuccess": "Зображення видалено"
 }
