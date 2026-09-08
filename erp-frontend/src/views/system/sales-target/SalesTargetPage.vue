@@ -3,7 +3,7 @@
     <!-- 年份选择器和操作按钮 -->
     <a-card :bordered="false" style="margin-bottom: 16px">
       <a-space size="middle">
-        <span>年份:</span>
+        <span>{{ t('system.salesTarget.year') }}:</span>
         <a-date-picker
           v-model:value="selectedYear"
           picker="year"
@@ -14,7 +14,7 @@
           <template #icon>
             <ReloadOutlined />
           </template>
-          刷新
+          {{ t('system.salesTarget.refresh') }}
         </a-button>
         <a-button
           v-if="hasPermission('system:sales-target:add')"
@@ -24,7 +24,7 @@
           <template #icon>
             <PlusOutlined />
           </template>
-          创建目标
+          {{ t('system.salesTarget.createTarget') }}
         </a-button>
         <a-button
           v-if="hasPermission('system:sales-target:edit') && overview?.monthlyTargets?.length"
@@ -33,7 +33,7 @@
           <template #icon>
             <EditOutlined />
           </template>
-          批量编辑
+          {{ t('system.salesTarget.batchEdit') }}
         </a-button>
       </a-space>
     </a-card>
@@ -42,42 +42,42 @@
     <a-card
       v-if="overview?.annualTarget"
       :bordered="false"
-      title="年度概览"
+      :title="t('system.salesTarget.annualOverview')"
       style="margin-bottom: 16px"
     >
       <a-descriptions :column="3">
-        <a-descriptions-item label="年度目标">
+        <a-descriptions-item :label="t('system.salesTarget.annualTarget')">
           {{
             formatAmount(overview.annualTarget.targetAmount, overview.annualTarget.currency, false)
           }}
         </a-descriptions-item>
-        <a-descriptions-item label="年度实际完成">
+        <a-descriptions-item :label="t('system.salesTarget.annualActual')">
           <span :style="{ color: getAmountColor(overview.annualAchievementRate) }">
             {{
               formatAmount(overview.annualActualAmount || 0, overview.annualTarget.currency, false)
             }}
           </span>
         </a-descriptions-item>
-        <a-descriptions-item label="年度达成率">
+        <a-descriptions-item :label="t('system.salesTarget.annualRate')">
           <span :style="{ color: getAchievementColor(overview.annualAchievementRate) }">
             {{ formatAchievementRate(overview.annualAchievementRate) }}
           </span>
         </a-descriptions-item>
-        <a-descriptions-item label="月度目标合计">
+        <a-descriptions-item :label="t('system.salesTarget.monthlyTotal')">
           {{ formatAmount(overview.monthlySum, overview.annualTarget.currency, false) }}
         </a-descriptions-item>
-        <a-descriptions-item label="差额">
+        <a-descriptions-item :label="t('system.salesTarget.difference')">
           <span :style="{ color: overview.difference >= 0 ? '#52c41a' : '#ff4d4f' }">
             {{ formatAmount(overview.difference, overview.annualTarget.currency, false) }}
           </span>
         </a-descriptions-item>
-        <a-descriptions-item label="备注">
+        <a-descriptions-item :label="t('common.remarks')">
           {{ overview.annualTarget.remark || '-' }}
         </a-descriptions-item>
-        <a-descriptions-item label="创建人">
+        <a-descriptions-item :label="t('system.salesTarget.createdBy')">
           {{ overview.annualTarget.createdBy }}
         </a-descriptions-item>
-        <a-descriptions-item label="更新时间">
+        <a-descriptions-item :label="t('common.updateTime')">
           {{ overview.annualTarget.updateTime }}
         </a-descriptions-item>
       </a-descriptions>
@@ -88,7 +88,7 @@
             size="small"
             @click="handleEditAnnual"
           >
-            编辑
+            {{ t('action.edit') }}
           </a-button>
           <a-button
             v-if="hasPermission('system:sales-target:del')"
@@ -96,7 +96,7 @@
             danger
             @click="handleDeleteAnnual"
           >
-            删除
+            {{ t('action.delete') }}
           </a-button>
         </a-space>
       </template>
@@ -104,13 +104,13 @@
 
     <!-- 空状态 -->
     <a-card v-else :bordered="false" style="margin-bottom: 16px">
-      <a-empty description="暂无年度目标数据">
+      <a-empty :description="t('system.salesTarget.noAnnualData')">
         <a-button
           v-if="hasPermission('system:sales-target:add')"
           type="primary"
           @click="handleCreateTarget"
         >
-          创建年度目标
+          {{ t('system.salesTarget.createAnnual') }}
         </a-button>
       </a-empty>
     </a-card>
@@ -119,9 +119,9 @@
     <a-card :bordered="false">
       <template #title>
         <div style="display: flex; justify-content: space-between; align-items: center">
-          <span>月度目标</span>
+          <span>{{ t('system.salesTarget.monthlyTargets') }}</span>
           <a-tag v-if="overview?.annualTarget" color="blue">
-            已设置 {{ overview.monthlyCount }} / 12 个月
+            {{ t('system.salesTarget.monthsConfigured', { count: overview.monthlyCount }) }}
           </a-tag>
         </div>
       </template>
@@ -146,7 +146,7 @@
             >
               {{ formatAmount(record.actualAmount, record.currency, false) }}
             </span>
-            <span v-else style="color: #999">暂无数据</span>
+            <span v-else style="color: #999">{{ t('system.salesTarget.noData') }}</span>
           </template>
           <template v-if="column.key === 'achievementRate'">
             <span
@@ -162,7 +162,7 @@
               v-if="hasPermission('system:sales-target:edit') && record.id"
               @click="handleEditMonthly(record)"
             >
-              编辑
+              {{ t('action.edit') }}
             </a>
             <a
               v-if="
@@ -170,14 +170,16 @@
               "
               @click="handleCreateMonthly(record)"
             >
-              创建
+              {{ t('action.create') }}
             </a>
           </template>
         </template>
         <template #summary>
           <a-table-summary>
             <a-table-summary-row>
-              <a-table-summary-cell :index="0">合计</a-table-summary-cell>
+              <a-table-summary-cell :index="0">{{
+                t('system.salesTarget.total')
+              }}</a-table-summary-cell>
               <a-table-summary-cell :index="1">
                 <strong>
                   {{
@@ -215,10 +217,12 @@ import SalesTargetBatchFormModal from './SalesTargetBatchFormModal.vue'
 import SalesTargetEditModal from './SalesTargetEditModal.vue'
 import dayjs, { Dayjs } from 'dayjs'
 import { formatAmount } from '@/utils/currency-utils'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'SalesTargetPage' })
 
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 // 年份选择
 const currentYear = new Date().getFullYear()
@@ -233,23 +237,11 @@ const batchFormModalRef = ref()
 const editModalRef = ref()
 
 // 月份名称映射
-const monthNames = [
-  '一月',
-  '二月',
-  '三月',
-  '四月',
-  '五月',
-  '六月',
-  '七月',
-  '八月',
-  '九月',
-  '十月',
-  '十一月',
-  '十二月'
-]
-
 const getMonthName = (month: number) => {
-  return `${month}月 (${monthNames[month - 1]})`
+  return t('system.salesTarget.monthName', {
+    month,
+    name: t(`system.salesTarget.months.${month}`)
+  })
 }
 
 // 获取达成率颜色
@@ -273,41 +265,41 @@ const formatAchievementRate = (rate?: number) => {
 }
 
 // 月度目标表格列定义
-const monthlyColumns = [
+const monthlyColumns = computed(() => [
   {
-    title: '月份',
+    title: t('system.salesTarget.month'),
     key: 'month',
     dataIndex: 'month',
     width: 150
   },
   {
-    title: '目标金额',
+    title: t('system.salesTarget.targetAmount'),
     key: 'targetAmount',
     dataIndex: 'targetAmount',
     width: 150
   },
   {
-    title: '实际完成金额',
+    title: t('system.salesTarget.actualAmount'),
     key: 'actualAmount',
     width: 150
   },
   {
-    title: '达成率',
+    title: t('system.salesTarget.achievementRate'),
     key: 'achievementRate',
     width: 120
   },
   {
-    title: '备注',
+    title: t('common.remarks'),
     dataIndex: 'remark',
     ellipsis: true
   },
   {
-    title: '操作',
+    title: t('common.operation'),
     key: 'operate',
     width: 100,
     align: 'center'
   }
-]
+])
 
 // 月度目标表格数据(始终显示12个月)
 const monthlyTableData = computed(() => {
@@ -335,7 +327,7 @@ const loadData = async () => {
     const { data } = await getYearlyOverview(year)
     overview.value = data
   } catch (error) {
-    console.error('加载数据失败:', error)
+    console.error(t('system.salesTarget.loadFailed'), error)
   } finally {
     loading.value = false
   }
@@ -378,12 +370,12 @@ const handleEditAnnual = () => {
 // 删除年度目标
 const handleDeleteAnnual = () => {
   Modal.confirm({
-    title: '确认删除',
-    content: '删除年度目标将同时删除该年所有月度目标,确定要删除吗?',
+    title: t('system.salesTarget.confirmDelete'),
+    content: t('system.salesTarget.deleteAnnualContent'),
     onOk: async () => {
       if (overview.value?.annualTarget?.id) {
         await doRequest(deleteSalesTarget(overview.value.annualTarget.id), {
-          successMessage: '删除成功!',
+          successMessage: t('message.removeSuccess'),
           onSuccess: () => loadData()
         })
       }

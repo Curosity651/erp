@@ -7,20 +7,27 @@
     @cancel="handleCancel"
   >
     <a-form ref="formRef" :model="formData" :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
-      <a-form-item label="年份">
+      <a-form-item :label="t('system.salesTarget.year')">
         <span>{{ year }}</span>
       </a-form-item>
 
-      <a-form-item v-if="mode === 'editMonthly' || mode === 'createMonthly'" label="月份">
+      <a-form-item
+        v-if="mode === 'editMonthly' || mode === 'createMonthly'"
+        :label="t('system.salesTarget.month')"
+      >
         <span>{{ monthName }}</span>
       </a-form-item>
 
       <a-form-item
-        :label="mode === 'editAnnual' || mode === 'createAnnual' ? '年度目标' : '目标金额'"
+        :label="
+          mode === 'editAnnual' || mode === 'createAnnual'
+            ? t('system.salesTarget.annualTarget')
+            : t('system.salesTarget.targetAmount')
+        "
         name="targetAmount"
         :rules="[
-          { required: true, message: '请输入目标金额' },
-          { type: 'number', min: 0.01, message: '金额必须大于0' }
+          { required: true, message: t('system.salesTarget.validation.targetAmount') },
+          { type: 'number', min: 0.01, message: t('system.salesTarget.validation.amountPositive') }
         ]"
       >
         <a-input-number
@@ -32,12 +39,19 @@
         />
       </a-form-item>
 
-      <a-form-item v-if="mode === 'editAnnual' || mode === 'createAnnual'" label="货币">
+      <a-form-item
+        v-if="mode === 'editAnnual' || mode === 'createAnnual'"
+        :label="t('system.salesTarget.currency')"
+      >
         <a-input value="RUB" disabled />
       </a-form-item>
 
-      <a-form-item label="备注" name="remark">
-        <a-textarea v-model:value="formData.remark" :rows="3" placeholder="可选" />
+      <a-form-item :label="t('common.remarks')" name="remark">
+        <a-textarea
+          v-model:value="formData.remark"
+          :rows="3"
+          :placeholder="t('system.salesTarget.optional')"
+        />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -52,6 +66,9 @@ import {
   updateSingleMonthly,
   createSingleMonthly
 } from '@/api/system/sales-target'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits(['submit-success'])
 
@@ -71,29 +88,20 @@ const formData = reactive({
 
 // 模态框标题
 const modalTitle = computed(() => {
-  if (mode.value === 'createAnnual') return '创建年度目标'
-  if (mode.value === 'editAnnual') return '编辑年度目标'
-  if (mode.value === 'editMonthly') return '编辑月度目标'
-  return '创建月度目标'
+  if (mode.value === 'createAnnual') return t('system.salesTarget.createAnnual')
+  if (mode.value === 'editAnnual') return t('system.salesTarget.editAnnual')
+  if (mode.value === 'editMonthly') return t('system.salesTarget.editMonthly')
+  return t('system.salesTarget.createMonthly')
 })
 
 // 月份名称
-const monthNames = [
-  '一月',
-  '二月',
-  '三月',
-  '四月',
-  '五月',
-  '六月',
-  '七月',
-  '八月',
-  '九月',
-  '十月',
-  '十一月',
-  '十二月'
-]
 const monthName = computed(() => {
-  return month.value ? `${month.value}月 (${monthNames[month.value - 1]})` : ''
+  return month.value
+    ? t('system.salesTarget.monthName', {
+        month: month.value,
+        name: t(`system.salesTarget.months.${month.value}`)
+      })
+    : ''
 })
 
 // 打开模态框
@@ -151,7 +159,7 @@ const handleSubmit = async () => {
       }
 
       await doRequest(createAnnualTarget(dto), {
-        successMessage: '创建成功!',
+        successMessage: t('system.salesTarget.createSuccess'),
         onSuccess: () => {
           visible.value = false
           emit('submit-success')
@@ -160,7 +168,7 @@ const handleSubmit = async () => {
     } else if (mode.value === 'editAnnual') {
       // 更新年度目标
       if (!targetId.value) {
-        console.error('目标ID不存在')
+        console.error(t('system.salesTarget.targetIdMissing'))
         return
       }
 
@@ -171,7 +179,7 @@ const handleSubmit = async () => {
           remark: formData.remark
         }),
         {
-          successMessage: '更新成功!',
+          successMessage: t('system.salesTarget.updateSuccess'),
           onSuccess: () => {
             visible.value = false
             emit('submit-success')
@@ -181,7 +189,7 @@ const handleSubmit = async () => {
     } else if (mode.value === 'editMonthly') {
       // 更新月度目标
       if (!targetId.value) {
-        console.error('目标ID不存在')
+        console.error(t('system.salesTarget.targetIdMissing'))
         return
       }
 
@@ -192,7 +200,7 @@ const handleSubmit = async () => {
           remark: formData.remark
         }),
         {
-          successMessage: '更新成功!',
+          successMessage: t('system.salesTarget.updateSuccess'),
           onSuccess: () => {
             visible.value = false
             emit('submit-success')
@@ -209,7 +217,7 @@ const handleSubmit = async () => {
       }
 
       await doRequest(createSingleMonthly(dto), {
-        successMessage: '创建成功!',
+        successMessage: t('system.salesTarget.createSuccess'),
         onSuccess: () => {
           visible.value = false
           emit('submit-success')
@@ -217,7 +225,7 @@ const handleSubmit = async () => {
       })
     }
   } catch (error) {
-    console.error('提交失败:', error)
+    console.error(t('system.salesTarget.submitFailed'), error)
   } finally {
     loading.value = false
   }

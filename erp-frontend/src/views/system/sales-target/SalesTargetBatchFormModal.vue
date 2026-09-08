@@ -13,18 +13,18 @@
       <!-- 基本信息 -->
       <a-card
         size="small"
-        title="基本信息"
+        :title="t('system.salesTarget.basicInfo')"
         :body-style="{ padding: '12px' }"
         style="margin-bottom: 12px"
       >
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item
-              label="年份"
+              :label="t('system.salesTarget.year')"
               name="year"
               :label-col="{ span: 6 }"
               :wrapper-col="{ span: 18 }"
-              :rules="[{ required: true, message: '请选择年份' }]"
+              :rules="[{ required: true, message: t('system.salesTarget.validation.year') }]"
             >
               <a-date-picker
                 v-model:value="formData.yearValue"
@@ -37,13 +37,17 @@
           </a-col>
           <a-col :span="8">
             <a-form-item
-              label="年度目标"
+              :label="t('system.salesTarget.annualTarget')"
               name="annualAmount"
               :label-col="{ span: 8 }"
               :wrapper-col="{ span: 16 }"
               :rules="[
-                { required: true, message: '请输入年度目标金额' },
-                { type: 'number', min: 0.01, message: '金额必须大于0' }
+                { required: true, message: t('system.salesTarget.validation.annualAmount') },
+                {
+                  type: 'number',
+                  min: 0.01,
+                  message: t('system.salesTarget.validation.amountPositive')
+                }
               ]"
             >
               <a-input-number
@@ -56,7 +60,11 @@
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="货币" :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
+            <a-form-item
+              :label="t('system.salesTarget.currency')"
+              :label-col="{ span: 6 }"
+              :wrapper-col="{ span: 18 }"
+            >
               <a-input value="RUB" disabled />
             </a-form-item>
           </a-col>
@@ -64,12 +72,15 @@
         <a-row>
           <a-col :span="24">
             <a-form-item
-              label="备注"
+              :label="t('common.remarks')"
               name="annualRemark"
               :label-col="{ span: 2 }"
               :wrapper-col="{ span: 22 }"
             >
-              <a-input v-model:value="formData.annualRemark" placeholder="可选" />
+              <a-input
+                v-model:value="formData.annualRemark"
+                :placeholder="t('system.salesTarget.optional')"
+              />
             </a-form-item>
           </a-col>
         </a-row>
@@ -79,8 +90,10 @@
       <a-card size="small">
         <template #title>
           <div style="display: flex; justify-content: space-between; align-items: center">
-            <span>月度目标分配</span>
-            <a-tag color="blue">已填写 {{ filledMonthsCount }} / 12 个月</a-tag>
+            <span>{{ t('system.salesTarget.monthlyAllocation') }}</span>
+            <a-tag color="blue">{{
+              t('system.salesTarget.monthsFilled', { count: filledMonthsCount })
+            }}</a-tag>
           </div>
         </template>
 
@@ -93,13 +106,13 @@
         >
           <a-space :size="16">
             <a-statistic
-              title="月度合计"
+              :title="t('system.salesTarget.monthlyTotal')"
               :value="formatNumber(monthlySum)"
               :value-style="{ fontSize: '14px', color: '#1890ff' }"
               prefix="₽"
             />
             <a-statistic
-              title="差额"
+              :title="t('system.salesTarget.difference')"
               :value="formatNumber(Math.abs(difference))"
               :value-style="{
                 fontSize: '14px',
@@ -108,7 +121,7 @@
               :prefix="difference >= 0 ? '+₽' : '-₽'"
             />
             <a-statistic
-              title="完成比例"
+              :title="t('system.salesTarget.completionRate')"
               :value="completionRate"
               suffix="%"
               :precision="1"
@@ -145,7 +158,11 @@
                 />
               </template>
               <template v-if="column.key === 'remark'">
-                <a-input v-model:value="record.remark" placeholder="可选" size="small" />
+                <a-input
+                  v-model:value="record.remark"
+                  :placeholder="t('system.salesTarget.optional')"
+                  size="small"
+                />
               </template>
             </template>
           </a-table>
@@ -166,6 +183,9 @@ import type {
   MonthlyTargetInputDTO
 } from '@/api/system/sales-target/types'
 import dayjs, { Dayjs } from 'dayjs'
+import { useI18n } from 'vue-i18n'
+
+const { t, locale } = useI18n()
 
 const emit = defineEmits(['submit-success'])
 
@@ -187,34 +207,20 @@ const formData = reactive({
 
 // 模态框标题
 const modalTitle = computed(() => {
-  if (mode.value === 'create') return '创建销售目标'
-  if (mode.value === 'edit') return '批量编辑月度目标'
-  return '编辑年度目标'
+  if (mode.value === 'create') return t('system.salesTarget.createSalesTarget')
+  if (mode.value === 'edit') return t('system.salesTarget.batchEditMonthly')
+  return t('system.salesTarget.editAnnual')
 })
 
 // 月份名称
-const monthNames = [
-  '一月',
-  '二月',
-  '三月',
-  '四月',
-  '五月',
-  '六月',
-  '七月',
-  '八月',
-  '九月',
-  '十月',
-  '十一月',
-  '十二月'
-]
-const getMonthName = (month: number) => `${month}月`
+const getMonthName = (month: number) => t('system.salesTarget.monthShort', { month })
 
 // 月度目标表格列
-const monthlyColumns = [
-  { title: '月份', key: 'month', width: 80 },
-  { title: '目标金额', key: 'amount', width: 180 },
-  { title: '备注', key: 'remark' }
-]
+const monthlyColumns = computed(() => [
+  { title: t('system.salesTarget.month'), key: 'month', width: 80 },
+  { title: t('system.salesTarget.targetAmount'), key: 'amount', width: 180 },
+  { title: t('common.remarks'), key: 'remark' }
+])
 
 // 计算月度合计
 const monthlySum = computed(() => {
@@ -241,7 +247,7 @@ const completionRate = computed(() => {
 
 // 格式化数字
 const formatNumber = (num: number) => {
-  return num.toLocaleString('zh-CN', {
+  return num.toLocaleString(locale.value, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })
@@ -327,7 +333,7 @@ const handleSubmit = async () => {
       }
 
       await doRequest(batchCreateSalesTarget(dto), {
-        successMessage: '创建成功!',
+        successMessage: t('system.salesTarget.createSuccess'),
         onSuccess: () => {
           visible.value = false
           emit('submit-success')
@@ -374,7 +380,7 @@ const handleSubmit = async () => {
       })
 
       await doRequest(batchUpdateMonthly(dto), {
-        successMessage: '更新成功!',
+        successMessage: t('system.salesTarget.updateSuccess'),
         onSuccess: () => {
           visible.value = false
           emit('submit-success')
@@ -382,7 +388,7 @@ const handleSubmit = async () => {
       })
     }
   } catch (error) {
-    console.error('提交失败:', error)
+    console.error(t('system.salesTarget.submitFailed'), error)
   } finally {
     loading.value = false
   }
