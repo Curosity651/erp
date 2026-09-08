@@ -4,7 +4,7 @@
 
   <pro-table
     ref="tableRef"
-    header-title="店铺管理"
+    :header-title="t('shop.pageTitle')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -25,7 +25,7 @@
                 : 'default'
           "
         >
-          {{ ShopStatusText[record.status as keyof typeof ShopStatusText] || record.status }}
+          {{ getShopStatusText(record.status) }}
         </a-tag>
       </template>
       <template v-else-if="column.key === 'lastTestStatus'">
@@ -38,19 +38,19 @@
                 : 'default'
           "
         >
-          {{
-            record.lastTestStatus !== undefined
-              ? ShopTestStatusText[record.lastTestStatus as keyof typeof ShopTestStatusText] || '—'
-              : '—'
-          }}
+          {{ record.lastTestStatus !== undefined ? getTestStatusText(record.lastTestStatus) : '—' }}
         </a-tag>
       </template>
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="hasPermission('system:shop:edit')" @click="handleEdit(record)">编辑</a>
-          <a v-if="hasPermission('system:shop:edit')" @click="retest(record)">测试</a>
+          <a v-if="hasPermission('system:shop:edit')" @click="handleEdit(record)">{{
+            t('action.edit')
+          }}</a>
+          <a v-if="hasPermission('system:shop:edit')" @click="retest(record)">{{
+            t('shop.test')
+          }}</a>
           <a v-if="hasPermission('system:shop:edit')" @click="toggleStatus(record)">{{
-            record.status === 1 ? '禁用' : '启用'
+            record.status === 1 ? t('shop.disable') : t('shop.enable')
           }}</a>
         </operation-group>
       </template>
@@ -71,15 +71,20 @@ import { useAuthorize } from '@/hooks/permission'
 import { mergePageParam } from '@/utils/page-utils'
 import { listShops, toggleShopStatus, retestShop } from '@/api/shop'
 import type { ShopVO } from '@/api/shop/types'
-import { ShopStatus, ShopTestStatus, ShopStatusText, ShopTestStatusText } from '@/api/shop/types'
+import { ShopStatus, ShopTestStatus } from '@/api/shop/types'
 import { Modal } from 'ant-design-vue'
 import ShopFormModal from './ShopFormModal.vue'
 import { FormAction } from '@/hooks/form'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'ShopPage' })
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
+
+const getShopStatusText = (status: number) => t(`shop.status.${status}`, String(status))
+const getTestStatusText = (status: number) => t(`shop.testStatus.${status}`, '—')
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -114,7 +119,7 @@ function handleEdit(record: ShopVO) {
 }
 function toggleStatus(row: ShopVO) {
   Modal.confirm({
-    title: row.status === 1 ? '确认禁用该店铺？' : '确认启用该店铺？',
+    title: row.status === 1 ? t('shop.confirmDisable') : t('shop.confirmEnable'),
     onOk: async () => {
       await toggleShopStatus(row.id, row.status === 1 ? 0 : 1)
       reloadTable()
@@ -123,7 +128,7 @@ function toggleStatus(row: ShopVO) {
 }
 function retest(row: ShopVO) {
   Modal.confirm({
-    title: '重新测试凭证？',
+    title: t('shop.confirmRetest'),
     onOk: async () => {
       await retestShop(row.id)
       reloadTable()
@@ -132,15 +137,15 @@ function retest(row: ShopVO) {
 }
 // removed local modal logic; delegated to ShopFormModal
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   { title: '#', dataIndex: 'id', width: 80 },
-  { title: '平台', dataIndex: 'platform', key: 'platform', width: 120 },
-  { title: 'ERP店铺名称', dataIndex: 'erpShopName', width: 180, ellipsis: true },
-  { title: '平台店铺名称', dataIndex: 'name', width: 180, ellipsis: true },
-  { title: '店铺ID', dataIndex: 'platformShopId', width: 180, ellipsis: true },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
-  { title: '最近测试', dataIndex: 'lastTestedAt', width: 180 },
-  { title: '测试状态', dataIndex: 'lastTestStatus', width: 120 },
-  { key: 'operate', title: '操作', align: 'center', width: 160 }
-]
+  { title: t('shop.platform'), dataIndex: 'platform', key: 'platform', width: 120 },
+  { title: t('shop.erpShopName'), dataIndex: 'erpShopName', width: 180, ellipsis: true },
+  { title: t('shop.platformShopName'), dataIndex: 'name', width: 180, ellipsis: true },
+  { title: t('shop.shopId'), dataIndex: 'platformShopId', width: 180, ellipsis: true },
+  { title: t('shop.statusLabel'), dataIndex: 'status', key: 'status', width: 100 },
+  { title: t('shop.lastTest'), dataIndex: 'lastTestedAt', width: 180 },
+  { title: t('shop.testStatusLabel'), dataIndex: 'lastTestStatus', width: 120 },
+  { key: 'operate', title: t('common.operation'), align: 'center', width: 160 }
+])
 </script>

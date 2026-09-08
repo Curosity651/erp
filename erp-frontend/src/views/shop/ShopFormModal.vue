@@ -6,16 +6,16 @@
     :body-style="{ paddingBottom: '8px' }"
     width="600px"
     :ok-button-props="{ disabled: !canSave, loading: saving }"
-    :ok-text="saving ? '保存中...' : '保存'"
+    :ok-text="saving ? t('shop.saving') : t('shop.save')"
     @ok="handleSave"
     @cancel="handleClose"
   >
     <a-form :model="formModel" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-      <a-form-item label="ERP店铺名称" required>
+      <a-form-item :label="t('shop.erpShopName')" required>
         <a-input v-model:value="formModel.erpShopName" maxlength="100" />
       </a-form-item>
 
-      <a-form-item label="平台" required>
+      <a-form-item :label="t('shop.platform')" required>
         <PlatformRadioGroup
           v-model:value="formModel.platform"
           :disabled="!!formModel.id"
@@ -47,24 +47,35 @@
             />
 
             <template v-if="field.key === 'api_key' && action === FormAction.UPDATE">
-              <a-button type="link" size="small" @click="toggleEditingCredential(!editingCredential)">
-                {{ editingCredential ? '取消修改凭证' : '修改凭证' }}
+              <a-button
+                type="link"
+                size="small"
+                @click="toggleEditingCredential(!editingCredential)"
+              >
+                {{ editingCredential ? t('shop.cancelCredentialEdit') : t('shop.editCredential') }}
               </a-button>
             </template>
           </a-form-item>
         </template>
       </template>
 
-      <a-form-item label="店铺名称" :required="requiresManualShopName">
+      <a-form-item :label="t('shop.platformShopName')" :required="requiresManualShopName">
         <template v-if="requiresManualShopName">
-          <a-input v-model:value="formModel.shopName" :placeholder="currentPlatformConfig.shopNamePlaceholder" />
+          <a-input
+            v-model:value="formModel.shopName"
+            :placeholder="currentPlatformConfig.shopNamePlaceholder"
+          />
         </template>
         <template v-else>
-          <a-input :value="formModel.shopName" disabled placeholder="测试成功后自动填充" />
+          <a-input
+            :value="formModel.shopName"
+            disabled
+            :placeholder="t('shop.autoFillAfterTest')"
+          />
         </template>
       </a-form-item>
 
-      <a-form-item label="店铺ID" required>
+      <a-form-item :label="t('shop.shopId')" required>
         <a-input
           :value="displayPlatformShopId"
           disabled
@@ -72,26 +83,30 @@
         />
       </a-form-item>
 
-      <a-form-item label="默认WMS仓库" required>
+      <a-form-item :label="t('shop.defaultWarehouse')" required>
         <a-select
           v-model:value="formModel.defaultWmsWarehouseId"
           :options="warehouseOptions"
-          placeholder="请选择订单默认提交的海外仓"
+          :placeholder="t('shop.defaultWarehousePlaceholder')"
         />
       </a-form-item>
 
-      <a-form-item label="默认物流产品" required>
+      <a-form-item :label="t('shop.defaultLogisticsProduct')" required>
         <a-select
           v-model:value="formModel.defaultLogisticsProductId"
           :options="logisticsProductOptions"
-          placeholder="确认发货时默认使用，可临时修改"
+          :placeholder="t('shop.defaultLogisticsProductPlaceholder')"
         />
       </a-form-item>
 
-      <a-form-item label="测试">
+      <a-form-item :label="t('shop.test')">
         <a-space>
-          <a-button :loading="testing" :disabled="!canTest" @click="testCred">{{ testBtnText }}</a-button>
-          <span v-if="state === 'TEST_SUCCESS'" style="color: #52c41a">测试成功</span>
+          <a-button :loading="testing" :disabled="!canTest" @click="testCred">{{
+            testBtnText
+          }}</a-button>
+          <span v-if="state === 'TEST_SUCCESS'" style="color: #52c41a">{{
+            t('shop.testSuccess')
+          }}</span>
           <span v-else-if="state === 'TEST_FAIL'" style="color: #ff4d4f">{{ testError }}</span>
         </a-space>
       </a-form-item>
@@ -113,6 +128,9 @@ import { PlatformRadioGroup } from '@/components/Platform'
 import { message } from 'ant-design-vue'
 import { getWarehouseOptions } from '@/api/wms/warehouse'
 import { listOwnerLogisticsProducts } from '@/api/wms/logistics-product'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 defineOptions({ name: 'ShopFormModal' })
 
@@ -134,7 +152,7 @@ type PlatformFormConfig = {
   platformIdCredentialKey?: string
 }
 
-const PLATFORM_FORM_CONFIG: Record<PlatformType, PlatformFormConfig> = {
+const platformFormConfig = computed<Record<PlatformType, PlatformFormConfig>>(() => ({
   [PLATFORMS.WILDBERRIES]: {
     credentialFields: [
       {
@@ -142,13 +160,13 @@ const PLATFORM_FORM_CONFIG: Record<PlatformType, PlatformFormConfig> = {
         label: 'API Key',
         required: true,
         inputType: 'textarea',
-        placeholder: '请输入 API Key/JWT',
+        placeholder: t('shop.enterApiKeyJwt'),
         maxLength: 1024,
         rows: 3
       }
     ],
     shopNameRequired: false,
-    platformShopIdPlaceholder: '测试成功后自动填充'
+    platformShopIdPlaceholder: t('shop.autoFillAfterTest')
   },
   [PLATFORMS.OZON]: {
     credentialFields: [
@@ -157,7 +175,7 @@ const PLATFORM_FORM_CONFIG: Record<PlatformType, PlatformFormConfig> = {
         label: 'Client ID',
         required: true,
         inputType: 'input',
-        placeholder: '请输入 Client ID',
+        placeholder: t('shop.enterClientId'),
         maxLength: 128
       },
       {
@@ -165,14 +183,14 @@ const PLATFORM_FORM_CONFIG: Record<PlatformType, PlatformFormConfig> = {
         label: 'API Key',
         required: true,
         inputType: 'textarea',
-        placeholder: '请输入 API Key',
+        placeholder: t('shop.enterApiKey'),
         maxLength: 1024,
         rows: 3
       }
     ],
     shopNameRequired: true,
-    shopNamePlaceholder: '请手动填写 Ozon 店铺名称',
-    platformShopIdPlaceholder: '自动使用 Client ID（测试后确认）',
+    shopNamePlaceholder: t('shop.enterOzonShopName'),
+    platformShopIdPlaceholder: t('shop.useClientIdAfterTest'),
     platformIdCredentialKey: 'client_id'
   },
   [PLATFORMS.YANDEX]: {
@@ -182,7 +200,7 @@ const PLATFORM_FORM_CONFIG: Record<PlatformType, PlatformFormConfig> = {
         label: 'Business ID',
         required: true,
         inputType: 'input',
-        placeholder: '请输入 Business ID',
+        placeholder: t('shop.enterBusinessId'),
         maxLength: 64
       },
       {
@@ -190,7 +208,7 @@ const PLATFORM_FORM_CONFIG: Record<PlatformType, PlatformFormConfig> = {
         label: 'Campaign ID',
         required: true,
         inputType: 'input',
-        placeholder: '请输入 Campaign ID',
+        placeholder: t('shop.enterCampaignId'),
         maxLength: 64
       },
       {
@@ -198,17 +216,17 @@ const PLATFORM_FORM_CONFIG: Record<PlatformType, PlatformFormConfig> = {
         label: 'API Key',
         required: true,
         inputType: 'textarea',
-        placeholder: '请输入 API Key',
+        placeholder: t('shop.enterApiKey'),
         maxLength: 1024,
         rows: 3
       }
     ],
     shopNameRequired: true,
-    shopNamePlaceholder: '请手动填写 Yandex 店铺名称',
-    platformShopIdPlaceholder: '自动使用 Campaign ID（测试后确认）',
+    shopNamePlaceholder: t('shop.enterYandexShopName'),
+    platformShopIdPlaceholder: t('shop.useCampaignIdAfterTest'),
     platformIdCredentialKey: 'campaign_id'
   }
-}
+}))
 
 const emits = defineEmits<{ (e: 'submit-success'): void }>()
 
@@ -241,7 +259,7 @@ const saving = ref(false)
 const warehouseOptions = ref<{ label: string; value: number }[]>([])
 const logisticsProductOptions = ref<{ label: string; value: number }[]>([])
 
-const currentPlatformConfig = computed(() => PLATFORM_FORM_CONFIG[formModel.platform])
+const currentPlatformConfig = computed(() => platformFormConfig.value[formModel.platform])
 const requiresManualShopName = computed(() => currentPlatformConfig.value.shopNameRequired)
 const testing = computed(() => state.value === 'TESTING')
 
@@ -252,13 +270,15 @@ const inferredPlatformShopId = computed(() => {
   return hasText(value) ? value!.trim() : undefined
 })
 
-const displayPlatformShopId = computed(() => formModel.platformShopId || inferredPlatformShopId.value || '')
+const displayPlatformShopId = computed(
+  () => formModel.platformShopId || inferredPlatformShopId.value || ''
+)
 
 const canTest = computed(() => {
   if (action.value === FormAction.UPDATE && !editingCredential.value) return false
   return currentPlatformConfig.value.credentialFields
-    .filter((field) => field.required)
-    .every((field) => hasText(formModel.credential[field.key]))
+    .filter(field => field.required)
+    .every(field => hasText(formModel.credential[field.key]))
 })
 
 const canSave = computed(() => {
@@ -282,12 +302,12 @@ const canSave = computed(() => {
 const testBtnText = computed(() => {
   switch (state.value) {
     case 'TESTING':
-      return '测试中...'
+      return t('shop.testing')
     case 'TEST_SUCCESS':
     case 'TEST_FAIL':
-      return '重新测试'
+      return t('shop.retest')
     default:
-      return '测试并获取信息'
+      return t('shop.testAndFetch')
   }
 })
 
@@ -303,14 +323,14 @@ function open(newAction: FormAction, record?: ShopVO) {
   loadLogisticsProductOptions()
 
   if (newAction === FormAction.CREATE) {
-    modalTitle.value = '新增店铺'
+    modalTitle.value = t('shop.createTitle')
     state.value = 'EDITING'
     editingCredential.value = true
     return
   }
 
   if (record?.id) {
-    modalTitle.value = '编辑店铺'
+    modalTitle.value = t('shop.editTitle')
     state.value = 'EDITING'
     loadDetail(record.id)
   }
@@ -436,13 +456,13 @@ async function testCred() {
     credentialDirty.value = true
 
     if (data.shopNameRequired) {
-      message.success('测试成功，请填写店铺名称')
+      message.success(t('shop.testSuccessEnterName'))
     } else {
-      message.success('测试成功')
+      message.success(t('shop.testSuccess'))
     }
   } catch (e: any) {
     state.value = 'TEST_FAIL'
-    testError.value = e?.message || '测试失败'
+    testError.value = e?.message || t('shop.testFailed')
   }
 }
 
@@ -450,23 +470,23 @@ async function handleSave() {
   if (!canSave.value) return
 
   if (!hasText(formModel.erpShopName)) {
-    message.error('请填写 ERP 店铺名称')
+    message.error(t('shop.validation.erpShopName'))
     return
   }
 
   if (requiresManualShopName.value && !hasText(formModel.shopName)) {
-    message.error('请填写店铺名称')
+    message.error(t('shop.validation.shopName'))
     return
   }
 
   const platformShopId = displayPlatformShopId.value
   if (!hasText(platformShopId)) {
-    message.error('缺少店铺ID，请重新测试凭证')
+    message.error(t('shop.validation.shopId'))
     return
   }
 
   if (credentialDirty.value && !hasText(formModel.testToken)) {
-    message.error('请先测试凭证')
+    message.error(t('shop.validation.testCredential'))
     return
   }
 
@@ -486,14 +506,14 @@ async function handleSave() {
   try {
     const resp = formModel.id ? await updateShop(formModel.id, req) : await createShop(req)
     if (resp.code === 200) {
-      message.success('保存成功')
+      message.success(t('shop.saveSuccess'))
       visible.value = false
       emits('submit-success')
     } else {
-      message.error(resp.message || '保存失败')
+      message.error(resp.message || t('shop.saveFailed'))
     }
   } catch (e: any) {
-    message.error(e?.message || '保存失败')
+    message.error(e?.message || t('shop.saveFailed'))
   } finally {
     saving.value = false
   }
