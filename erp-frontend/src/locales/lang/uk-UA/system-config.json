@@ -1,0 +1,11 @@
+{
+  "system.config.pageTitle": "Системні налаштування",
+  "system.config.name": "Назва налаштування",
+  "system.config.category": "Категорія",
+  "system.config.createTitle": "Нове системне налаштування",
+  "system.config.editTitle": "Редагувати системне налаштування",
+  "system.config.validation.name": "Введіть назву налаштування!",
+  "system.config.validation.key": "Введіть ключ!",
+  "system.config.validation.value": "Введіть значення!",
+  "system.config.validation.category": "Введіть категорію!"
+}

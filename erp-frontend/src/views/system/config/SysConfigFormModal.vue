@@ -10,24 +10,32 @@
     @cancel="handleClose"
   >
     <a-form :model="formModel" :label-col="labelCol" :wrapper-col="wrapperCol">
-      <a-form-item label="名称" v-bind="validateInfos.name">
-        <a-input v-model:value="formModel.name" placeholder="请输入" />
+      <a-form-item :label="t('system.config.name')" v-bind="validateInfos.name">
+        <a-input v-model:value="formModel.name" :placeholder="t('message.pleaseEnter')" />
       </a-form-item>
 
       <a-form-item label="Key" v-bind="validateInfos.confKey">
-        <a-input v-model:value="formModel.confKey" :disabled="isUpdateForm" placeholder="请输入" />
+        <a-input
+          v-model:value="formModel.confKey"
+          :disabled="isUpdateForm"
+          :placeholder="t('message.pleaseEnter')"
+        />
       </a-form-item>
 
       <a-form-item label="Value" v-bind="validateInfos.confValue">
-        <a-input v-model:value="formModel.confValue" placeholder="请输入" />
+        <a-input v-model:value="formModel.confValue" :placeholder="t('message.pleaseEnter')" />
       </a-form-item>
 
-      <a-form-item label="分类" v-bind="validateInfos.category">
-        <a-input v-model:value="formModel.category" placeholder="请输入" />
+      <a-form-item :label="t('system.config.category')" v-bind="validateInfos.category">
+        <a-input v-model:value="formModel.category" :placeholder="t('message.pleaseEnter')" />
       </a-form-item>
 
-      <a-form-item label="备注">
-        <a-textarea v-model:value="formModel.remarks" :rows="3" placeholder="请输入" />
+      <a-form-item :label="t('common.remarks')">
+        <a-textarea
+          v-model:value="formModel.remarks"
+          :rows="3"
+          :placeholder="t('message.pleaseEnter')"
+        />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -41,6 +49,9 @@ import { FormAction, useAdminForm, useFormAction } from '@/hooks/form'
 import { useModal } from '@/hooks/modal'
 import { overrideProperties } from '@/utils/bean-utils'
 import type { ColProps } from 'ant-design-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const labelCol: ColProps = {
   sm: { span: 24 },
@@ -71,12 +82,12 @@ const formModel = reactive<SysConfigDTO>({
 })
 
 // 表单的校验规则
-const formRule = reactive({
-  name: [{ required: true, message: '请输入配置名称!' }],
-  confKey: [{ required: true, message: '请输入 Key!' }],
-  confValue: [{ required: true, message: '请输入 Value!' }],
-  category: [{ required: true, message: '请输入 分类!' }]
-})
+const formRule = computed(() => ({
+  name: [{ required: true, message: t('system.config.validation.name') }],
+  confKey: [{ required: true, message: t('system.config.validation.key') }],
+  confValue: [{ required: true, message: t('system.config.validation.value') }],
+  category: [{ required: true, message: t('system.config.validation.category') }]
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<SysConfigDTO> = {
@@ -113,9 +124,9 @@ defineExpose({
     openModal()
     resetFields()
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建系统配置'
+      title.value = t('system.config.createTitle')
     } else {
-      title.value = '编辑系统配置'
+      title.value = t('system.config.editTitle')
       overrideProperties(formModel, record)
     }
     formAction.value = newFormAction

@@ -3,18 +3,18 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="名称">
-            <a-input v-model:value="formModel.name" placeholder="请输入" />
+          <a-form-item :label="t('system.config.name')">
+            <a-input v-model:value="formModel.name" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
           <a-form-item label="Key">
-            <a-input v-model:value="formModel.confKey" placeholder="请输入" />
+            <a-input v-model:value="formModel.confKey" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="分类">
-            <a-input v-model:value="formModel.category" placeholder="请输入" />
+          <a-form-item :label="t('system.config.category')">
+            <a-input v-model:value="formModel.category" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
@@ -28,7 +28,9 @@
 <script setup lang="ts">
 import { Form } from 'ant-design-vue'
 import type { SysConfigQO } from '@/api/system/config/types'
+import { useI18n } from 'vue-i18n'
 const useForm = Form.useForm
+const { t } = useI18n()
 
 // 表单 label 全局配置
 const labelCol = { md: { span: 6 } }

@@ -1,0 +1,11 @@
+{
+  "system.config.pageTitle": "System Configuration",
+  "system.config.name": "Configuration Name",
+  "system.config.category": "Category",
+  "system.config.createTitle": "New System Configuration",
+  "system.config.editTitle": "Edit System Configuration",
+  "system.config.validation.name": "Enter the configuration name!",
+  "system.config.validation.key": "Enter the key!",
+  "system.config.validation.value": "Enter the value!",
+  "system.config.validation.category": "Enter the category!"
+}

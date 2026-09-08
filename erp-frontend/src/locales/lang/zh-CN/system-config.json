@@ -1,0 +1,11 @@
+{
+  "system.config.pageTitle": "配置信息",
+  "system.config.name": "配置名称",
+  "system.config.category": "分类",
+  "system.config.createTitle": "新建系统配置",
+  "system.config.editTitle": "编辑系统配置",
+  "system.config.validation.name": "请输入配置名称！",
+  "system.config.validation.key": "请输入 Key！",
+  "system.config.validation.value": "请输入 Value！",
+  "system.config.validation.category": "请输入分类！"
+}

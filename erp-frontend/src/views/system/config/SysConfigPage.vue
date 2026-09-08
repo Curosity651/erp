@@ -4,7 +4,7 @@
 
   <pro-table
     ref="tableRef"
-    header-title="配置信息"
+    :header-title="t('system.config.pageTitle')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -19,7 +19,9 @@
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'operate'">
         <operation-group>
-          <a v-if="hasPermission('system:config:edit')" @click="handleEdit(record)">编辑</a>
+          <a v-if="hasPermission('system:config:edit')" @click="handleEdit(record)">{{
+            t('action.edit')
+          }}</a>
           <delete-text-button
             v-if="hasPermission('system:config:del')"
             @confirm="() => handleDelete(record)"
@@ -47,11 +49,13 @@ import SysConfigFormModal from '@/views/system/config/SysConfigFormModal.vue'
 import { FormAction } from '@/hooks/form'
 import { NewButton, DeleteTextButton } from '@/components/Button'
 import { OperationGroup } from '@/components/Operation'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'SysConfigPage' })
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -90,14 +94,14 @@ const handleEdit = (record: SysConfigPageVO) => {
 /* 删除配置 */
 const handleDelete = (record: SysConfigPageVO) => {
   doRequest(deleteConfig(record.confKey), {
-    successMessage: '删除成功！',
+    successMessage: t('message.removeSuccess'),
     onSuccess: () => reloadTable()
   })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '配置名称',
+    title: t('system.config.name'),
     dataIndex: 'name',
     width: 100,
     ellipsis: true
@@ -115,33 +119,33 @@ const columns: ProColumns[] = [
     ellipsis: true
   },
   {
-    title: '分类',
+    title: t('system.config.category'),
     dataIndex: 'category',
     width: 100
   },
   {
-    title: '备注信息',
+    title: t('common.remarks'),
     dataIndex: 'remarks',
     width: 200,
     ellipsis: true
   },
   {
-    title: '创建时间',
+    title: t('common.createTime'),
     dataIndex: 'createTime',
     width: 150,
     sorter: true
   },
   {
-    title: '更新时间',
+    title: t('common.updateTime'),
     dataIndex: 'updateTime',
     width: 150,
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 100
   }
-]
+])
 </script>
