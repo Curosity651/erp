@@ -8,7 +8,7 @@
             <template #icon>
               <ArrowLeftOutlined />
             </template>
-            返回列表
+            {{ t('product.sku.form.back') }}
           </a-button>
           <a-divider type="vertical" />
           <div class="title-section">
@@ -22,13 +22,13 @@
               <template #icon>
                 <ReloadOutlined />
               </template>
-              重置
+              {{ t('action.reset') }}
             </a-button>
             <a-button type="primary" :loading="submitLoading" @click="handleSubmit">
               <template #icon>
                 <CheckOutlined />
               </template>
-              {{ isUpdateMode ? '更新SKU' : '创建SKU' }}
+              {{ isUpdateMode ? t('product.sku.form.update') : t('product.sku.form.create') }}
             </a-button>
           </a-space>
         </div>
@@ -934,6 +934,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import EngineeringFileManagerOptimized from '@/views/product/sku/components/SkuEngineeringFileManager.vue'
+import { useI18n } from 'vue-i18n'
 
 // 组件属性定义
 interface Props {
@@ -954,6 +955,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
+const { t } = useI18n()
 
 defineOptions({ name: 'SkuFormPanel' })
 
@@ -1156,22 +1158,22 @@ const collectFilesData = (): Record<string, SkuFileDTO[]> => {
 const pageTitle = computed(() => {
   switch (props.mode) {
     case 'edit':
-      return '编辑SKU'
+      return t('product.sku.form.editTitle')
     case 'view':
-      return '查看SKU'
+      return t('product.sku.form.viewTitle')
     case 'copy':
-      return '复制创建SKU'
+      return t('product.sku.form.copyTitle')
     case 'create':
     default:
-      return '新建SKU'
+      return t('product.sku.form.createTitle')
   }
 })
 
 const pageSubTitle = computed(() => {
   if (isUpdateMode.value && formData.skuCode) {
-    return `SKU编码: ${formData.skuCode}`
+    return t('product.sku.form.codeSubtitle', { sku: formData.skuCode })
   }
-  return '请填写SKU基本信息'
+  return t('product.sku.form.subtitle')
 })
 
 // 监听表单数据变化，更新计算器
@@ -1316,7 +1318,7 @@ const validateProductImages = (): boolean => {
 
   // 检查是否至少有一类图片
   if (actualImages.length === 0 && platformImages.length === 0) {
-    message.error('请至少上传一张实图图片或平台图片')
+    message.error(t('product.sku.form.imageRequired'))
     return false
   }
 
@@ -1358,18 +1360,18 @@ const validateSkuCode = async () => {
 
   // 基本格式验证
   if (formData.skuCode.length < 3) {
-    setFieldError('skuCode', 'SKU编码长度不能少于3位')
+    setFieldError('skuCode', t('product.sku.form.validation.codeMin'))
     return
   }
 
   if (formData.skuCode.length > 100) {
-    setFieldError('skuCode', 'SKU编码长度不能超过100位')
+    setFieldError('skuCode', t('product.sku.form.validation.codeMax'))
     return
   }
 
   // 格式验证
   if (!/^[A-Z0-9_-]+$/.test(formData.skuCode)) {
-    setFieldError('skuCode', 'SKU编码只能包含大写字母、数字、下划线和中划线')
+    setFieldError('skuCode', t('product.sku.form.validation.codePattern'))
     return
   }
 
@@ -1377,14 +1379,14 @@ const validateSkuCode = async () => {
   try {
     const result = await apiValidateSkuCode(formData.skuCode)
     if (!result.isValid) {
-      setFieldError('skuCode', result.message || 'SKU编码已存在')
+      setFieldError('skuCode', result.message || t('product.sku.form.validation.codeExists'))
     } else {
       clearFieldError('skuCode')
       // 验证通过，不显示成功提示
     }
   } catch (error) {
-    console.error('SKU编码验证失败:', error)
-    setFieldError('skuCode', '验证失败，请稍后重试')
+    console.error(t('product.sku.form.validation.codeFailed'), error)
+    setFieldError('skuCode', t('product.sku.form.validation.retry'))
   } finally {
     skuCodeValidating.value = false
   }
@@ -1397,22 +1399,22 @@ const validateSkuNo = () => {
   const value = formData.skuNo as unknown as number | undefined | null
 
   if (value === undefined || value === null) {
-    setFieldError('skuNo', 'SKU序号不能为空')
+    setFieldError('skuNo', t('product.sku.form.validation.numberRequired'))
     return
   }
 
   if (typeof value !== 'number' || isNaN(value)) {
-    setFieldError('skuNo', 'SKU序号必须是数字')
+    setFieldError('skuNo', t('product.sku.form.validation.numberType'))
     return
   }
 
   if (value < 1) {
-    setFieldError('skuNo', 'SKU序号必须大于0')
+    setFieldError('skuNo', t('product.sku.form.validation.numberPositive'))
     return
   }
 
   if (value > 999999) {
-    setFieldError('skuNo', 'SKU序号不能超过999999')
+    setFieldError('skuNo', t('product.sku.form.validation.numberMax'))
     return
   }
 
@@ -1427,7 +1429,7 @@ const onFinish = async (values: any) => {
 // 表单提交失败
 const onFinishFailed = (errorInfo: any) => {
   console.log('表单验证失败:', errorInfo)
-  message.error('表单验证失败，请检查必填项和数据格式')
+  message.error(t('product.sku.form.validation.formFailed'))
 }
 
 // 处理提交
@@ -1449,7 +1451,7 @@ const handleSubmit = async () => {
 
   // 3. 计算器验证
   if (calculatorErrors.value.length > 0) {
-    message.error('包装尺寸数据有误，请检查后重试')
+    message.error(t('product.sku.form.validation.dimensions'))
     return
   }
 
@@ -1463,7 +1465,7 @@ const handleSubmit = async () => {
 
     // 6. 数据完整性检查
     if (!submitData.skuCode) {
-      message.error('SKU编码不能为空')
+      message.error(t('product.sku.form.validation.codeRequired'))
       return
     }
 
@@ -1480,7 +1482,7 @@ const handleSubmit = async () => {
     // 8. 检查接口响应是否成功
     if (!isSuccess(response)) {
       // 接口业务逻辑失败，显示错误消息但不关闭页面
-      const errorMsg = response.message || '操作失败，请稍后重试'
+      const errorMsg = response.message || t('product.sku.form.operationFailed')
       message.error({
         content: errorMsg,
         duration: 5,
@@ -1500,7 +1502,7 @@ const handleSubmit = async () => {
     console.error('提交失败:', error)
 
     // 8. 错误处理
-    let errorMessage = '保存失败，请稍后重试'
+    let errorMessage = t('product.sku.form.saveFailed')
 
     if (error?.response?.data?.message) {
       errorMessage = error.response.data.message
@@ -1528,17 +1530,17 @@ const handleSubmit = async () => {
 // 处理重置
 const handleReset = () => {
   Modal.confirm({
-    title: '确认重置表单',
-    content: '重置后将清空所有已填写的内容，此操作不可恢复。确定要重置吗？',
-    okText: '确认重置',
-    cancelText: '取消',
+    title: t('product.sku.form.resetTitle'),
+    content: t('product.sku.form.resetContent'),
+    okText: t('product.sku.form.resetConfirm'),
+    cancelText: t('action.cancel'),
     okType: 'danger',
     onOk: () => {
       // 重置表单
       resetForm()
 
       message.success({
-        content: '表单已重置',
+        content: t('product.sku.form.resetSuccess'),
         duration: 2
       })
     }
@@ -1549,10 +1551,10 @@ const handleReset = () => {
 const handleCancel = () => {
   if (hasUnsavedChanges.value) {
     Modal.confirm({
-      title: '确认离开',
-      content: '您有未保存的更改，离开后更改将丢失。确定要离开吗？',
-      okText: '确认离开',
-      cancelText: '取消',
+      title: t('product.sku.form.leaveTitle'),
+      content: t('product.sku.form.leaveContent'),
+      okText: t('product.sku.form.leaveConfirm'),
+      cancelText: t('action.cancel'),
       okType: 'danger',
       onOk: () => {
         emit('cancel')
@@ -1629,7 +1631,7 @@ const initPanel = async () => {
     console.log('面板初始化完成')
   } catch (error) {
     console.error('面板初始化失败:', error)
-    message.error('面板初始化失败')
+    message.error(t('product.sku.form.initFailed'))
     emit('cancel')
   } finally {
     initializing.value = false
