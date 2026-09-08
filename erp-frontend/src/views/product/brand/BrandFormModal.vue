@@ -13,17 +13,17 @@
       <a-form-item v-if="isUpdateForm" style="display: none">
         <a-input v-model:value="formModel.id" />
       </a-form-item>
-      <a-form-item label="品牌名称" v-bind="validateInfos.name">
-        <a-input v-model:value="formModel.name" placeholder="请输入品牌名称" />
+      <a-form-item :label="t('product.brand.name')" v-bind="validateInfos.name">
+        <a-input v-model:value="formModel.name" :placeholder="t('product.brand.namePlaceholder')" />
       </a-form-item>
-      <a-form-item label="品牌编码" v-bind="validateInfos.code">
+      <a-form-item :label="t('product.brand.code')" v-bind="validateInfos.code">
         <a-input
           v-model:value="formModel.code"
-          placeholder="请输入品牌编码"
+          :placeholder="t('product.brand.codePlaceholder')"
           :disabled="isUpdateForm"
         />
       </a-form-item>
-      <a-form-item label="品牌LOGO">
+      <a-form-item :label="t('product.brand.logo')">
         <div class="logo-upload-container">
           <!-- 文件上传组件 -->
           <a-upload
@@ -40,7 +40,7 @@
                   :width="80"
                   :height="80"
                   style="border-radius: 4px; object-fit: cover"
-                  :preview="{ mask: '预览' }"
+                  :preview="{ mask: t('product.brand.preview') }"
                 />
                 <div class="logo-overlay">
                   <div class="overlay-actions">
@@ -53,7 +53,7 @@
                 <LoadingOutlined v-if="logoUploading" />
                 <PlusOutlined v-else />
                 <div class="upload-text">
-                  {{ logoUploading ? '上传中...' : '上传LOGO' }}
+                  {{ logoUploading ? t('product.brand.uploading') : t('product.brand.uploadLogo') }}
                 </div>
               </div>
             </div>
@@ -63,24 +63,27 @@
           <div class="upload-tips">
             <div class="tip-item">
               <InfoCircleOutlined />
-              支持 JPG、PNG、GIF、WebP 格式，建议尺寸 200x200px，大小不超过 2MB
+              {{ t('product.brand.uploadTip') }}
             </div>
           </div>
         </div>
       </a-form-item>
-      <a-form-item label="原产国家/地区">
-        <a-input v-model:value="formModel.originCountry" placeholder="请输入原产国家/地区" />
+      <a-form-item :label="t('product.brand.origin')">
+        <a-input
+          v-model:value="formModel.originCountry"
+          :placeholder="t('product.brand.originPlaceholder')"
+        />
       </a-form-item>
-      <a-form-item label="品牌介绍">
+      <a-form-item :label="t('product.brand.description')">
         <a-textarea
           v-model:value="formModel.description"
-          placeholder="请输入品牌介绍"
+          :placeholder="t('product.brand.descriptionPlaceholder')"
           :rows="3"
           :maxlength="500"
           show-count
         />
       </a-form-item>
-      <a-form-item label="状态">
+      <a-form-item :label="t('product.brand.status')">
         <dict-radio-group v-model:value="formModel.status" dict-code="enable_status" />
       </a-form-item>
     </a-form>
@@ -107,6 +110,9 @@ import { uploadToOSSWithCache } from '@/hooks/use-oss-upload'
 import { fileAbsoluteUrl } from '@/utils/file-utils'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const labelCol: ColProps = {
   sm: { span: 24 },
@@ -145,21 +151,21 @@ const formModel = reactive<BrandDTO>({
 })
 
 // 表单的校验规则
-const formRule = reactive({
+const formRule = computed(() => ({
   name: [
-    { required: true, message: '请输入品牌名称', trigger: 'blur' },
-    { max: 100, message: '品牌名称长度不能超过100个字符', trigger: 'blur' }
+    { required: true, message: t('product.brand.validation.name'), trigger: 'blur' },
+    { max: 100, message: t('product.brand.validation.nameLength'), trigger: 'blur' }
   ],
   code: [
-    { required: true, message: '请输入品牌编码', trigger: 'blur' },
-    { max: 30, message: '品牌编码长度不能超过30个字符', trigger: 'blur' },
+    { required: true, message: t('product.brand.validation.code'), trigger: 'blur' },
+    { max: 30, message: t('product.brand.validation.codeLength'), trigger: 'blur' },
     {
       pattern: /^[a-zA-Z0-9_-]+$/,
-      message: '品牌编码只能包含字母、数字、下划线和横线',
+      message: t('product.brand.validation.codePattern'),
       trigger: 'blur'
     }
   ]
-})
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<BrandDTO> = {
@@ -190,14 +196,14 @@ const beforeLogoUpload = (file: File) => {
     file.type
   )
   if (!isValidType) {
-    message.error('只能上传 JPG、PNG、GIF、WebP 格式的图片!')
+    message.error(t('product.brand.validation.imageType'))
     return false
   }
 
   // 文件大小验证 (2MB)
   const isLt2M = file.size / 1024 / 1024 < 2
   if (!isLt2M) {
-    message.error('图片大小不能超过 2MB!')
+    message.error(t('product.brand.validation.imageSize'))
     return false
   }
 
@@ -228,10 +234,14 @@ const handleLogoUpload = async (options: any) => {
     formModel.logoUrl = uploadResult.objectKey
 
     onSuccess(uploadResult, file)
-    message.success('LOGO 上传成功')
+    message.success(t('product.brand.uploadSuccess'))
   } catch (error: any) {
-    console.error('LOGO 上传失败:', error)
-    message.error(`LOGO 上传失败: ${error.message || '未知错误'}`)
+    console.error(t('product.brand.uploadFailed'), error)
+    message.error(
+      t('product.brand.uploadFailedWithReason', {
+        reason: error.message || t('product.brand.unknownError')
+      })
+    )
     onError(error)
   } finally {
     logoUploading.value = false
@@ -258,9 +268,9 @@ const removeLogo = (event: Event) => {
   event.stopPropagation()
 
   // 简单确认
-  if (confirm('确定要删除当前 LOGO 吗？')) {
+  if (confirm(t('product.brand.confirmDeleteLogo'))) {
     formModel.logoUrl = ''
-    message.success('LOGO 已删除')
+    message.success(t('product.brand.logoDeleted'))
   }
 }
 
@@ -290,11 +300,11 @@ defineExpose({
     logoUploading.value = false
 
     if (newFormAction === FormAction.CREATE) {
-      title.value = '新建品牌'
+      title.value = t('product.brand.createTitle')
       // 新建时清空 LOGO
       formModel.logoUrl = ''
     } else {
-      title.value = '编辑品牌'
+      title.value = t('product.brand.editTitle')
       overrideProperties(formModel, record)
     }
     formAction.value = newFormAction

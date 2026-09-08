@@ -4,7 +4,7 @@
 
   <pro-table
     ref="tableRef"
-    header-title="品牌管理"
+    :header-title="t('product.brand.pageTitle')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -25,7 +25,7 @@
             :src="fileAbsoluteUrl(record.logoUrl)"
             :width="32"
             :height="32"
-            :preview="{ mask: '预览' }"
+            :preview="{ mask: t('product.brand.preview') }"
             style="border-radius: 4px; object-fit: cover"
           />
           <a-avatar v-else :size="32" style="background-color: #f5f5f5; color: #999">
@@ -46,7 +46,7 @@
             size="small"
             @click="handleEdit(record)"
           >
-            编辑
+            {{ t('action.edit') }}
           </a-button>
           <delete-text-button
             v-if="hasPermission('product:brand:del')"
@@ -79,11 +79,13 @@ import { FormAction } from '@/hooks/form'
 import { DictTag } from '@/components/Dict'
 import { PictureOutlined } from '@ant-design/icons-vue'
 import { fileAbsoluteUrl } from '@/utils/file-utils'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'BrandPage' })
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -122,63 +124,63 @@ const handleEdit = (record: BrandPageVO) => {
 /* 删除品牌管理 */
 const handleDelete = (record: BrandPageVO) => {
   doRequest(deleteBrand(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('message.removeSuccess'),
     onSuccess: () => reloadTable()
   })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '品牌名称',
+    title: t('product.brand.name'),
     dataIndex: 'name',
     width: 120,
     fixed: 'left'
   },
   {
-    title: '品牌编码',
+    title: t('product.brand.code'),
     dataIndex: 'code',
     width: 120
   },
   {
-    title: '品牌LOGO',
+    title: t('product.brand.logo'),
     dataIndex: 'logoUrl',
     key: 'logoUrl',
     width: 80,
     align: 'center'
   },
   {
-    title: '原产国家/地区',
+    title: t('product.brand.origin'),
     dataIndex: 'originCountry',
     width: 140,
     ellipsis: true
   },
   {
-    title: '品牌介绍',
+    title: t('product.brand.description'),
     dataIndex: 'description',
     ellipsis: true,
     width: 200
   },
   {
-    title: '状态',
+    title: t('product.brand.status'),
     dataIndex: 'status',
     key: 'status',
     width: 80,
     align: 'center'
   },
   {
-    title: '创建时间',
+    title: t('common.createTime'),
     dataIndex: 'createTime',
     width: 160,
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 120,
     fixed: 'right'
   }
-]
+])
 </script>
 
 <style scoped>

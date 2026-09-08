@@ -3,30 +3,38 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="[16, 8]">
         <a-col :xl="6" :lg="8" :md="12" :sm="24">
-          <a-form-item label="品牌名称">
-            <a-input v-model:value="formModel.name" placeholder="请输入品牌名称" allow-clear />
-          </a-form-item>
-        </a-col>
-        <a-col :xl="6" :lg="8" :md="12" :sm="24">
-          <a-form-item label="品牌编码">
-            <a-input v-model:value="formModel.code" placeholder="请输入品牌编码" allow-clear />
-          </a-form-item>
-        </a-col>
-        <a-col :xl="6" :lg="8" :md="12" :sm="24">
-          <a-form-item label="原产国家/地区">
+          <a-form-item :label="t('product.brand.name')">
             <a-input
-              v-model:value="formModel.originCountry"
-              placeholder="请输入原产国家/地区"
+              v-model:value="formModel.name"
+              :placeholder="t('product.brand.namePlaceholder')"
               allow-clear
             />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :lg="8" :md="12" :sm="24">
-          <a-form-item label="状态">
+          <a-form-item :label="t('product.brand.code')">
+            <a-input
+              v-model:value="formModel.code"
+              :placeholder="t('product.brand.codePlaceholder')"
+              allow-clear
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :xl="6" :lg="8" :md="12" :sm="24">
+          <a-form-item :label="t('product.brand.origin')">
+            <a-input
+              v-model:value="formModel.originCountry"
+              :placeholder="t('product.brand.originPlaceholder')"
+              allow-clear
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :xl="6" :lg="8" :md="12" :sm="24">
+          <a-form-item :label="t('product.brand.status')">
             <dict-select
               v-model:value="formModel.status"
               dict-code="enable_status"
-              placeholder="请选择状态"
+              :placeholder="t('product.brand.statusPlaceholder')"
               allow-clear
             />
           </a-form-item>
@@ -43,7 +51,9 @@
 import { Form } from 'ant-design-vue'
 import type { BrandQO } from '@/api/product/brand/types'
 import { DictSelect } from '@/components/Dict'
+import { useI18n } from 'vue-i18n'
 const useForm = Form.useForm
+const { t } = useI18n()
 
 // 表单 label 全局配置
 const labelCol = { md: { span: 6 } }
