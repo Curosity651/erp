@@ -3,36 +3,36 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :md="8" :sm="24">
-          <a-form-item label="用户名">
-            <a-input v-model:value="formModel.username" placeholder="请输入" />
+          <a-form-item :label="t('system.user.username')">
+            <a-input v-model:value="formModel.username" :placeholder="t('message.pleaseEnter')" />
           </a-form-item>
         </a-col>
         <a-col :md="8" :sm="24">
-          <a-form-item label="状态">
+          <a-form-item :label="t('system.user.status')">
             <dict-select
               v-model:value="formModel.status"
               dict-code="user_status"
               allow-clear
-              placeholder="请输入"
+              :placeholder="t('message.pleaseEnter')"
             />
           </a-form-item>
         </a-col>
         <template v-if="!searchCollapsed">
           <a-col :md="8" :sm="24">
-            <a-form-item label="昵称">
-              <a-input v-model:value="formModel.nickname" placeholder="请输入" />
+            <a-form-item :label="t('system.user.nickname')">
+              <a-input v-model:value="formModel.nickname" :placeholder="t('message.pleaseEnter')" />
             </a-form-item>
           </a-col>
           <a-col :md="8" :sm="24">
-            <a-form-item label="邮箱">
-              <a-input v-model:value="formModel.email" placeholder="请输入" />
+            <a-form-item :label="t('system.user.email')">
+              <a-input v-model:value="formModel.email" :placeholder="t('message.pleaseEnter')" />
             </a-form-item>
           </a-col>
           <a-col :md="8" :sm="24">
-            <a-form-item label="电话">
+            <a-form-item :label="t('system.user.phone')">
               <a-input-number
                 v-model:value="formModel.phoneNumber"
-                placeholder="请输入"
+                :placeholder="t('message.pleaseEnter')"
                 style="width: 100%"
               />
             </a-form-item>
@@ -56,6 +56,8 @@
 import { DictSelect } from '@/components/Dict'
 import { Form } from 'ant-design-vue'
 import type { SysUserQO } from '@/api/system/user/types'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 const useForm = Form.useForm
 
 // 表单 label 全局配置

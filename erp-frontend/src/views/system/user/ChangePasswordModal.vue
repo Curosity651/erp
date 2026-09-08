@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    title="修改密码"
+    :title="t('system.user.changePasswordTitle')"
     :open="visible"
     :confirm-loading="submitLoading"
     :mask-closable="false"
@@ -9,16 +9,16 @@
   >
     <a-spin :spinning="submitLoading">
       <a-form :model="formModel" :label-col="labelCol" :wrapper-col="wrapperCol">
-        <a-form-item label="用户名">
-          <a-input v-model:value="formModel.username" disabled placeholder="用户名" />
+        <a-form-item :label="t('system.user.username')">
+          <a-input v-model:value="formModel.username" disabled :placeholder="t('system.user.username')" />
         </a-form-item>
 
-        <a-form-item label="新密码" has-feedback v-bind="validateInfos.pass">
-          <a-input v-model:value="formModel.pass" type="password" placeholder="新密码" />
+        <a-form-item :label="t('system.user.newPassword')" has-feedback v-bind="validateInfos.pass">
+          <a-input v-model:value="formModel.pass" type="password" :placeholder="t('system.user.newPassword')" />
         </a-form-item>
 
-        <a-form-item label="确认密码" has-feedback v-bind="validateInfos.confirmPass">
-          <a-input v-model:value="formModel.confirmPass" type="password" placeholder="确认密码" />
+        <a-form-item :label="t('system.user.confirmPassword')" has-feedback v-bind="validateInfos.confirmPass">
+          <a-input v-model:value="formModel.confirmPass" type="password" :placeholder="t('system.user.confirmPassword')" />
         </a-form-item>
       </a-form>
     </a-spin>
@@ -34,6 +34,9 @@ import type { Rule } from 'ant-design-vue/es/form'
 import { FormAction, useAdminForm } from '@/hooks/form'
 import type { FormRequestMapping } from '@/hooks/form'
 import { useModal } from '@/hooks/modal'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 type ChangePasswordFormModel = SysUserPassDTO & {
   userId?: number
@@ -55,7 +58,7 @@ const wrapperCol = {
 /** 校验密码 */
 const validatePass = async (_rule: Rule, value: string) => {
   if (value === '') {
-    return Promise.reject('请输入新密码！')
+    return Promise.reject(t('system.user.newPasswordRequired'))
   } else {
     if (formModel.confirmPass !== '') {
       validate('confirmPass')
@@ -67,9 +70,9 @@ const validatePass = async (_rule: Rule, value: string) => {
 /** 校验 confirm 密码 */
 const validateConfirmPass = async (_rule: Rule, value: string) => {
   if (value === '') {
-    return Promise.reject('请确认新密码！')
+    return Promise.reject(t('system.user.confirmPasswordRequired'))
   } else if (value !== formModel.pass) {
-    return Promise.reject('两次输入的密码不一致！')
+    return Promise.reject(t('system.user.passwordMismatch'))
   } else {
     return Promise.resolve()
   }

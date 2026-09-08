@@ -14,7 +14,7 @@
           <sys-user-page-search :loading="tableRef?.loading" @search="searchTable" />
           <pro-table
             ref="tableRef"
-            header-title="系统用户"
+            :header-title="t('system.user.title')"
             row-key="userId"
             :columns="columns"
             :request="tableRequest"
@@ -25,20 +25,20 @@
             <template #tableAlertOptionRender="{ intl, onCleanSelected, selectedRowKeys }">
               <a-space :size="16">
                 <a-dropdown v-if="hasPermission('system:user:edit')">
-                  <a @click.prevent> 批量操作&nbsp;<DownOutlined /> </a>
+                  <a @click.prevent> {{ t('system.user.batchOperation') }}&nbsp;<DownOutlined /> </a>
                   <template #overlay>
                     <a-menu @click="(info: MenuInfo) => handleUpdateStatus(selectedRowKeys, info)">
                       <a-menu-item :key="1">
-                        <DeleteOutlined style="margin-right: 8px" />开启
+                        <DeleteOutlined style="margin-right: 8px" />{{ t('system.user.enable') }}
                       </a-menu-item>
                       <a-menu-item :key="0">
-                        <LockOutlined style="margin-right: 8px" />锁定
+                        <LockOutlined style="margin-right: 8px" />{{ t('system.user.lock') }}
                       </a-menu-item>
                     </a-menu>
                   </template>
                 </a-dropdown>
                 <a @click="onCleanSelected">
-                  {{ intl.getMessage('alert.clear', '清空') }}
+                  {{ intl.getMessage('alert.clear', t('system.user.clear')) }}
                 </a>
               </a-space>
             </template>
@@ -60,17 +60,17 @@
               </template>
               <template v-else-if="column.key === 'operate'">
                 <a-dropdown :trigger="['click']">
-                  <a class="ant-dropdown-link" @click.prevent> 操作 </a>
+                  <a class="ant-dropdown-link" @click.prevent> {{ t('system.user.operation') }} </a>
                   <template #overlay>
                     <a-menu>
                       <a-menu-item v-if="hasPermission('system:user:edit')">
-                        <a @click="handleEdit(record)">编辑</a>
+                        <a @click="handleEdit(record)">{{ t('system.user.edit') }}</a>
                       </a-menu-item>
                       <a-menu-item v-if="hasPermission('system:user:grant')">
-                        <a @click="handleGrant(record)">授权</a>
+                        <a @click="handleGrant(record)">{{ t('system.user.grant') }}</a>
                       </a-menu-item>
                       <a-menu-item v-if="hasPermission('system:user:pass')">
-                        <a @click="changePass(record)">改密</a>
+                        <a @click="changePass(record)">{{ t('system.user.changePassword') }}</a>
                       </a-menu-item>
                       <a-menu-item v-if="hasPermission('system:user:del')">
                         <delete-text-button @confirm="handleDelete(record)" />
@@ -129,6 +129,9 @@ import { DictBadge, DictText } from '@/components/Dict'
 import { NewButton, DeleteTextButton } from '@/components/Button'
 import { uploadToOSSWithCache } from '@/hooks/use-oss-upload'
 import { isSuccess } from '@/api'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 defineOptions({ name: 'SysUserPage' })
 
@@ -202,7 +205,7 @@ const handleEdit = (record: SysUserPageVO) => {
 /* 删除用户 */
 const handleDelete = (record: SysUserPageVO) => {
   doRequest(deleteUser(record.userId), {
-    successMessage: '删除成功！',
+    successMessage: t('system.user.deleteSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -211,7 +214,7 @@ const handleDelete = (record: SysUserPageVO) => {
 const handleUpdateStatus = (userIds: number[], info: MenuInfo) => {
   const status = info.key as SysUserStatus
   doRequest(updateUserStatus(userIds, status), {
-    successMessage: '修改状态成功！',
+    successMessage: t('system.user.statusSuccess'),
     onSuccess: () => reloadTable()
   })
 }
@@ -267,38 +270,38 @@ const uploadAvatarProcessor = async (fileObj: FileObject, record: SysUserPageVO)
 }
 
 // 表格列配置
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '用户名',
+    title: t('system.user.username'),
     dataIndex: 'username'
   },
   {
-    title: '昵称',
+    title: t('system.user.nickname'),
     dataIndex: 'nickname'
   },
   {
-    title: '头像',
+    title: t('system.user.avatar'),
     dataIndex: 'avatar',
     key: 'avatar',
     width: '80px'
   },
   {
-    title: '性别',
+    title: t('system.user.gender'),
     dataIndex: 'gender',
     customRender: function ({ value }) {
       return h(DictText, { dictCode: 'gender', value: value })
     }
   },
   {
-    title: '组织',
+    title: t('system.user.organization'),
     dataIndex: 'organizationName'
   },
   {
-    title: '电话',
+    title: t('system.user.phone'),
     dataIndex: 'phoneNumber'
   },
   {
-    title: '状态',
+    title: t('system.user.status'),
     dataIndex: 'status',
     width: '80px',
     customRender: function ({ value }) {
@@ -306,16 +309,16 @@ const columns: ProColumns[] = [
     }
   },
   {
-    title: '创建时间',
+    title: t('system.user.createTime'),
     dataIndex: 'createTime',
     width: '150px',
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('system.user.operation'),
     align: 'center',
     width: '70px'
   }
-]
+])
 </script>
