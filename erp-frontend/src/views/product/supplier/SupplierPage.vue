@@ -6,7 +6,7 @@
 
     <pro-table
       ref="tableRef"
-      header-title="生产供应商"
+      :header-title="t('product.supplier.pageTitle')"
       row-key="id"
       :request="tableRequest"
       :columns="columns"
@@ -47,7 +47,7 @@
               "
               class="no-contact"
             >
-              <span style="color: #d9d9d9">暂无联系信息</span>
+              <span style="color: #d9d9d9">{{ t('product.supplier.noContact') }}</span>
             </div>
           </div>
         </template>
@@ -59,7 +59,7 @@
             </div>
             <div v-if="record.address" class="address">{{ record.address }}</div>
             <div v-if="!record.city && !record.address" class="no-location">
-              <span style="color: #d9d9d9">暂无地址信息</span>
+              <span style="color: #d9d9d9">{{ t('product.supplier.noAddress') }}</span>
             </div>
           </div>
         </template>
@@ -68,7 +68,9 @@
         </template>
         <template v-else-if="column.key === 'operate'">
           <operation-group>
-            <a v-if="hasPermission('product:supplier:edit')" @click="handleEdit(record)">编辑</a>
+            <a v-if="hasPermission('product:supplier:edit')" @click="handleEdit(record)">{{
+              t('action.edit')
+            }}</a>
             <delete-text-button
               v-if="hasPermission('product:supplier:del')"
               @confirm="() => handleDelete(record)"
@@ -110,11 +112,13 @@ import {
   MailOutlined,
   EnvironmentOutlined
 } from '@ant-design/icons-vue'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'SupplierPage' })
 
 // 鉴权方法
 const { hasPermission } = useAuthorize()
+const { t } = useI18n()
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -173,55 +177,55 @@ const handleFormCancel = () => {
 /* 删除供应商 */
 const handleDelete = (record: SupplierPageVO) => {
   doRequest(deleteSupplier(record.id), {
-    successMessage: '删除成功！',
+    successMessage: t('message.removeSuccess'),
     onSuccess: () => reloadTable()
   })
 }
 
-const columns: ProColumns[] = [
+const columns = computed<ProColumns[]>(() => [
   {
-    title: '供应商信息',
+    title: t('product.supplier.info'),
     key: 'supplierInfo',
     width: 200,
     fixed: 'left'
   },
   {
-    title: '业务联系人',
+    title: t('product.supplier.businessContact'),
     key: 'contactInfo',
     width: 220
   },
   {
-    title: '地址信息',
+    title: t('product.supplier.addressInfo'),
     key: 'locationInfo',
     width: 200,
     ellipsis: true
   },
   {
-    title: '状态',
+    title: t('product.supplier.status'),
     dataIndex: 'status',
     key: 'status',
     width: 80
   },
   {
-    title: '备注',
+    title: t('common.remarks'),
     dataIndex: 'remarks',
     width: 150,
     ellipsis: true
   },
   {
-    title: '创建时间',
+    title: t('common.createTime'),
     dataIndex: 'createTime',
     width: 150,
     sorter: true
   },
   {
     key: 'operate',
-    title: '操作',
+    title: t('common.operation'),
     align: 'center',
     width: 100,
     fixed: 'right'
   }
-]
+])
 </script>
 
 <style scoped>

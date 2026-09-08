@@ -3,37 +3,52 @@
     <a-form :model="formModel" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="供应商编码">
-            <a-input v-model:value="formModel.supplierCode" placeholder="请输入供应商编码" />
-          </a-form-item>
-        </a-col>
-        <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="供应商名称">
-            <a-input v-model:value="formModel.name" placeholder="请输入供应商名称" />
-          </a-form-item>
-        </a-col>
-        <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="所在城市">
-            <a-input v-model:value="formModel.city" placeholder="请输入城市" />
-          </a-form-item>
-        </a-col>
-        <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="状态">
-            <dict-select
-              v-model:value="formModel.status"
-              dict-code="enable_status"
-              placeholder="请选择状态"
+          <a-form-item :label="t('product.supplier.code')">
+            <a-input
+              v-model:value="formModel.supplierCode"
+              :placeholder="t('product.supplier.codePlaceholder')"
             />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="业务联系人">
-            <a-input v-model:value="formModel.businessContactName" placeholder="请输入业务联系人" />
+          <a-form-item :label="t('product.supplier.name')">
+            <a-input
+              v-model:value="formModel.name"
+              :placeholder="t('product.supplier.namePlaceholder')"
+            />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24">
-          <a-form-item label="联系电话">
-            <a-input v-model:value="formModel.businessContactPhone" placeholder="请输入联系电话" />
+          <a-form-item :label="t('product.supplier.city')">
+            <a-input
+              v-model:value="formModel.city"
+              :placeholder="t('product.supplier.cityPlaceholder')"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :xl="6" :md="12" :sm="24">
+          <a-form-item :label="t('product.supplier.status')">
+            <dict-select
+              v-model:value="formModel.status"
+              dict-code="enable_status"
+              :placeholder="t('product.supplier.statusPlaceholder')"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :xl="6" :md="12" :sm="24">
+          <a-form-item :label="t('product.supplier.businessContact')">
+            <a-input
+              v-model:value="formModel.businessContactName"
+              :placeholder="t('product.supplier.contactPlaceholder')"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :xl="6" :md="12" :sm="24">
+          <a-form-item :label="t('product.supplier.phone')">
+            <a-input
+              v-model:value="formModel.businessContactPhone"
+              :placeholder="t('product.supplier.phonePlaceholder')"
+            />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :md="12" :sm="24" class="search-actions-col">
@@ -51,7 +66,9 @@ import { Form } from 'ant-design-vue'
 import type { SupplierQO } from '@/api/product/supplier/types'
 import { DictSelect } from '@/components/Dict'
 import { SearchActions } from '@/components/Search'
+import { useI18n } from 'vue-i18n'
 const useForm = Form.useForm
+const { t } = useI18n()
 
 // 表单 label 全局配置
 const labelCol = { md: { span: 6 } }

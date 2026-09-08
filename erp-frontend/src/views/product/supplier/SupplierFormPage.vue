@@ -6,17 +6,19 @@
         <div class="header-left">
           <a-button type="text" class="back-btn" @click="handleBack">
             <arrow-left-outlined />
-            返回列表
+            {{ t('product.supplier.backToList') }}
           </a-button>
           <div class="title-section">
             <h1 class="page-title">{{ title }}</h1>
-            <p class="page-subtitle">请填写完整的供应商信息</p>
+            <p class="page-subtitle">{{ t('product.supplier.formSubtitle') }}</p>
           </div>
         </div>
         <div class="header-right">
-          <a-button style="margin-right: 12px" @click="handleBack">取消</a-button>
+          <a-button style="margin-right: 12px" @click="handleBack">{{
+            t('action.cancel')
+          }}</a-button>
           <a-button type="primary" :loading="submitLoading" @click="handleSubmit">
-            {{ isUpdateForm ? '更新' : '保存' }}
+            {{ isUpdateForm ? t('action.update') : t('product.supplier.save') }}
           </a-button>
         </div>
       </div>
@@ -39,25 +41,28 @@
         <div class="form-section">
           <div class="section-header">
             <shop-outlined class="section-icon" />
-            <span class="section-title">基本信息</span>
+            <span class="section-title">{{ t('product.supplier.basicInfo') }}</span>
           </div>
           <div class="section-content">
             <a-row :gutter="32">
               <a-col :span="12">
-                <a-form-item label="供应商编码" v-bind="validateInfos.supplierCode">
+                <a-form-item
+                  :label="t('product.supplier.code')"
+                  v-bind="validateInfos.supplierCode"
+                >
                   <a-input
                     v-model:value="formModel.supplierCode"
-                    placeholder="请输入供应商编码"
+                    :placeholder="t('product.supplier.codePlaceholder')"
                     :disabled="isUpdateForm"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="供应商名称" v-bind="validateInfos.name">
+                <a-form-item :label="t('product.supplier.name')" v-bind="validateInfos.name">
                   <a-input
                     v-model:value="formModel.name"
-                    placeholder="请输入供应商名称"
+                    :placeholder="t('product.supplier.namePlaceholder')"
                     size="large"
                   />
                 </a-form-item>
@@ -65,15 +70,19 @@
             </a-row>
             <a-row :gutter="32">
               <a-col :span="12">
-                <a-form-item label="所在城市">
-                  <a-input v-model:value="formModel.city" placeholder="请输入城市" size="large" />
+                <a-form-item :label="t('product.supplier.city')">
+                  <a-input
+                    v-model:value="formModel.city"
+                    :placeholder="t('product.supplier.cityPlaceholder')"
+                    size="large"
+                  />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="税号">
+                <a-form-item :label="t('product.supplier.taxNumber')">
                   <a-input
                     v-model:value="formModel.taxNumber"
-                    placeholder="请输入税号"
+                    :placeholder="t('product.supplier.taxNumberPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
@@ -82,13 +91,13 @@
             <a-row :gutter="32">
               <a-col :span="24">
                 <a-form-item
-                  label="详细地址"
+                  :label="t('product.supplier.detailedAddress')"
                   :label-col="{ sm: { span: 24 }, md: { span: 3 } }"
                   :wrapper-col="{ sm: { span: 24 }, md: { span: 21 } }"
                 >
                   <a-textarea
                     v-model:value="formModel.address"
-                    placeholder="请输入详细地址"
+                    :placeholder="t('product.supplier.addressPlaceholder')"
                     :rows="3"
                     size="large"
                   />
@@ -102,25 +111,25 @@
         <div class="form-section">
           <div class="section-header">
             <user-outlined class="section-icon" />
-            <span class="section-title">法人信息</span>
-            <span class="section-subtitle">可选</span>
+            <span class="section-title">{{ t('product.supplier.legalInfo') }}</span>
+            <span class="section-subtitle">{{ t('product.supplier.optional') }}</span>
           </div>
           <div class="section-content">
             <a-row :gutter="32">
               <a-col :span="12">
-                <a-form-item label="法人姓名">
+                <a-form-item :label="t('product.supplier.legalName')">
                   <a-input
                     v-model:value="formModel.legalPersonName"
-                    placeholder="请输入法人姓名"
+                    :placeholder="t('product.supplier.legalNamePlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="法人电话">
+                <a-form-item :label="t('product.supplier.legalPhone')">
                   <a-input
                     v-model:value="formModel.legalPersonPhone"
-                    placeholder="请输入法人电话"
+                    :placeholder="t('product.supplier.legalPhonePlaceholder')"
                     size="large"
                   />
                 </a-form-item>
@@ -133,34 +142,43 @@
         <div class="form-section required-section">
           <div class="section-header">
             <contacts-outlined class="section-icon" />
-            <span class="section-title">业务联系人信息</span>
-            <span class="required-badge">必填</span>
+            <span class="section-title">{{ t('product.supplier.contactInfo') }}</span>
+            <span class="required-badge">{{ t('product.supplier.required') }}</span>
           </div>
           <div class="section-content">
             <a-row :gutter="32">
               <a-col :span="8">
-                <a-form-item label="联系人" v-bind="validateInfos.businessContactName">
+                <a-form-item
+                  :label="t('product.supplier.contact')"
+                  v-bind="validateInfos.businessContactName"
+                >
                   <a-input
                     v-model:value="formModel.businessContactName"
-                    placeholder="请输入业务联系人"
+                    :placeholder="t('product.supplier.contactPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :span="8">
-                <a-form-item label="联系电话" v-bind="validateInfos.businessContactPhone">
+                <a-form-item
+                  :label="t('product.supplier.phone')"
+                  v-bind="validateInfos.businessContactPhone"
+                >
                   <a-input
                     v-model:value="formModel.businessContactPhone"
-                    placeholder="请输入联系电话"
+                    :placeholder="t('product.supplier.phonePlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :span="8">
-                <a-form-item label="联系邮箱" v-bind="validateInfos.businessContactEmail">
+                <a-form-item
+                  :label="t('product.supplier.email')"
+                  v-bind="validateInfos.businessContactEmail"
+                >
                   <a-input
                     v-model:value="formModel.businessContactEmail"
-                    placeholder="请输入联系邮箱"
+                    :placeholder="t('product.supplier.emailPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
@@ -173,43 +191,43 @@
         <div class="form-section">
           <div class="section-header">
             <bank-outlined class="section-icon" />
-            <span class="section-title">公账信息</span>
-            <span class="section-subtitle">可选</span>
+            <span class="section-title">{{ t('product.supplier.publicAccountInfo') }}</span>
+            <span class="section-subtitle">{{ t('product.supplier.optional') }}</span>
           </div>
           <div class="section-content">
             <a-row :gutter="32">
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="账户名称">
+                <a-form-item :label="t('product.supplier.accountName')">
                   <a-input
                     v-model:value="formModel.publicAccountName"
-                    placeholder="请输入公账账户名称"
+                    :placeholder="t('product.supplier.publicAccountNamePlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="银行名称">
+                <a-form-item :label="t('product.supplier.bankName')">
                   <a-input
                     v-model:value="formModel.publicBankName"
-                    placeholder="请输入公账银行"
+                    :placeholder="t('product.supplier.publicBankPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="开户行地址">
+                <a-form-item :label="t('product.supplier.bankAddress')">
                   <a-input
                     v-model:value="formModel.publicBankAddress"
-                    placeholder="请输入公账开户行地址"
+                    :placeholder="t('product.supplier.publicBankAddressPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="账户卡号">
+                <a-form-item :label="t('product.supplier.accountNumber')">
                   <a-input
                     v-model:value="formModel.publicAccountNo"
-                    placeholder="请输入公账账户卡号（可选）"
+                    :placeholder="t('product.supplier.publicAccountNoPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
@@ -222,43 +240,55 @@
         <div class="form-section required-section">
           <div class="section-header">
             <credit-card-outlined class="section-icon" />
-            <span class="section-title">私账信息</span>
-            <span class="required-badge">必填</span>
+            <span class="section-title">{{ t('product.supplier.privateAccountInfo') }}</span>
+            <span class="required-badge">{{ t('product.supplier.required') }}</span>
           </div>
           <div class="section-content">
             <a-row :gutter="32">
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="账户名称" v-bind="validateInfos.privateAccountName">
+                <a-form-item
+                  :label="t('product.supplier.accountName')"
+                  v-bind="validateInfos.privateAccountName"
+                >
                   <a-input
                     v-model:value="formModel.privateAccountName"
-                    placeholder="请输入私账账户名称"
+                    :placeholder="t('product.supplier.privateAccountNamePlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="银行名称" v-bind="validateInfos.privateBankName">
+                <a-form-item
+                  :label="t('product.supplier.bankName')"
+                  v-bind="validateInfos.privateBankName"
+                >
                   <a-input
                     v-model:value="formModel.privateBankName"
-                    placeholder="请输入私账银行"
+                    :placeholder="t('product.supplier.privateBankPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="开户行地址" v-bind="validateInfos.privateBankAddress">
+                <a-form-item
+                  :label="t('product.supplier.bankAddress')"
+                  v-bind="validateInfos.privateBankAddress"
+                >
                   <a-input
                     v-model:value="formModel.privateBankAddress"
-                    placeholder="请输入私账开户行地址"
+                    :placeholder="t('product.supplier.privateBankAddressPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
               </a-col>
               <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12" :xxl="12">
-                <a-form-item label="账户卡号" v-bind="validateInfos.privateAccountNo">
+                <a-form-item
+                  :label="t('product.supplier.accountNumber')"
+                  v-bind="validateInfos.privateAccountNo"
+                >
                   <a-input
                     v-model:value="formModel.privateAccountNo"
-                    placeholder="请输入私账账户卡号"
+                    :placeholder="t('product.supplier.privateAccountNoPlaceholder')"
                     size="large"
                   />
                 </a-form-item>
@@ -271,15 +301,18 @@
         <div class="form-section required-section">
           <div class="section-header">
             <file-image-outlined class="section-icon" />
-            <span class="section-title">营业执照</span>
-            <span class="required-badge">必填</span>
+            <span class="section-title">{{ t('product.supplier.businessLicense') }}</span>
+            <span class="required-badge">{{ t('product.supplier.required') }}</span>
           </div>
           <div class="section-content">
-            <a-form-item label="营业执照照片" v-bind="validateInfos.businessLicensePhoto">
+            <a-form-item
+              :label="t('product.supplier.businessLicensePhoto')"
+              v-bind="validateInfos.businessLicensePhoto"
+            >
               <image-upload
                 v-model="formModel.businessLicensePhoto"
                 :preview-url="businessLicensePreviewUrl"
-                placeholder="请上传营业执照照片"
+                :placeholder="t('product.supplier.businessLicensePlaceholder')"
               />
             </a-form-item>
           </div>
@@ -289,12 +322,12 @@
         <div class="form-section">
           <div class="section-header">
             <setting-outlined class="section-icon" />
-            <span class="section-title">其他信息</span>
+            <span class="section-title">{{ t('product.supplier.otherInfo') }}</span>
           </div>
           <div class="section-content">
             <a-row :gutter="32">
               <a-col :span="12">
-                <a-form-item label="状态">
+                <a-form-item :label="t('product.supplier.status')">
                   <dict-radio-group v-model:value="formModel.status" dict-code="enable_status" />
                 </a-form-item>
               </a-col>
@@ -302,13 +335,13 @@
             <a-row :gutter="32">
               <a-col :span="24">
                 <a-form-item
-                  label="备注"
+                  :label="t('common.remarks')"
                   :label-col="{ sm: { span: 24 }, md: { span: 3 } }"
                   :wrapper-col="{ sm: { span: 24 }, md: { span: 21 } }"
                 >
                   <a-textarea
                     v-model:value="formModel.remarks"
-                    placeholder="请输入备注"
+                    :placeholder="t('product.supplier.remarksPlaceholder')"
                     :rows="4"
                     size="large"
                   />
@@ -327,11 +360,7 @@ import { computed, reactive, ref } from 'vue'
 import { FormAction, useAdminForm, useFormAction } from '@/hooks/form'
 import type { FormRequestMapping } from '@/hooks/form'
 import type { SupplierDTO, SupplierPageVO } from '@/api/product/supplier/types'
-import {
-  createSupplier,
-  getBusinessLicenseUrl,
-  updateSupplier
-} from '@/api/product/supplier'
+import { createSupplier, getBusinessLicenseUrl, updateSupplier } from '@/api/product/supplier'
 import { isSuccess } from '@/api'
 import { overrideProperties } from '@/utils/bean-utils'
 import type { ColProps } from 'ant-design-vue'
@@ -347,6 +376,9 @@ import {
   FileImageOutlined,
   SettingOutlined
 } from '@ant-design/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const labelCol: ColProps = {
   sm: { span: 24 },
@@ -367,7 +399,7 @@ const { formAction, isUpdateForm } = useFormAction()
 const businessLicensePreviewUrl = ref('')
 
 const title = computed(() => {
-  return isUpdateForm.value ? '编辑供应商' : '新建供应商'
+  return isUpdateForm.value ? t('product.supplier.editTitle') : t('product.supplier.createTitle')
 })
 
 // 表单模型
@@ -419,50 +451,72 @@ const formModel = reactive<SupplierDTO>({
 })
 
 // 表单的校验规则
-const formRule = reactive({
+const formRule = computed(() => ({
   supplierCode: [
-    { required: true, message: '请输入供应商编码', trigger: 'blur' },
-    { max: 30, message: '供应商编码长度不能超过30个字符', trigger: 'blur' },
+    { required: true, message: t('product.supplier.validation.code'), trigger: 'blur' },
+    { max: 30, message: t('product.supplier.validation.codeLength'), trigger: 'blur' },
     {
       pattern: /^[a-zA-Z0-9_-]+$/,
-      message: '供应商编码只能包含字母、数字、下划线和横线',
+      message: t('product.supplier.validation.codePattern'),
       trigger: 'blur'
     }
   ],
   name: [
-    { required: true, message: '请输入供应商名称', trigger: 'blur' },
-    { max: 100, message: '供应商名称长度不能超过100个字符', trigger: 'blur' }
+    { required: true, message: t('product.supplier.validation.name'), trigger: 'blur' },
+    { max: 100, message: t('product.supplier.validation.nameLength'), trigger: 'blur' }
   ],
   businessContactName: [
-    { required: true, message: '请输入业务联系人', trigger: 'blur' },
-    { max: 100, message: '业务联系人长度不能超过100个字符', trigger: 'blur' }
+    { required: true, message: t('product.supplier.validation.contact'), trigger: 'blur' },
+    { max: 100, message: t('product.supplier.validation.contactLength'), trigger: 'blur' }
   ],
   businessContactPhone: [
-    { required: true, message: '请输入业务联系人电话', trigger: 'blur' },
-    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }
+    { required: true, message: t('product.supplier.validation.phone'), trigger: 'blur' },
+    {
+      pattern: /^1[3-9]\d{9}$/,
+      message: t('product.supplier.validation.phoneFormat'),
+      trigger: 'blur'
+    }
   ],
   businessContactEmail: [
-    { required: true, message: '请输入业务联系人邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+    { required: true, message: t('product.supplier.validation.email'), trigger: 'blur' },
+    { type: 'email', message: t('product.supplier.validation.emailFormat'), trigger: 'blur' }
   ],
   privateAccountName: [
-    { required: true, message: '请输入私账账户名称', trigger: 'blur' },
-    { max: 100, message: '私账账户名称长度不能超过100个字符', trigger: 'blur' }
+    {
+      required: true,
+      message: t('product.supplier.validation.privateAccountName'),
+      trigger: 'blur'
+    },
+    {
+      max: 100,
+      message: t('product.supplier.validation.privateAccountNameLength'),
+      trigger: 'blur'
+    }
   ],
   privateBankName: [
-    { required: true, message: '请输入私账银行', trigger: 'blur' },
-    { max: 100, message: '私账银行长度不能超过100个字符', trigger: 'blur' }
+    { required: true, message: t('product.supplier.validation.privateBank'), trigger: 'blur' },
+    { max: 100, message: t('product.supplier.validation.privateBankLength'), trigger: 'blur' }
   ],
   privateBankAddress: [
-    { required: true, message: '请输入私账开户行地址', trigger: 'blur' },
-    { max: 255, message: '私账开户行地址长度不能超过255个字符', trigger: 'blur' }
+    {
+      required: true,
+      message: t('product.supplier.validation.privateBankAddress'),
+      trigger: 'blur'
+    },
+    {
+      max: 255,
+      message: t('product.supplier.validation.privateBankAddressLength'),
+      trigger: 'blur'
+    }
   ],
   privateAccountNo: [
-    { required: true, message: '请输入私账账户卡号', trigger: 'blur' },
-    { max: 50, message: '账户卡号长度不能超过50个字符', trigger: 'blur' }
+    { required: true, message: t('product.supplier.validation.privateAccountNo'), trigger: 'blur' },
+    { max: 50, message: t('product.supplier.validation.accountNoLength'), trigger: 'blur' }
   ],
-  businessLicensePhoto: [{ required: true, message: '请上传营业执照照片', trigger: 'change' }]
-})
+  businessLicensePhoto: [
+    { required: true, message: t('product.supplier.validation.businessLicense'), trigger: 'change' }
+  ]
+}))
 
 // 表单的提交请求
 const formRequestMapping: FormRequestMapping<SupplierDTO> = {
