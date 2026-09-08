@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="open"
-    title="添加平台映射"
+    :title="t('product.sku.mapping.addTitle')"
     :width="600"
     :confirm-loading="submitLoading"
     @ok="handleSubmit"
@@ -9,10 +9,14 @@
   >
     <a-form :model="formModel" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
       <!-- SKU 信息展示 -->
-      <a-form-item label="SKU 信息">
+      <a-form-item :label="t('product.sku.mapping.skuInfo')">
         <div class="sku-info-display">
           <div class="sku-image-wrapper">
-            <img :src="getProductImageUrl()" alt="产品图片" class="sku-image" />
+            <img
+              :src="getProductImageUrl()"
+              :alt="t('product.sku.productImage')"
+              class="sku-image"
+            />
           </div>
           <div class="sku-text-info">
             <span class="sku-code">{{ skuCode }}</span>
@@ -22,13 +26,17 @@
       </a-form-item>
 
       <!-- 平台商品 ID 输入 -->
-      <a-form-item label="平台商品 ID" v-bind="validateInfos.platformItemId" required>
+      <a-form-item
+        :label="t('product.sku.mapping.platformItemId')"
+        v-bind="validateInfos.platformItemId"
+        required
+      >
         <a-input
           v-model:value="formModel.platformItemId"
-          placeholder="请输入平台商品ID"
+          :placeholder="t('product.sku.mapping.platformItemIdPlaceholder')"
           @blur="handleBlur"
         />
-        <div class="form-tip">请输入平台商品的唯一标识符</div>
+        <div class="form-tip">{{ t('product.sku.mapping.platformItemIdTip') }}</div>
       </a-form-item>
 
       <!-- 唯一性错误提示 -->
@@ -49,6 +57,7 @@ import { message } from 'ant-design-vue'
 import { Form } from 'ant-design-vue'
 import { quickCreateSkuMapping } from '@/api/product/sku-mapping'
 import httpClient from '@/utils/axios'
+import { useI18n } from 'vue-i18n'
 
 interface Props {
   open: boolean
@@ -58,6 +67,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
@@ -85,7 +95,9 @@ const formModel = reactive({
 
 // 表单验证规则
 const formRules = reactive({
-  platformItemId: [{ required: true, message: '平台商品ID不能为空', trigger: 'blur' }]
+  platformItemId: [
+    { required: true, message: t('product.sku.mapping.platformItemIdRequired'), trigger: 'blur' }
+  ]
 })
 
 const { validateInfos, validate, resetFields } = useForm(formModel, formRules)
@@ -113,17 +125,17 @@ const handleBlur = async () => {
       }
     })
     if (res.code === 200 && res.data === false) {
-      uniqueError.value = '该平台商品已存在映射'
+      uniqueError.value = t('product.sku.mapping.duplicate')
     }
   } catch (error) {
-    console.error('验证唯一性失败:', error)
+    console.error(t('product.sku.mapping.validationFailed'), error)
   }
 }
 
 // 提交表单
 const handleSubmit = async () => {
   if (uniqueError.value) {
-    message.error('请先处理唯一性冲突')
+    message.error(t('product.sku.mapping.resolveConflict'))
     return
   }
 
@@ -141,13 +153,14 @@ const handleSubmit = async () => {
     })
 
     if (res.code === 200) {
-      message.success('添加映射成功')
+      message.success(t('product.sku.mapping.addSuccess'))
       emit('success')
       handleClose()
     }
   } catch (error: any) {
-    console.error('添加映射失败:', error)
-    const errorMsg = error?.response?.data?.message || error?.message || '添加映射失败'
+    console.error(t('product.sku.mapping.addFailed'), error)
+    const errorMsg =
+      error?.response?.data?.message || error?.message || t('product.sku.mapping.addFailed')
     message.error(errorMsg)
   } finally {
     submitLoading.value = false

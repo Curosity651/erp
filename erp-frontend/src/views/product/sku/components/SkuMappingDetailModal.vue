@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="open"
-    :title="`SKU 映射详情`"
+    :title="t('product.sku.mapping.detailTitle')"
     :body-style="{ paddingTop: '12px' }"
     :width="800"
     :footer="null"
@@ -11,7 +11,7 @@
     <div v-if="skuInfo" class="sku-info-section">
       <div class="sku-info-content">
         <div class="sku-image-wrapper">
-          <img :src="getProductImageUrl()" alt="产品图片" class="sku-image" />
+          <img :src="getProductImageUrl()" :alt="t('product.sku.productImage')" class="sku-image" />
         </div>
         <div class="sku-text-info">
           <div class="sku-code-row">
@@ -19,7 +19,7 @@
             <span class="sku-code">{{ skuInfo.skuCode }}</span>
           </div>
           <div class="sku-name-row">
-            <span class="sku-label">名称:</span>
+            <span class="sku-label">{{ t('product.sku.mapping.name') }}:</span>
             <span class="sku-name">{{ skuInfo.skuName }}</span>
           </div>
         </div>
@@ -29,7 +29,9 @@
     <!-- 映射列表 -->
     <div class="mapping-list-section">
       <div class="section-header">
-        <span class="section-title">平台映射列表 ({{ mappings.length }})</span>
+        <span class="section-title">{{
+          t('product.sku.mapping.list', { count: mappings.length })
+        }}</span>
         <a-button
           v-if="hasPermission('product:sku-mapping:add')"
           type="primary"
@@ -39,32 +41,35 @@
           <template #icon>
             <plus-outlined />
           </template>
-          添加映射
+          {{ t('product.sku.mapping.add') }}
         </a-button>
       </div>
 
       <a-spin :spinning="loading">
-        <a-empty v-if="!loading && mappings.length === 0" description="暂无映射" />
+        <a-empty
+          v-if="!loading && mappings.length === 0"
+          :description="t('product.sku.mapping.empty')"
+        />
 
         <div v-else class="mapping-list">
           <div v-for="mapping in mappings" :key="mapping.id" class="mapping-item">
             <div class="mapping-info">
               <div class="mapping-id">
-                <span class="label">平台商品 ID:</span>
+                <span class="label">{{ t('product.sku.mapping.platformItemId') }}:</span>
                 <span class="value">{{ mapping.platformItemId }}</span>
               </div>
               <div class="mapping-time">
-                <span class="label">创建时间:</span>
+                <span class="label">{{ t('common.createTime') }}:</span>
                 <span class="value">{{ formatTime(mapping.createTime) }}</span>
               </div>
             </div>
             <div class="mapping-actions">
               <a-popconfirm
                 v-if="hasPermission('product:sku-mapping:del')"
-                title="确定要删除此映射吗？"
+                :title="t('product.sku.mapping.confirmDelete')"
                 @confirm="handleDeleteMapping(mapping)"
               >
-                <a-button type="link" danger size="small">删除</a-button>
+                <a-button type="link" danger size="small">{{ t('action.delete') }}</a-button>
               </a-popconfirm>
             </div>
           </div>
@@ -91,6 +96,9 @@ import { useAuthorize } from '@/hooks/permission'
 import { getSkuMappingsBySkuCode, deleteSkuMapping } from '@/api/product/sku-mapping'
 import type { SkuMappingListItem } from '@/api/product/sku-mapping/types'
 import SkuMappingQuickAddModal from './SkuMappingQuickAddModal.vue'
+import { useI18n } from 'vue-i18n'
+import { formatLocaleDateTime } from '@/utils/locale-format'
+import type { SupportedLocale } from '@/locales/locale-contract'
 
 interface Props {
   open: boolean
@@ -100,6 +108,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t, locale } = useI18n()
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
@@ -148,8 +157,8 @@ const loadMappings = async () => {
       mappings.value = res.data || []
     }
   } catch (error) {
-    console.error('加载映射列表失败:', error)
-    message.error('加载映射列表失败')
+    console.error(t('product.sku.mapping.loadFailed'), error)
+    message.error(t('product.sku.mapping.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -158,8 +167,7 @@ const loadMappings = async () => {
 // 格式化时间
 const formatTime = (timeStr: string) => {
   if (!timeStr) return '-'
-  const date = new Date(timeStr)
-  return date.toLocaleString('zh-CN', {
+  return formatLocaleDateTime(timeStr, locale.value as SupportedLocale, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -178,13 +186,13 @@ const handleDeleteMapping = async (mapping: SkuMappingListItem) => {
   try {
     const res = await deleteSkuMapping(mapping.id)
     if (res.code === 200) {
-      message.success('删除成功')
+      message.success(t('message.removeSuccess'))
       loadMappings()
       emit('success')
     }
   } catch (error) {
-    console.error('删除映射失败:', error)
-    message.error('删除映射失败')
+    console.error(t('product.sku.mapping.deleteFailed'), error)
+    message.error(t('product.sku.mapping.deleteFailed'))
   }
 }
 
