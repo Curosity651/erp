@@ -15,8 +15,6 @@ type Events = {
   'close-current-tab': string | undefined
   // 刷新SKU列表
   'refresh-sku-list': void
-  // 刷新采购单列表
-  'refresh-purchase-order-list': void
   // 刷新自定义退货单列表
   'refresh-custom-return-list': void
   // 刷新自定义出库单列表

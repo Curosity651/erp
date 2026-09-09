@@ -1,6 +1,6 @@
 import type { PageParam } from '@/api/types'
 import type { SkuBriefVO } from '@/api/common/sku-types'
-import type { RegionDisplayVO } from '@/api/wms/shipping-order/types'
+import type { RegionDisplayVO } from '@/api/wms/stock-flow/types'
 
 /**
  * 采购入库单 DTO

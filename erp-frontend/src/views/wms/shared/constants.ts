@@ -105,7 +105,7 @@ export const SourceType = {
 
 export const SourceTypeLabels: Record<string, string> = {
   [SourceType.SHIPPING_ORDER]: '物流单',
-  [SourceType.PURCHASE_INBOUND]: '采购入库单',
+  [SourceType.PURCHASE_INBOUND]: '入库单',
   [SourceType.ORDER]: '销售订单',
   [SourceType.SALES_OUTBOUND]: '销售出库单',
   [SourceType.RETURN_INBOUND]: '退货入库单',
@@ -118,7 +118,6 @@ export const SourceTypeLabels: Record<string, string> = {
 
 /** 来源单据类型到路由的映射 */
 export const SourceTypeRouteMap: Record<string, string> = {
-  PURCHASE_INBOUND: '/wms/purchase-inbound',
   SALES_OUTBOUND: '/wms/sales-outbound',
   RETURN_INBOUND: '/wms/return-inbound',
   // 盘点/调拨/库存调整 已迁至「海外仓作业」(/ops) 下

@@ -63,42 +63,6 @@ export const HOME_ROUTE: RouteRecordRaw = {
         keepAlive: true
       }
     },
-    // 采购单表单路由
-    {
-      path: 'wms/purchase-order/form/:mode/:id?',
-      name: 'PurchaseOrderForm',
-      component: () => import('@/views/wms/purchase-order/PurchaseOrderFormPage.vue'),
-      meta: {
-        name: '采购单表单',
-        hideInMenu: true,
-        hideInTab: false,
-        keepAlive: true
-      }
-    },
-    // 物流单表单路由
-    {
-      path: 'wms/shipping-order/form/:mode/:id?',
-      name: 'ShippingOrderForm',
-      component: () => import('@/views/wms/shipping-order/ShippingOrderFormPage.vue'),
-      meta: {
-        name: '物流单表单',
-        hideInMenu: true,
-        hideInTab: false,
-        keepAlive: true
-      }
-    },
-    // 采购入库单表单路由
-    {
-      path: 'wms/purchase-inbound/form/:mode/:id?',
-      name: 'PurchaseInboundForm',
-      component: () => import('@/views/wms/purchase-inbound/PurchaseInboundFormPage.vue'),
-      meta: {
-        name: '采购入库单表单',
-        hideInMenu: true,
-        hideInTab: false,
-        keepAlive: true
-      }
-    },
     // 自定义入库单表单路由
     {
       path: 'wms/manual-inbound/form/:mode/:id?',

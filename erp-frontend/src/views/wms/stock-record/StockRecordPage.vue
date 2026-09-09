@@ -107,7 +107,6 @@ function handleViewSource(record: any) {
   if (!sourceNo) return
 
   const routeMap: Record<string, string> = {
-    PURCHASE_INBOUND: '/wms/purchase-inbound',
     SALES_OUTBOUND: '/wms/sales-outbound',
     RETURN_INBOUND: '/wms/return-inbound',
     // 盘点/调拨/库存调整 已迁至「海外仓作业」(/ops) 下
