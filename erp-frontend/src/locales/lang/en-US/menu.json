@@ -1,6 +1,6 @@
 {
   "menu": {
-    "statistics": { "dashboard": "Analytics" },
+    "statistics": { "dashboard": "Dashboard", "salesTarget": "Sales targets" },
     "warehouseMgmt": { "locationMgmt": "Location management", "locationInventory": "Location inventory", "rackAssignment": "Location assignment" },
     "outboundOps": { "orderDispatch": "Order dispatch", "pickingTasks": "Picking tasks", "fulfillment": "Outbound operations" },
     "platformFinance": { "receivableBill": "Receivable bills", "warehouseContracts": "Contracts and funds", "providerFunds": "Provider settlement" },

@@ -3,7 +3,7 @@
     <template #title>
       <div class="flex items-center gap-2">
         <PieChartOutlined class="card-icon" />
-        <span>订单状态分布</span>
+        <span>{{ t('dashboard.orderStatus') }}</span>
       </div>
     </template>
     <div class="order-status-card">
@@ -37,7 +37,7 @@
         <template #summary>
           <a-table-summary-row class="summary-row">
             <a-table-summary-cell :index="0">
-              <span class="summary-label">合计</span>
+              <span class="summary-label">{{ t('dashboard.total') }}</span>
             </a-table-summary-cell>
             <a-table-summary-cell :index="1" align="right">
               <span class="summary-value">{{ totalCount }}</span>
@@ -54,6 +54,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { PieChartOutlined } from '@ant-design/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -61,7 +62,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent } from 'echarts/components'
 import type { OrderStatusVO } from '@/api/dashboard/types'
-import { ERP_STATUS_MAP, type ErpStatusKey } from '@/api/order/types'
+import type { ErpStatusKey } from '@/api/order/types'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent])
@@ -71,12 +72,13 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t, locale } = useI18n()
 
-const columns = [
-  { title: '状态', key: 'status', width: 120 },
-  { title: '数量', key: 'count', width: 80, align: 'right' },
-  { title: '金额', key: 'amount', align: 'right' }
-]
+const columns = computed(() => [
+  { title: t('dashboard.status'), key: 'status', width: 120 },
+  { title: t('dashboard.quantity'), key: 'count', width: 80, align: 'right' },
+  { title: t('dashboard.amount'), key: 'amount', align: 'right' }
+])
 
 const tableData = computed(() => props.data || [])
 
@@ -96,7 +98,9 @@ const statusColorMap: Record<ErpStatusKey, string> = {
 
 const getStatusName = (status: string) => {
   const statusKey = status as ErpStatusKey
-  return ERP_STATUS_MAP[statusKey]?.label || status
+  const key = `dashboard.orderStatuses.${statusKey}`
+  const label = t(key)
+  return label === key ? status : label
 }
 
 const getStatusColor = (status: string) => {
@@ -106,7 +110,7 @@ const getStatusColor = (status: string) => {
 
 const formatAmount = (amount: number) => {
   return (
-    amount?.toLocaleString('zh-CN', {
+    amount?.toLocaleString(locale.value, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }) || '0.00'
@@ -132,7 +136,8 @@ const getChartColor = (status: string): string => {
 const chartOption = computed(() => ({
   tooltip: {
     trigger: 'item',
-    formatter: '{b}: {c}单 ({d}%)'
+    formatter: (params: any) =>
+      `${params.name}: ${t('dashboard.ordersCount', { count: params.value, percent: params.percent })}`
   },
   legend: {
     orient: 'horizontal',

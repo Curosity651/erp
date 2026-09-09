@@ -3,7 +3,7 @@
     <template #title>
       <div class="flex items-center gap-2">
         <AppstoreOutlined class="card-icon" />
-        <span>平台履约分布</span>
+        <span>{{ t('dashboard.platformFulfillment') }}</span>
       </div>
     </template>
     <div class="platform-fulfillment-card">
@@ -30,19 +30,19 @@
           </template>
           <template v-else-if="column.key === 'fbs'">
             <div class="data-cell">
-              <div class="count">数量：{{ record.fbs.count.toLocaleString() }}</div>
+              <div class="count">{{ t('dashboard.quantity') }}：{{ record.fbs.count.toLocaleString(locale) }}</div>
               <div class="amount">₽{{ formatAmount(record.fbs.amount) }}</div>
             </div>
           </template>
           <template v-else-if="column.key === 'fbo'">
             <div class="data-cell">
-              <div class="count">数量：{{ record.fbo.count.toLocaleString() }}</div>
+              <div class="count">{{ t('dashboard.quantity') }}：{{ record.fbo.count.toLocaleString(locale) }}</div>
               <div class="amount">₽{{ formatAmount(record.fbo.amount) }}</div>
             </div>
           </template>
           <template v-else-if="column.key === 'total'">
             <div class="data-cell total">
-              <div class="count">数量：{{ record.total.count.toLocaleString() }}</div>
+              <div class="count">{{ t('dashboard.quantity') }}：{{ record.total.count.toLocaleString(locale) }}</div>
               <div class="amount">₽{{ formatAmount(record.total.amount) }}</div>
             </div>
           </template>
@@ -54,6 +54,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { AppstoreOutlined } from '@ant-design/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -76,13 +77,14 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t, locale } = useI18n()
 
-const columns = [
-  { title: '平台', key: 'platform', dataIndex: 'platform', width: 120, align: 'left' },
+const columns = computed(() => [
+  { title: t('dashboard.platform'), key: 'platform', dataIndex: 'platform', width: 120, align: 'left' },
   { title: 'FBS', key: 'fbs', width: 200, align: 'right' },
   { title: 'FBO', key: 'fbo', width: 200, align: 'right' },
-  { title: '合计', key: 'total', width: 200, align: 'right' }
-]
+  { title: t('dashboard.total'), key: 'total', width: 200, align: 'right' }
+])
 
 const tableData = computed(() => props.data || [])
 
@@ -99,7 +101,7 @@ const getRowClassName = (_record: any, index: number) => {
 }
 
 const formatAmount = (amount: number) => {
-  return amount.toLocaleString('zh-CN', {
+  return amount.toLocaleString(locale.value, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })
@@ -133,7 +135,7 @@ const chartOption = computed<EChartsOption>(() => {
 								<span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${color}; margin-right: 8px;"></span>
 								${item.seriesName}
 							</span>
-							<span style="font-weight: 600; margin-left: 20px;">₽${item.value.toLocaleString('zh-CN', {
+							<span style="font-weight: 600; margin-left: 20px;">₽${item.value.toLocaleString(locale.value, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
               })}</span>
@@ -145,8 +147,8 @@ const chartOption = computed<EChartsOption>(() => {
         const total = params.reduce((sum: number, item: any) => sum + item.value, 0)
         result += `
 					<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0;">
-						<span style="font-weight: 600;">合计</span>
-						<span style="font-weight: 600; color: #1890ff;">₽${total.toLocaleString('zh-CN', {
+							<span style="font-weight: 600;">${t('dashboard.total')}</span>
+						<span style="font-weight: 600; color: #1890ff;">₽${total.toLocaleString(locale.value, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2
             })}</span>
@@ -192,7 +194,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     yAxis: {
       type: 'value',
-      name: '金额（₽）',
+      name: t('dashboard.amountRub'),
       nameTextStyle: {
         fontSize: 12,
         color: '#8c8c8c',
@@ -203,7 +205,7 @@ const chartOption = computed<EChartsOption>(() => {
         color: '#8c8c8c',
         formatter: (value: number) => {
           if (value >= 10000) {
-            return `${(value / 10000).toFixed(1)}万`
+            return t('dashboard.tenThousand', { value: (value / 10000).toFixed(1) })
           }
           return value.toLocaleString()
         }

@@ -1,6 +1,6 @@
 <template>
   <div class="dashboard-container">
-    <a-spin :spinning="loading" tip="加载中...">
+    <a-spin :spinning="loading" :tip="t('dashboard.loading')">
       <!-- 筛选栏 -->
       <FilterBar
         :quick-time-range="quickTimeRange"
@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { getDashboardData } from '@/api/dashboard'
 import type { DashboardDataVO, DashboardFilters } from '@/api/dashboard/types'
@@ -105,6 +106,7 @@ import SkuRankingCard from './components/SkuRankingCard.vue'
 // 状态
 const loading = ref(false)
 const dashboardData = ref<DashboardDataVO | null>(null)
+const { t, locale } = useI18n()
 const lastUpdateTime = ref('')
 const serverTime = ref<string>('')
 
@@ -176,7 +178,7 @@ async function loadDashboardData() {
     // response.data 是 ApiResult<DashboardDataVO>
     if (response.data?.data) {
       dashboardData.value = response.data.data
-      lastUpdateTime.value = new Date().toLocaleString('zh-CN')
+      lastUpdateTime.value = new Date().toLocaleString(locale.value)
 
       // 从响应头中提取服务器时间
       const dateHeader = response.headers?.['date'] || response.headers?.['Date']
@@ -185,8 +187,8 @@ async function loadDashboardData() {
       }
     }
   } catch (error: any) {
-    message.error(error.message || '加载Dashboard数据失败')
-    console.error('加载Dashboard数据失败:', error)
+    message.error(error.message || t('dashboard.loadFailed'))
+    console.error(t('dashboard.loadFailed'), error)
   } finally {
     loading.value = false
   }

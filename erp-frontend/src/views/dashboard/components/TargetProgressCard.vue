@@ -19,15 +19,15 @@
           class="progress-bar"
         />
         <div class="progress-detail">
-          <span class="detail-label">目标：</span>
+          <span class="detail-label">{{ t('dashboard.target') }}</span>
           <span class="detail-value">₽{{ formatAmount(data.target) }}</span>
           <a-divider type="vertical" />
-          <span class="detail-label">当前：</span>
+          <span class="detail-label">{{ t('dashboard.current') }}</span>
           <span class="detail-value">₽{{ formatAmount(data.current) }}</span>
         </div>
       </div>
-      <a-empty v-else description="未设置目标" :image-style="{ height: '50px' }">
-        <a-button type="primary" size="small" @click="goToTargetSetting">去设置</a-button>
+      <a-empty v-else :description="t('dashboard.targetNotSet')" :image-style="{ height: '50px' }">
+        <a-button type="primary" size="small" @click="goToTargetSetting">{{ t('dashboard.setTarget') }}</a-button>
       </a-empty>
     </div>
   </a-card>
@@ -35,10 +35,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { CalendarOutlined, TrophyOutlined } from '@ant-design/icons-vue'
 
 const router = useRouter()
+const { t, locale } = useI18n()
 
 interface Props {
   data?: {
@@ -52,7 +54,9 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const title = computed(() => (props.type === 'monthly' ? '月度目标' : '年度目标'))
+const title = computed(() =>
+  props.type === 'monthly' ? t('dashboard.monthlyTarget') : t('dashboard.yearlyTarget')
+)
 const icon = computed(() => (props.type === 'monthly' ? CalendarOutlined : TrophyOutlined))
 
 const progressColor = computed(() => {
@@ -77,12 +81,12 @@ const formatAmount = (amount?: number) => {
   if (!amount) return '0'
   // 大额数字使用万/亿单位，不显示小数
   if (amount >= 100000000) {
-    return (amount / 100000000).toFixed(1) + '亿'
+    return t('dashboard.hundredMillion', { value: (amount / 100000000).toFixed(1) })
   }
   if (amount >= 10000) {
-    return (amount / 10000).toFixed(1) + '万'
+    return t('dashboard.tenThousand', { value: (amount / 10000).toFixed(1) })
   }
-  return amount.toLocaleString('zh-CN', {
+  return amount.toLocaleString(locale.value, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   })

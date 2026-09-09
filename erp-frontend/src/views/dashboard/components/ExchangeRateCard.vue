@@ -3,7 +3,7 @@
     <div class="card-header">
       <div class="header-left">
         <GlobalOutlined class="header-icon" />
-        <span class="header-title">汇率信息</span>
+        <span class="header-title">{{ t('dashboard.exchangeRates') }}</span>
       </div>
       <div v-if="data?.date" class="header-date">{{ data.date }}</div>
     </div>
@@ -18,13 +18,14 @@
           <div class="rate-reverse">¥→ {{ formatRate(rate.reverseRate) }}</div>
         </div>
       </div>
-      <a-empty v-else description="暂无汇率数据" :image="simpleImage" />
+      <a-empty v-else :description="t('dashboard.noExchangeRates')" :image="simpleImage" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { GlobalOutlined } from '@ant-design/icons-vue'
 import { Empty } from 'ant-design-vue'
 import { getCurrencySymbol } from '@/utils/currency-utils'
@@ -40,6 +41,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
 
 const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE
 
@@ -56,7 +58,7 @@ const ratesWithReverse = computed(() => {
         reverseRate: rate.rate && rate.rate !== 0 ? 1 / rate.rate : 0 // CNY → 目标币种
       }
     } catch (error) {
-      console.error('汇率计算失败:', error)
+      console.error('Exchange-rate calculation failed:', error)
       return {
         currency: rate.currency,
         currencySymbol: getCurrencySymbol(rate.currency),

@@ -8,7 +8,7 @@
     </template>
     <template #extra>
       <a-button type="link" size="small" @click="handleViewMore">
-        查看更多
+        {{ t('dashboard.viewMore') }}
         <RightOutlined />
       </a-button>
     </template>
@@ -31,7 +31,7 @@
           <div class="sku-cell">
             <span class="sku-text" :class="{ unmapped: !record.isMapped }">{{ record.sku }}</span>
             <a-tag v-if="!record.isMapped" color="orange" size="small" class="unmapped-tag"
-              >未映射</a-tag
+              >{{ t('dashboard.unmapped') }}</a-tag
             >
           </div>
         </template>
@@ -50,6 +50,7 @@
 
 <script setup lang="ts">
 import { computed, h } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { FireOutlined, WarningOutlined, RightOutlined } from '@ant-design/icons-vue'
 import type { SkuItem, DashboardFilters } from '@/api/dashboard/types'
@@ -65,8 +66,11 @@ interface Props {
 const props = defineProps<Props>()
 const router = useRouter()
 const dashboardFilterStore = useDashboardFilterStore()
+const { t, locale } = useI18n()
 
-const title = computed(() => (props.type === 'top' ? '热销SKU TOP5' : '滞销SKU BOTTOM5'))
+const title = computed(() =>
+  props.type === 'top' ? t('dashboard.hotSku') : t('dashboard.slowSku')
+)
 const icon = computed(() => (props.type === 'top' ? FireOutlined : WarningOutlined))
 const cardClass = computed(() => (props.type === 'top' ? 'top-ranking' : 'bottom-ranking'))
 
@@ -84,12 +88,12 @@ function handleViewMore() {
   })
 }
 
-const columns = [
-  { title: '排名', key: 'rank', width: 60, align: 'center' as const },
+const columns = computed(() => [
+  { title: t('dashboard.rank'), key: 'rank', width: 60, align: 'center' as const },
   { title: 'SKU', key: 'sku', ellipsis: true },
-  { title: '销量', key: 'quantity', width: 80, align: 'right' as const },
-  { title: '金额', key: 'amount', width: 120, align: 'right' as const }
-]
+  { title: t('dashboard.quantity'), key: 'quantity', width: 80, align: 'right' as const },
+  { title: t('dashboard.amount'), key: 'amount', width: 120, align: 'right' as const }
+])
 
 const tableData = computed(() => props.data || [])
 
@@ -111,7 +115,7 @@ const getRowClassName = (_record: unknown, index: number) => {
 
 const formatAmount = (amount: number) => {
   return (
-    amount?.toLocaleString('zh-CN', {
+    amount?.toLocaleString(locale.value, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }) || '0.00'

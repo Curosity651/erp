@@ -4,17 +4,17 @@
       <!-- 第一行：时间和平台筛选 -->
       <div class="filter-row">
         <div class="filter-group">
-          <label class="filter-label">时间范围</label>
+          <label class="filter-label">{{ t('dashboard.timeRange') }}</label>
           <a-radio-group
             :value="quickTimeRange"
             button-style="solid"
             @change="handleQuickTimeChange"
           >
-            <a-radio-button value="today">今日</a-radio-button>
-            <a-radio-button value="yesterday">昨日</a-radio-button>
-            <a-radio-button value="last7days">最近7天</a-radio-button>
-            <a-radio-button value="thisMonth">本月</a-radio-button>
-            <a-radio-button value="lastMonth">上月</a-radio-button>
+            <a-radio-button value="today">{{ t('dashboard.today') }}</a-radio-button>
+            <a-radio-button value="yesterday">{{ t('dashboard.yesterday') }}</a-radio-button>
+            <a-radio-button value="last7days">{{ t('dashboard.last7Days') }}</a-radio-button>
+            <a-radio-button value="thisMonth">{{ t('dashboard.thisMonth') }}</a-radio-button>
+            <a-radio-button value="lastMonth">{{ t('dashboard.lastMonth') }}</a-radio-button>
           </a-radio-group>
           <a-range-picker
             v-model:value="localDateRange"
@@ -25,7 +25,7 @@
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">平台</label>
+          <label class="filter-label">{{ t('dashboard.platform') }}</label>
           <PlatformSelect
             :value="platform"
             width="150px"
@@ -42,28 +42,28 @@
           <SkuSelectInput
             :model-value="localSkuCodes"
             :multiple="true"
-            placeholder="请选择SKU"
+            :placeholder="t('dashboard.selectSku')"
             style="min-width: 200px; max-width: 400px"
             @update:model-value="handleSkuCodesChange"
           />
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">店铺</label>
+          <label class="filter-label">{{ t('dashboard.shop') }}</label>
           <ShopSelectInput
             :model-value="localShopIds"
             :multiple="true"
-            placeholder="请选择店铺"
+            :placeholder="t('dashboard.selectShop')"
             style="min-width: 200px"
             @update:model-value="handleShopIdsChange"
           />
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">品类</label>
+          <label class="filter-label">{{ t('dashboard.category') }}</label>
           <CategoryTreeSelect
             :value="localCategoryId"
-            placeholder="请选择品类"
+            :placeholder="t('dashboard.selectCategory')"
             style="width: 180px"
             @update:value="handleCategoryChange"
           />
@@ -79,21 +79,22 @@
             <template #icon>
               <ReloadOutlined />
             </template>
-            刷新
+            {{ t('dashboard.refresh') }}
           </a-button>
         </div>
       </div>
     </div>
 
     <div class="filter-footer">
-      <span class="moscow-time">莫斯科时间：{{ moscowTime }}</span>
-      <span v-if="lastUpdateTime" class="update-time">最后更新：{{ lastUpdateTime }}</span>
+      <span class="moscow-time">{{ t('dashboard.moscowTime', { time: moscowTime }) }}</span>
+      <span v-if="lastUpdateTime" class="update-time">{{ t('dashboard.lastUpdated', { time: lastUpdateTime }) }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
@@ -102,6 +103,8 @@ import ShopSelectInput from '@/components/ShopSelectInput.vue'
 import SkuSelectInput from '@/components/Sku/SkuSelectInput.vue'
 import CategoryTreeSelect from '@/components/Lov/CategoryTreeSelect.vue'
 import { PlatformSelect } from '@/components/Platform'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   quickTimeRange: string

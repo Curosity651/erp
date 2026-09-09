@@ -18,6 +18,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { LineChartOutlined } from '@ant-design/icons-vue'
 
 interface Props {
@@ -30,22 +31,23 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t, locale } = useI18n()
 
 // 动态标题
 const cardTitle = computed(() => {
   switch (props.quickTimeRange) {
     case 'today':
-      return '今日销售额'
+      return t('dashboard.todaySales')
     case 'yesterday':
-      return '昨日销售额'
+      return t('dashboard.yesterdaySales')
     case 'last7days':
-      return '最近7天销售额'
+      return t('dashboard.last7DaysSales')
     case 'thisMonth':
-      return '本月销售额'
+      return t('dashboard.thisMonthSales')
     case 'lastMonth':
-      return '上月销售额'
+      return t('dashboard.lastMonthSales')
     default:
-      return '销售额'
+      return t('dashboard.sales')
   }
 })
 
@@ -64,12 +66,12 @@ const formatAmount = (amount?: number) => {
   if (!amount) return '0'
   // 大额数字使用万/亿单位
   if (amount >= 100000000) {
-    return (amount / 100000000).toFixed(2) + '亿'
+    return t('dashboard.hundredMillion', { value: (amount / 100000000).toFixed(2) })
   }
   if (amount >= 10000) {
-    return (amount / 10000).toFixed(2) + '万'
+    return t('dashboard.tenThousand', { value: (amount / 10000).toFixed(2) })
   }
-  return amount.toLocaleString('zh-CN', {
+  return amount.toLocaleString(locale.value, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   })

@@ -3,20 +3,21 @@
     <template #title>
       <div class="flex items-center gap-2">
         <LineChartOutlined class="card-icon" />
-        <span>销售趋势</span>
+        <span>{{ t('dashboard.salesTrend') }}</span>
       </div>
     </template>
     <div v-if="chartData.length > 0" class="chart-container">
       <v-chart :option="chartOption" autoresize class="chart" />
     </div>
     <div v-else class="empty-state">
-      <a-empty description="暂无数据" />
+      <a-empty :description="t('dashboard.noData')" />
     </div>
   </a-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { LineChartOutlined } from '@ant-design/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -48,6 +49,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t, locale } = useI18n()
 
 const chartData = computed(() => props.data?.data || [])
 
@@ -111,7 +113,7 @@ const chartOption = computed<EChartsOption>(() => {
 								${marker}
 								${item.seriesName}
 							</span>
-							<span style="font-weight: 600; margin-left: 20px;">₽${item.value.toLocaleString('zh-CN', {
+          <span style="font-weight: 600; margin-left: 20px;">₽${item.value.toLocaleString(locale.value, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
               })}</span>
@@ -123,7 +125,7 @@ const chartOption = computed<EChartsOption>(() => {
       }
     },
     legend: {
-      data: ['总销售额', '已签收销售额'],
+      data: [t('dashboard.totalSales'), t('dashboard.deliveredSales')],
       top: 10,
       right: 20,
       itemWidth: 14,
@@ -211,7 +213,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     yAxis: {
       type: 'value',
-      name: '销售额（₽）',
+      name: t('dashboard.salesRub'),
       nameTextStyle: {
         fontSize: 12,
         color: '#8c8c8c',
@@ -222,7 +224,7 @@ const chartOption = computed<EChartsOption>(() => {
         color: '#8c8c8c',
         formatter: (value: number) => {
           if (value >= 10000) {
-            return `${(value / 10000).toFixed(1)}万`
+            return t('dashboard.tenThousand', { value: (value / 10000).toFixed(1) })
           }
           return value.toLocaleString()
         }
@@ -242,7 +244,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     series: [
       {
-        name: '总销售额',
+        name: t('dashboard.totalSales'),
         type: 'bar',
         data: totalSales,
         itemStyle: {
@@ -258,7 +260,7 @@ const chartOption = computed<EChartsOption>(() => {
         z: 1
       },
       {
-        name: '已签收销售额',
+        name: t('dashboard.deliveredSales'),
         type: 'line',
         data: effectiveSales,
         smooth: true,

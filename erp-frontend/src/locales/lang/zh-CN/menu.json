@@ -1,6 +1,6 @@
 {
   "menu": {
-    "statistics": { "dashboard": "数据分析" },
+    "statistics": { "dashboard": "数据看板", "salesTarget": "销售目标" },
     "warehouseMgmt": { "locationMgmt": "库位管理", "locationInventory": "库位库存", "rackAssignment": "库位分配" },
     "outboundOps": { "orderDispatch": "订单下架", "pickingTasks": "拣货任务", "fulfillment": "出库作业" },
     "platformFinance": { "receivableBill": "应收账单", "warehouseContracts": "合同资金", "providerFunds": "服务商结算" },

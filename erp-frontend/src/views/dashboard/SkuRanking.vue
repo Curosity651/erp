@@ -4,20 +4,20 @@
     <a-form :model="filters" :label-col="labelCol">
       <a-row :gutter="16">
         <a-col :xl="8" :lg="8" :md="8" :sm="12">
-          <a-form-item label="平台">
+          <a-form-item :label="t('dashboard.platform')">
             <PlatformSelect v-model:value="filters.platform" allow-clear style="width: 100%" />
           </a-form-item>
         </a-col>
 
         <a-col :xl="8" :lg="8" :md="8" :sm="12">
-          <a-form-item label="店铺">
-            <ShopSelectInput v-model="filters.shopIds" :multiple="true" placeholder="请选择店铺" />
+          <a-form-item :label="t('dashboard.shop')">
+            <ShopSelectInput v-model="filters.shopIds" :multiple="true" :placeholder="t('dashboard.selectShop')" />
           </a-form-item>
         </a-col>
 
         <a-col :xl="8" :lg="8" :md="8" :sm="12">
-          <a-form-item label="品类">
-            <CategoryTreeSelect v-model:value="filters.categoryId" placeholder="请选择品类" />
+          <a-form-item :label="t('dashboard.category')">
+            <CategoryTreeSelect v-model:value="filters.categoryId" :placeholder="t('dashboard.selectCategory')" />
           </a-form-item>
         </a-col>
 
@@ -26,14 +26,14 @@
             <SkuSelectInput
               :model-value="filters.skuCodes"
               :multiple="true"
-              placeholder="请选择SKU"
+              :placeholder="t('dashboard.selectSku')"
               @update:model-value="handleSkuCodesChange"
             />
           </a-form-item>
         </a-col>
 
         <a-col :xl="8" :lg="12" :md="12" :sm="24">
-          <a-form-item label="时间范围">
+          <a-form-item :label="t('dashboard.timeRange')">
             <a-range-picker
               v-model:value="dateRangeValue"
               :allow-clear="false"
@@ -56,7 +56,7 @@
   <!-- 数据表格 -->
   <pro-table
     ref="tableRef"
-    header-title="SKU销量排名"
+    :header-title="t('dashboard.skuRanking')"
     row-key="sku"
     :request="tableRequest"
     :columns="columns"
@@ -68,7 +68,7 @@
         <template #icon>
           <DownloadOutlined />
         </template>
-        导出Excel
+        {{ t('dashboard.exportExcel') }}
       </a-button>
     </template>
 
@@ -94,7 +94,7 @@
           <div class="product-info">
             <div class="sku-code">
               {{ record.sku }}
-              <a-tag v-if="!record.isMapped" color="orange" size="small">未映射</a-tag>
+              <a-tag v-if="!record.isMapped" color="orange" size="small">{{ t('dashboard.unmapped') }}</a-tag>
             </div>
             <div v-if="record.skuNameCn" class="product-name">{{ record.skuNameCn }}</div>
           </div>
@@ -118,6 +118,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownloadOutlined } from '@ant-design/icons-vue'
@@ -140,6 +141,7 @@ import { remoteFileDownload } from '@/utils/file-utils'
 defineOptions({ name: 'SkuRankingPage' })
 
 const route = useRoute()
+const { t, locale } = useI18n()
 
 // 表单 label 全局配置
 const labelCol = { md: { span: 6 } }
@@ -175,12 +177,12 @@ const dateRangeValue = computed<[Dayjs, Dayjs]>({
 })
 
 // 表格列定义
-const columns: ProColumns<SkuRankingItemVO>[] = [
-  { title: '排名', key: 'rank', dataIndex: 'rank', width: 80, align: 'center' },
-  { title: '产品信息', key: 'product', dataIndex: 'sku', width: 300 },
-  { title: '品类', key: 'category', dataIndex: 'categoryName', width: 150 },
+const columns = computed<ProColumns<SkuRankingItemVO>[]>(() => [
+  { title: t('dashboard.rank'), key: 'rank', dataIndex: 'rank', width: 80, align: 'center' },
+  { title: t('dashboard.productInfo'), key: 'product', dataIndex: 'sku', width: 300 },
+  { title: t('dashboard.category'), key: 'category', dataIndex: 'categoryName', width: 150 },
   {
-    title: '销量',
+    title: t('dashboard.quantity'),
     key: 'quantity',
     dataIndex: 'quantity',
     width: 100,
@@ -188,14 +190,14 @@ const columns: ProColumns<SkuRankingItemVO>[] = [
     sorter: true
   },
   {
-    title: '销售额',
+    title: t('dashboard.sales'),
     key: 'amount',
     dataIndex: 'amount',
     width: 150,
     align: 'right',
     sorter: true
   }
-]
+])
 
 // 初始化
 onMounted(() => {
@@ -271,13 +273,13 @@ const handleReset = () => {
 async function handleExport() {
   exporting.value = true
   try {
-    const hide = message.loading('正在导出SKU排行...', 0)
+    const hide = message.loading(t('dashboard.exporting'), 0)
     const response = await exportSkuRanking(filters)
     hide()
-    remoteFileDownload(response, `SKU排行导出_${Date.now()}.xlsx`)
-    message.success('导出成功')
+    remoteFileDownload(response, t('dashboard.exportFile', { timestamp: Date.now() }))
+    message.success(t('dashboard.exportSuccess'))
   } catch (error: any) {
-    message.error('导出失败：' + (error.message || '未知错误'))
+    message.error(t('dashboard.exportFailed', { message: error.message || t('dashboard.unknownError') }))
   } finally {
     exporting.value = false
   }
@@ -285,13 +287,13 @@ async function handleExport() {
 
 // 格式化数字
 function formatNumber(num: number) {
-  return num?.toLocaleString('zh-CN') || '0'
+  return num?.toLocaleString(locale.value) || '0'
 }
 
 // 格式化金额
 function formatAmount(amount: number) {
   return (
-    amount?.toLocaleString('zh-CN', {
+    amount?.toLocaleString(locale.value, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }) || '0.00'
