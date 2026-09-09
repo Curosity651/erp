@@ -92,6 +92,7 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import AccountLoginForm from '@/views/login/components/AccountLoginForm.vue'
 import MobileLoginForm from '@/views/login/components/MobileLoginForm.vue'
 import type { LoginFormInstance, LoginType } from '@/views/login/components/types'
