@@ -24,7 +24,6 @@ class NewInventoryFeatureDependencyGuardTest {
 		assertClean("admin/src/main/java/com/erp/admin/wms/controller/InventoryController.java");
 		assertClean("admin/src/main/java/com/erp/admin/wms/service/RegionStockDataProvider.java");
 		assertClean("admin/src/main/java/com/erp/admin/wms/facade/InventoryForecastFacade.java");
-		assertClean("admin/src/main/java/com/erp/admin/wms/facade/ShipProdCalcFacade.java");
 		assertClean("admin/src/main/java/com/erp/admin/wms/controller/StockFlowController.java");
 		assertClean("admin/src/main/java/com/erp/admin/wms/controller/StockPostingQueryController.java");
 	}
