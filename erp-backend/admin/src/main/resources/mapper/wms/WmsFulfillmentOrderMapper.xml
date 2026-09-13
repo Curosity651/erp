@@ -28,6 +28,20 @@
       fulfillment.shipping_method,
       fulfillment.tracking_no,
       fulfillment.package_weight_kg,
+      COALESCE(fulfillment.handover_status,
+        CASE WHEN fulfillment.fulfillment_status = 'SHIPPED' THEN 'HANDED_OVER' ELSE 'READY_HANDOVER' END) AS handover_status,
+      fulfillment.vehicle_plate,
+      fulfillment.driver_name,
+      fulfillment.driver_phone,
+      fulfillment.departure_time,
+      fulfillment.handover_destination,
+      fulfillment.recorded_freight_cost,
+      fulfillment.recorded_freight_currency,
+      fulfillment.logistics_photo_file_ids,
+      fulfillment.handover_remark,
+      fulfillment.handover_by,
+      COALESCE(NULLIF(handover_user.nickname, ''), handover_user.username) AS handover_by_name,
+      fulfillment.handover_time,
       fulfillment.shipped_by,
       COALESCE(NULLIF(shipped_user.nickname, ''), shipped_user.username) AS shipped_by_name,
       fulfillment.shipped_time,
@@ -39,9 +53,11 @@
       ON warehouse.id = fulfillment.warehouse_id AND warehouse.deleted = 0
     LEFT JOIN sys_user shipped_user
       ON shipped_user.user_id = fulfillment.shipped_by AND shipped_user.deleted = 0
+    LEFT JOIN sys_user handover_user
+      ON handover_user.user_id = fulfillment.handover_by AND handover_user.deleted = 0
     <where>
       fulfillment.deleted = 0
-      AND fulfillment.fulfillment_status IN ('WAITING_PACK', 'PACKED', 'SHIPPED')
+      AND fulfillment.fulfillment_status IN ('PACKED', 'SHIPPED')
       <if test="query.erpTenantId != null">
         AND fulfillment.erp_tenant_id = #{query.erpTenantId}
       </if>
@@ -49,10 +65,12 @@
         AND fulfillment.warehouse_id = #{query.warehouseId}
       </if>
       <if test="query.fulfillmentStatus != null and query.fulfillmentStatus != ''">
-        AND fulfillment.fulfillment_status = #{query.fulfillmentStatus}
+        AND COALESCE(fulfillment.handover_status,
+          CASE WHEN fulfillment.fulfillment_status = 'SHIPPED' THEN 'HANDED_OVER' ELSE 'READY_HANDOVER' END)
+          = #{query.fulfillmentStatus}
       </if>
       <if test="query.shippedBy != null">
-        AND fulfillment.shipped_by = #{query.shippedBy}
+        AND fulfillment.handover_by = #{query.shippedBy}
       </if>
       <if test="query.startDate != null">
         AND fulfillment.create_time &gt;= #{query.startDate}

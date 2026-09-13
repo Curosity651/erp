@@ -1,0 +1,31 @@
+-- Independent outbound handover document, created manually after fulfillment packing.
+-- Recorded freight remains operational data and is not connected to any billing table.
+CREATE TABLE wms_outbound_handover_order (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id BIGINT NOT NULL COMMENT '海外仓平台租户',
+    handover_no VARCHAR(40) NOT NULL COMMENT '出库交接单号',
+    fulfillment_order_id BIGINT NOT NULL COMMENT '关联的已打包履约单',
+    handover_status VARCHAR(32) NOT NULL DEFAULT 'READY_HANDOVER' COMMENT 'READY_HANDOVER/HANDED_OVER',
+    vehicle_plate VARCHAR(64) NOT NULL COMMENT '车牌',
+    driver_name VARCHAR(128) NOT NULL COMMENT '司机姓名',
+    driver_phone VARCHAR(64) NULL COMMENT '司机电话',
+    departure_time DATETIME NOT NULL COMMENT '发车时间',
+    destination VARCHAR(1000) NOT NULL COMMENT '目的地',
+    freight_cost DECIMAL(14,2) NOT NULL DEFAULT 0 COMMENT '记录运费，不参与系统计费',
+    currency VARCHAR(8) NOT NULL DEFAULT 'CNY' COMMENT '运费币种',
+    logistics_photo_file_ids VARCHAR(1000) NULL COMMENT '物流照片sys_file.id，逗号分隔',
+    remark VARCHAR(500) NULL COMMENT '交接备注',
+    handover_time DATETIME NULL COMMENT '确认交接时间',
+    handover_by BIGINT NULL COMMENT '确认交接操作人',
+    version INT NOT NULL DEFAULT 0 COMMENT '数据版本',
+    create_by BIGINT NULL COMMENT '创建人',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_by BIGINT NULL COMMENT '更新人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted BIGINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_outbound_handover_no (handover_no),
+    UNIQUE KEY uk_outbound_handover_fulfillment (fulfillment_order_id),
+    KEY idx_outbound_handover_page (tenant_id, handover_status, create_time),
+    KEY idx_outbound_handover_operator (handover_by)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='独立出库交接单';

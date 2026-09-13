@@ -12,7 +12,12 @@ import type {
   FulfillmentShelfOrderQuery,
   FulfillmentPickTaskQuery,
   FulfillmentShippingOrder,
-  FulfillmentShippingQuery
+  FulfillmentShippingQuery,
+  FulfillmentHandoverForm,
+  OutboundHandoverCreateForm,
+  OutboundHandoverOrder,
+  TransportExpenseForm,
+  TransportExpenseRecord
 } from './types'
 
 const baseUrl = '/wms/manual-fulfillment'
@@ -81,9 +86,6 @@ export const claimFulfillmentPickTask = (id: number) =>
 export const releaseFulfillmentPickTask = (id: number) =>
   httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${id}/release`)
 
-export const transferFulfillmentPickTask = (id: number, operatorId: number) =>
-  httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${id}/transfer`, { operatorId })
-
 export const markFulfillmentPickException = (
   taskId: number,
   orderId: number,
@@ -99,16 +101,6 @@ export const restoreFulfillmentPickException = (taskId: number, orderId: number)
 
 export const cancelFulfillmentPickException = (taskId: number, orderId: number) =>
   httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${taskId}/orders/${orderId}/cancel`)
-
-export function scanFulfillmentPickLine(dto: {
-  taskId: number
-  fulfillmentNo: string
-  locationCode: string
-  warehouseSkuCode: string
-  quantity: number
-}) {
-  return httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/scan`, dto)
-}
 
 export const completeSimplifiedFulfillmentTask = (taskId: number, evidenceFileIds: number[]) =>
   httpClient.post<ApiResult<void>>(`${pickingBaseUrl}/tasks/${taskId}/simplified-complete`, {
@@ -166,4 +158,68 @@ export function adjustFulfillmentLogisticsFee(
 
 export function shipFulfillmentOrders(ids: number[]) {
   return httpClient.post<ApiResult<FulfillmentBatchResult>>(`${shippingBaseUrl}/ship`, ids)
+}
+
+export function pageOutboundHandoverOrders(params: FulfillmentShippingQuery) {
+  return httpClient.get<ApiResult<PageResult<OutboundHandoverOrder>>>(
+    `${shippingBaseUrl}/handover-orders/page`,
+    { params }
+  )
+}
+
+export function listAvailableHandoverFulfillments() {
+  return httpClient.get<ApiResult<FulfillmentShippingOrder[]>>(
+    `${shippingBaseUrl}/handover-orders/available-fulfillments`
+  )
+}
+
+export function listRecentHandoverDestinations() {
+  return httpClient.get<ApiResult<string[]>>(
+    `${shippingBaseUrl}/handover-orders/recent-destinations`
+  )
+}
+
+export function createOutboundHandover(dto: OutboundHandoverCreateForm) {
+  return httpClient.post<ApiResult<number>>(`${shippingBaseUrl}/handover-orders`, dto)
+}
+
+export function getOutboundHandover(id: number) {
+  return httpClient.get<ApiResult<OutboundHandoverOrder>>(
+    `${shippingBaseUrl}/handover-orders/${id}`
+  )
+}
+
+export function saveOutboundHandover(id: number, dto: FulfillmentHandoverForm) {
+  return httpClient.put<ApiResult<void>>(`${shippingBaseUrl}/handover-orders/${id}`, dto)
+}
+
+export function confirmOutboundHandover(id: number, dto: FulfillmentHandoverForm) {
+  return httpClient.post<ApiResult<void>>(
+    `${shippingBaseUrl}/handover-orders/${id}/confirm`,
+    dto
+  )
+}
+
+export function downloadOutboundHandoverPdf(id: number) {
+  return httpClient.get(`${shippingBaseUrl}/handover-orders/${id}/pdf`, {
+    responseType: 'blob'
+  })
+}
+
+export function listTransportExpenses(type: 'FUEL' | 'DRIVER_MONTHLY') {
+  return httpClient.get<ApiResult<TransportExpenseRecord[]>>(`${shippingBaseUrl}/expenses`, {
+    params: { type }
+  })
+}
+
+export function createTransportExpense(dto: TransportExpenseForm) {
+  return httpClient.post<ApiResult<number>>(`${shippingBaseUrl}/expenses`, dto)
+}
+
+export function updateTransportExpense(id: number, dto: TransportExpenseForm) {
+  return httpClient.put<ApiResult<void>>(`${shippingBaseUrl}/expenses/${id}`, dto)
+}
+
+export function deleteTransportExpense(id: number) {
+  return httpClient.delete<ApiResult<void>>(`${shippingBaseUrl}/expenses/${id}`)
 }

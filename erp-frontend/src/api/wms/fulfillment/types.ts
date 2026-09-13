@@ -54,8 +54,11 @@ export interface FulfillmentShippingOrder {
   fulfillmentNo: string
   sourceType: string
   sourceOrderNo: string
-  fulfillmentStatus: 'WAITING_PACK' | 'PACKED' | 'SHIPPED'
+  fulfillmentStatus: 'PACKED' | 'SHIPPED'
+  /** 出库作业对外状态；底层仍保留履约状态用于兼容平台回传。 */
+  handoverStatus?: 'READY_HANDOVER' | 'HANDED_OVER'
   recipientName?: string
+  recipientAddress?: string
   logisticsProductName?: string
   logisticsProductActualFee?: number
   logisticsProductCurrency?: string
@@ -63,6 +66,18 @@ export interface FulfillmentShippingOrder {
   shippingMethod?: string
   trackingNo?: string
   packageWeightKg?: number
+  vehiclePlate?: string
+  driverName?: string
+  driverPhone?: string
+  departureTime?: string
+  handoverDestination?: string
+  recordedFreightCost?: number
+  recordedFreightCurrency?: string
+  logisticsPhotoFileIds?: string
+  handoverRemark?: string
+  handoverBy?: number
+  handoverByName?: string
+  handoverTime?: string
   shippedBy?: number
   shippedByName?: string
   shippedTime?: string
@@ -72,10 +87,80 @@ export interface FulfillmentShippingOrder {
 export interface FulfillmentShippingQuery extends PageParam {
   erpTenantId?: number
   warehouseId?: number
-  fulfillmentStatus?: 'WAITING_PACK' | 'PACKED' | 'SHIPPED'
+  fulfillmentStatus?: 'READY_HANDOVER' | 'HANDED_OVER'
   shippedBy?: number
   startDate?: string
   endDate?: string
+}
+
+export interface FulfillmentHandoverForm {
+  vehiclePlate: string
+  driverName: string
+  driverPhone?: string
+  departureTime: string
+  destination: string
+  freightCost: number
+  currency?: string
+  remark?: string
+  photoFileIds?: number[]
+}
+
+export interface OutboundHandoverCreateForm extends FulfillmentHandoverForm {
+  fulfillmentOrderId: number
+}
+
+export interface OutboundHandoverOrder {
+  id: number
+  handoverNo: string
+  fulfillmentOrderId: number
+  handoverStatus: 'READY_HANDOVER' | 'HANDED_OVER'
+  erpTenantId: number
+  ownerName?: string
+  warehouseId: number
+  warehouseName?: string
+  fulfillmentNo: string
+  sourceType: string
+  sourceOrderNo: string
+  recipientName?: string
+  recipientAddress?: string
+  carrierName?: string
+  shippingMethod?: string
+  trackingNo?: string
+  vehiclePlate: string
+  driverName: string
+  driverPhone?: string
+  departureTime: string
+  destination: string
+  freightCost: number
+  currency: string
+  logisticsPhotoFileIds?: string
+  remark?: string
+  handoverBy?: number
+  handoverByName?: string
+  handoverTime?: string
+  createTime?: string
+}
+
+export interface TransportExpenseRecord {
+  id: number
+  expenseType: 'FUEL' | 'DRIVER_MONTHLY'
+  expenseDate?: string
+  settlementMonth?: string
+  driverName?: string
+  amount: number
+  currency: string
+  note?: string
+  createTime?: string
+}
+
+export interface TransportExpenseForm {
+  expenseType: 'FUEL' | 'DRIVER_MONTHLY'
+  expenseDate?: string
+  settlementMonth?: string
+  driverName?: string
+  amount: number
+  currency?: string
+  note?: string
 }
 
 export interface FulfillmentShelfOrderQuery {

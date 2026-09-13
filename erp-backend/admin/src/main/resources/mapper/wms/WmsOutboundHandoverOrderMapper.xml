@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.admin.wms.mapper.WmsOutboundHandoverOrderMapper">
+  <sql id="handoverColumns">
+    handover.id,
+    handover.tenant_id,
+    handover.handover_no,
+    handover.fulfillment_order_id,
+    handover.handover_status,
+    handover.vehicle_plate,
+    handover.driver_name,
+    handover.driver_phone,
+    handover.departure_time,
+    handover.destination,
+    handover.freight_cost,
+    handover.currency,
+    handover.logistics_photo_file_ids,
+    handover.remark,
+    handover.handover_time,
+    handover.handover_by,
+    handover.version,
+    handover.create_by,
+    handover.create_time,
+    handover.update_by,
+    handover.update_time,
+    fulfillment.erp_tenant_id,
+    owner.tenant_name AS owner_name,
+    fulfillment.warehouse_id,
+    warehouse.warehouse_name,
+    fulfillment.fulfillment_no,
+    fulfillment.source_type,
+    fulfillment.source_order_no,
+    fulfillment.recipient_name,
+    fulfillment.recipient_address,
+    fulfillment.carrier_name,
+    fulfillment.shipping_method,
+    fulfillment.tracking_no,
+    COALESCE(NULLIF(operator.nickname, ''), operator.username) AS handover_by_name
+  </sql>
+
+  <sql id="handoverJoins">
+    FROM wms_outbound_handover_order handover
+    INNER JOIN wms_fulfillment_order fulfillment
+      ON fulfillment.id = handover.fulfillment_order_id AND fulfillment.deleted = 0
+    LEFT JOIN sys_tenant owner
+      ON owner.id = fulfillment.erp_tenant_id AND owner.deleted = 0
+    LEFT JOIN wms_warehouse warehouse
+      ON warehouse.id = fulfillment.warehouse_id AND warehouse.deleted = 0
+    LEFT JOIN sys_user operator
+      ON operator.user_id = handover.handover_by AND operator.deleted = 0
+  </sql>
+
+  <select id="selectHandoverPage" resultType="com.erp.admin.wms.model.vo.OutboundHandoverOrderVO">
+    SELECT <include refid="handoverColumns"/>
+    <include refid="handoverJoins"/>
+    <where>
+      handover.deleted = 0
+      AND handover.tenant_id = #{tenantId}
+      <if test="query.erpTenantId != null">
+        AND fulfillment.erp_tenant_id = #{query.erpTenantId}
+      </if>
+      <if test="query.warehouseId != null">
+        AND fulfillment.warehouse_id = #{query.warehouseId}
+      </if>
+      <if test="query.fulfillmentStatus != null and query.fulfillmentStatus != ''">
+        AND handover.handover_status = #{query.fulfillmentStatus}
+      </if>
+      <if test="query.startDate != null">
+        AND handover.create_time &gt;= #{query.startDate}
+      </if>
+      <if test="query.endDate != null">
+        AND handover.create_time &lt; DATE_ADD(#{query.endDate}, INTERVAL 1 DAY)
+      </if>
+    </where>
+    ORDER BY handover.create_time DESC, handover.id DESC
+  </select>
+
+  <select id="selectHandoverDetail" resultType="com.erp.admin.wms.model.vo.OutboundHandoverOrderVO">
+    SELECT <include refid="handoverColumns"/>
+    <include refid="handoverJoins"/>
+    WHERE handover.id = #{id} AND handover.tenant_id = #{tenantId} AND handover.deleted = 0
+  </select>
+
+  <select id="selectAvailableFulfillments" resultType="com.erp.admin.wms.model.vo.FulfillmentShippingOrderVO">
+    SELECT
+      fulfillment.id,
+      fulfillment.erp_tenant_id,
+      owner.tenant_name AS owner_name,
+      fulfillment.warehouse_id,
+      warehouse.warehouse_name,
+      fulfillment.fulfillment_no,
+      fulfillment.source_type,
+      fulfillment.source_order_no,
+      fulfillment.fulfillment_status,
+      fulfillment.recipient_name,
+      fulfillment.recipient_address,
+      fulfillment.carrier_name,
+      fulfillment.shipping_method,
+      fulfillment.tracking_no,
+      fulfillment.package_weight_kg,
+      fulfillment.create_time
+    FROM wms_fulfillment_order fulfillment
+    LEFT JOIN sys_tenant owner
+      ON owner.id = fulfillment.erp_tenant_id AND owner.deleted = 0
+    LEFT JOIN wms_warehouse warehouse
+      ON warehouse.id = fulfillment.warehouse_id AND warehouse.deleted = 0
+    LEFT JOIN wms_outbound_handover_order handover
+      ON handover.fulfillment_order_id = fulfillment.id AND handover.deleted = 0
+    WHERE fulfillment.deleted = 0
+      AND fulfillment.tenant_id = #{tenantId}
+      AND fulfillment.fulfillment_status = 'PACKED'
+      AND handover.id IS NULL
+    ORDER BY fulfillment.packed_time ASC, fulfillment.id ASC
+  </select>
+
+  <select id="selectRecentDestinations" resultType="java.lang.String">
+    SELECT destination
+    FROM wms_outbound_handover_order
+    WHERE tenant_id = #{tenantId} AND deleted = 0 AND destination IS NOT NULL AND destination &lt;&gt; ''
+    GROUP BY destination
+    ORDER BY MAX(id) DESC
+    LIMIT 10
+  </select>
+
+  <select id="selectForUpdate" resultType="com.erp.admin.wms.model.entity.WmsOutboundHandoverOrder">
+    SELECT * FROM wms_outbound_handover_order
+    WHERE id = #{id} AND tenant_id = #{tenantId} AND deleted = 0
+    FOR UPDATE
+  </select>
+</mapper>
