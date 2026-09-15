@@ -1,103 +1,33 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult, PageParam, PageResult } from '@/api/types'
-import type { ReturnOrderVO, ReturnQO, ReturnReceiveDTO, ReturnQcDTO } from './types'
-import type { PalletSummaryVO } from '@/api/wms/pallet'
-import type { WarehouseOptionVO } from '@/api/wms/warehouse/types'
-import { mockPage, mockDetail, mockReceive, mockQc } from './mock'
-
-/**
- * 是否使用 mock 数据。
- * 后端退货执行接口就绪后置 false 即切真实接口；稳定后可删 mock.ts 与本开关。
- *
- * 后端需实现的接口（前缀建议 /wms/return-qc）：
- *   GET   /page          分页 待收货/待质检/已完成 退货单  query=PageParam+ReturnQO → PageResult<ReturnOrderVO>
- *   GET   /{id}          退货单详情(含 items)             → ReturnOrderVO
- *   POST  /receive       退货收货 RETURN_PENDING→QC_PENDING  body=ReturnReceiveDTO → void
- *   POST  /qc            质检+上架 QC_PENDING→COMPLETED      body=ReturnQcDTO → void
- *                        (PASS→退货区 GOOD 生成新批次；FAIL→不良品区 DAMAGED；FAIL+电子类校验照片)
- */
-const USE_MOCK = false
+import type { ReturnOrderVO, ReturnQO, ReturnReceiptDTO, ReturnProcessDTO } from './types'
 
 const BASE = '/wms/return-qc'
 
-function ok<T>(data: T): ApiResult<T> {
-  return { code: 200, data, message: 'ok' }
-}
-const delay = () => new Promise(resolve => setTimeout(resolve, 260))
-
-/** 分页：待收货 / 待质检 / 已完成 退货单 */
-export async function pageReturns(
-  pageParam: PageParam,
-  qo: ReturnQO
-): Promise<ApiResult<PageResult<ReturnOrderVO>>> {
-  if (USE_MOCK) {
-    await delay()
-    const page = Number(pageParam.page ?? 1)
-    const size = Number(pageParam.size ?? 10)
-    return ok(mockPage(page, size, qo))
-  }
-  return httpClient.get(`${BASE}/page`, { params: { ...pageParam, ...qo } })
-}
-
-/** 退货单详情（含 items） */
-export async function getReturnDetail(id: number): Promise<ApiResult<ReturnOrderVO>> {
-  if (USE_MOCK) {
-    await delay()
-    const d = mockDetail(id)
-    return d ? ok(d) : { code: 404, data: null as any, message: '退货单不存在' }
-  }
-  return httpClient.get(`${BASE}/${id}`)
-}
-
-/** 质检完成后本次创建或更新的托盘，用于打印最新托盘标签。 */
-export function getReturnQcPallets(id: number) {
-  return httpClient.get<ApiResult<PalletSummaryVO[]>>(`${BASE}/${id}/pallets`)
-}
-
-/** 退货收货 */
-export async function receiveReturn(dto: ReturnReceiveDTO): Promise<ApiResult<void>> {
-  if (USE_MOCK) {
-    await delay()
-    const r = mockReceive(dto)
-    return r.ok ? ok(undefined as any) : { code: 500, data: null as any, message: r.message }
-  }
-  return httpClient.post(`${BASE}/receive`, dto)
-}
-
-/** 未收到或拒收，关闭待收货退货单并释放申报额度。 */
-export async function closeReturn(id: number): Promise<ApiResult<void>> {
-  return httpClient.post(`${BASE}/${id}/close`)
-}
-
-/** 质检 + 上架 */
-export async function submitQc(dto: ReturnQcDTO): Promise<ApiResult<void>> {
-  if (USE_MOCK) {
-    await delay()
-    const r = mockQc(dto)
-    return r.ok ? ok(undefined as any) : { code: 500, data: null as any, message: r.message }
-  }
-  return httpClient.post(`${BASE}/qc`, dto)
-}
-
-/** 当前退货单货主有权使用的自有仓 */
-export function getAuthorizedWarehouses(returnOrderId: number) {
-  return httpClient.get<ApiResult<WarehouseOptionVO[]>>(`${BASE}/warehouses`, {
-    params: { returnOrderId }
+export function pageReturns(pageParam: PageParam, qo: ReturnQO) {
+  return httpClient.get<ApiResult<PageResult<ReturnOrderVO>>>(`${BASE}/page`, {
+    params: { ...pageParam, ...qo }
   })
 }
 
-/** 指定仓库、分区下可用于退货质检的空层位或可合并托盘 */
-export function getAvailableSlots(returnOrderId: number, warehouseId: number, zone: string) {
-  return httpClient.get<ApiResult<PalletSlotVO[]>>(`${BASE}/slots`, {
+export function getReturnDetail(id: number) {
+  return httpClient.get<ApiResult<ReturnOrderVO>>(`${BASE}/${id}`)
+}
+
+export function registerReturnReceipt(dto: ReturnReceiptDTO) {
+  return httpClient.post<ApiResult<number[]>>(`${BASE}/receipts`, dto)
+}
+
+export function processReturnDisposition(dto: ReturnProcessDTO) {
+  return httpClient.post<ApiResult<void>>(`${BASE}/process`, dto)
+}
+
+export function closeReturn(id: number) {
+  return httpClient.post<ApiResult<void>>(`${BASE}/${id}/close`)
+}
+
+export function getAvailableLocations(returnOrderId: number, warehouseId: number, zone: string) {
+  return httpClient.get<ApiResult<string[]>>(`${BASE}/available-locations`, {
     params: { returnOrderId, warehouseId, zone }
   })
-}
-
-/** 按退货单所属仓库+分区查可用(未占用)库位，供质检上架库位下拉 */
-export async function getAvailableLocations(
-  returnOrderId: number,
-  warehouseId: number,
-  zone: string
-): Promise<ApiResult<string[]>> {
-  return httpClient.get(`${BASE}/available-locations`, { params: { returnOrderId, warehouseId, zone } })
 }

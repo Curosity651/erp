@@ -19,6 +19,8 @@ import com.erp.admin.wms.model.vo.LocationCapacityVO;
 import com.erp.admin.product.model.entity.Sku;
 import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
+import com.erp.admin.wms.model.dto.ReturnDispositionDTO;
+import com.erp.admin.wms.model.dto.ReturnProcessDTO;
 import com.erp.admin.wms.model.entity.ReturnInboundOrder;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsReturnQcItem;
@@ -79,6 +81,7 @@ class ReturnQcServiceTest {
     private SysFileService sysFileService;
     private WarehouseSkuCodeService warehouseSkuCodeService;
     private PrincipalAttributeAccessor principalAttributeAccessor;
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private ReturnQcService service;
 
     @BeforeEach
@@ -104,6 +107,7 @@ class ReturnQcServiceTest {
         sysFileService = mock(SysFileService.class);
         warehouseSkuCodeService = mock(WarehouseSkuCodeService.class);
         principalAttributeAccessor = mock(PrincipalAttributeAccessor.class);
+        stringRedisTemplate = mock(org.springframework.data.redis.core.StringRedisTemplate.class);
         when(principalAttributeAccessor.getUserId()).thenReturn(88L);
         TenantIdentityVO id = mock(TenantIdentityVO.class);
         when(id.getIdentityType()).thenReturn(TenantIdentityService.IDENTITY_OVERSEAS_PLATFORM);
@@ -144,7 +148,8 @@ class ReturnQcServiceTest {
                 locationInventoryService, locationCapacityService, wmsLocationMapper, skuMapper,
                 locationService, zoneService, tis, erpOrderItemMapper, erpOrderMapper,
                 sysTenantMapper, wmsRackAssignmentService, warehouseService, palletService,
-                skuLookupMapper, sysFileService, warehouseSkuCodeService, principalAttributeAccessor);
+                skuLookupMapper, sysFileService, warehouseSkuCodeService, principalAttributeAccessor,
+                stringRedisTemplate);
     }
 
     private ReturnInboundOrder order(String status) {
@@ -333,17 +338,71 @@ class ReturnQcServiceTest {
     }
 
     @Test
-    void close_only_advances_pending_return() {
-        when(returnInboundMapper.selectById(1L)).thenReturn(order(ReturnQcStatus.RETURN_PENDING.name()));
-        when(returnInboundMapper.casReturnStatus(1L, ReturnQcStatus.RETURN_PENDING.name(),
+    void close_only_advances_pending_owner_disposition() {
+        when(returnInboundMapper.selectById(1L)).thenReturn(order(ReturnQcStatus.PENDING_OWNER.name()));
+        when(returnInboundMapper.casReturnStatus(1L, ReturnQcStatus.PENDING_OWNER.name(),
                 ReturnQcStatus.CLOSED.name())).thenReturn(1);
         when(returnInboundMapper.markClosedAudit(1L, 88L)).thenReturn(1);
 
         service.close(1L);
 
-        verify(returnInboundMapper).casReturnStatus(1L, ReturnQcStatus.RETURN_PENDING.name(),
+        verify(returnInboundMapper).casReturnStatus(1L, ReturnQcStatus.PENDING_OWNER.name(),
                 ReturnQcStatus.CLOSED.name());
         verify(returnInboundMapper).markClosedAudit(1L, 88L);
+    }
+
+    @Test
+    void owner_disposition_rejects_quantity_mismatch() {
+        TenantIdentityVO ownerIdentity = new TenantIdentityVO();
+        ownerIdentity.setIdentityType(TenantIdentityService.IDENTITY_ERP_USER);
+        ownerIdentity.setTenantId(6L);
+        when(tis.currentIdentity(TenantIdentityService.IDENTITY_ERP_USER)).thenReturn(ownerIdentity);
+        ReturnInboundOrder order = order(ReturnQcStatus.PENDING_OWNER.name());
+        order.setErpTenantId(6L);
+        when(returnInboundMapper.selectById(1L)).thenReturn(order);
+        WmsReturnQcItem item = item("SKU1", 5);
+        item.setId(10L);
+        when(itemMapper.selectByReturnOrderId(1L)).thenReturn(Collections.singletonList(item));
+        ReturnDispositionDTO.Line line = new ReturnDispositionDTO.Line();
+        line.setItemId(10L);
+        line.setRestockQty(2);
+        line.setReworkQty(0);
+        line.setScrapQty(0);
+        ReturnDispositionDTO dto = new ReturnDispositionDTO();
+        dto.setReturnOrderId(1L);
+        dto.setItems(Collections.singletonList(line));
+
+        assertThatThrownBy(() -> service.submitDisposition(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("处置数量之和");
+    }
+
+    @Test
+    void warehouse_process_records_destroyed_return_without_putaway() {
+        ReturnInboundOrder order = order(ReturnQcStatus.PENDING_OPERATION.name());
+        order.setErpTenantId(6L);
+        when(returnInboundMapper.selectById(1L)).thenReturn(order);
+        when(returnInboundMapper.casReturnStatus(1L, ReturnQcStatus.PENDING_OPERATION.name(),
+                ReturnQcStatus.COMPLETED.name())).thenReturn(1);
+        when(returnInboundMapper.updateById(any())).thenReturn(1);
+        WmsReturnQcItem item = item("SKU1", 2);
+        item.setId(10L);
+        item.setRestockQty(0);
+        item.setReworkQty(0);
+        item.setScrapQty(2);
+        when(itemMapper.selectByReturnOrderId(1L)).thenReturn(Collections.singletonList(item));
+        when(itemMapper.updateById(any())).thenReturn(1);
+        ReturnProcessDTO.Line line = new ReturnProcessDTO.Line();
+        line.setItemId(10L);
+        line.setReworkPassQty(0);
+        line.setReworkScrapQty(0);
+        ReturnProcessDTO dto = new ReturnProcessDTO();
+        dto.setReturnOrderId(1L);
+        dto.setItems(Collections.singletonList(line));
+
+        service.processDisposition(dto);
+
+        assertThat(order.getScrapQuantity()).isEqualTo(2);
     }
 
     @Test

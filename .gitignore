@@ -41,6 +41,7 @@ coverage
 # Local runtime and database snapshots
 /runtime-logs/
 /backups/
+/database-backups/
 /*-before-*.sql
 /backup_*.sql
 /erp-frontend/vite.config.ts.timestamp-*.mjs

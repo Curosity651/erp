@@ -30,28 +30,10 @@
           <a-col v-bind="colConfig">
             <div class="search-group">
               <label class="search-label">订单状态</label>
-              <a-select v-model:value="formModel.erpStatus" allow-clear placeholder="选择订单状态">
-                <a-select-option v-for="(value, key) in ERP_STATUS_MAP" :key="key" :value="key">{{
+              <a-select v-model:value="formModel.businessStatus" allow-clear placeholder="选择订单状态">
+                <a-select-option v-for="(value, key) in OWNER_ORDER_STATUS_MAP" :key="key" :value="key">{{
                   value.label
                 }}</a-select-option>
-              </a-select>
-            </div>
-          </a-col>
-
-          <a-col v-bind="colConfig">
-            <div class="search-group">
-              <label class="search-label">平台履约状态</label>
-              <a-select
-                v-model:value="formModel.platformStatus"
-                allow-clear
-                placeholder="选择平台履约状态"
-              >
-                <a-select-option
-                  v-for="(value, key) in WB_PLATFORM_STATUS_MAP"
-                  :key="key"
-                  :value="key"
-                  >{{ value.label }}</a-select-option
-                >
               </a-select>
             </div>
           </a-col>
@@ -76,16 +58,6 @@
               <a-select v-model:value="formModel.locked" allow-clear placeholder="选择锁定状态">
                 <a-select-option :value="1">已锁定</a-select-option>
                 <a-select-option :value="0">未锁定</a-select-option>
-              </a-select>
-            </div>
-          </a-col>
-
-          <a-col v-bind="colConfig">
-            <div class="search-group">
-              <label class="search-label">面单状态</label>
-              <a-select v-model:value="formModel.hasLabel" allow-clear placeholder="选择面单状态">
-                <a-select-option :value="true">有</a-select-option>
-                <a-select-option :value="false">无</a-select-option>
               </a-select>
             </div>
           </a-col>
@@ -128,7 +100,7 @@
 
 <script setup lang="ts">
 import { Form } from 'ant-design-vue'
-import { ERP_STATUS_MAP, type ErpOrderQO, WB_PLATFORM_STATUS_MAP } from '@/api/order/wb-order/types'
+import { OWNER_ORDER_STATUS_MAP, type ErpOrderQO } from '@/api/order/wb-order/types'
 import dayjs from 'dayjs'
 import ShopSelectInput from '@/components/ShopSelectInput.vue'
 import SkuSelectInput from '@/components/Sku/SkuSelectInput.vue'
@@ -152,11 +124,9 @@ const emits = defineEmits<{
 
 const formModel = reactive<ErpOrderQO>({
   shopId: undefined,
-  erpStatus: undefined,
-  platformStatus: undefined,
+  businessStatus: undefined,
   fulfillmentType: undefined,
   locked: undefined,
-  hasLabel: undefined,
   keyword: undefined,
   skuCode: undefined,
   createdAtStart: undefined,

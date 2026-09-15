@@ -1,5 +1,5 @@
-import { ERP_STATUS_MAP } from '@/api/order/types'
-import type { ErpStatusKey } from '@/api/order/types'
+import { ERP_STATUS_MAP, OWNER_ORDER_STATUS_MAP } from '@/api/order/types'
+import type { ErpStatusKey, OwnerOrderBusinessStatus } from '@/api/order/types'
 
 /**
  * 状态映射条目
@@ -25,6 +25,14 @@ export function mapErpStatus(status?: string): { label: string; dotClass: string
     return { label: mapping.label, dotClass, tip: mapping.tip }
   }
   return { label: status || '-', dotClass, tip: status || '未知状态' }
+}
+
+export function mapOwnerOrderStatus(
+  status?: string
+): { label: string; dotClass: string; tip: string } {
+  const mapping = OWNER_ORDER_STATUS_MAP[status as OwnerOrderBusinessStatus]
+  if (mapping) return mapping
+  return { label: status || '-', dotClass: 'status-unknown', tip: status || '未知状态' }
 }
 
 /**

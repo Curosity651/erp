@@ -501,7 +501,8 @@ public interface SkuMapper extends ExtendMapper<Sku> {
 	default PageResult<Sku> querySelectPage(PageParam pageParam, SkuSelectQO qo) {
 		IPage<Sku> page = this.prodPage(pageParam);
 		LambdaQueryWrapperX<Sku> wrapper = WrappersX.lambdaQueryX(Sku.class)
-			.select(Sku::getId, Sku::getSkuCode, Sku::getChineseName, Sku::getCategoryId)
+			.select(Sku::getId, Sku::getSkuCode, Sku::getChineseName, Sku::getCategoryId,
+				Sku::getOuterLengthMm, Sku::getOuterWidthMm, Sku::getOuterHeightMm)
 			.likeIfPresent(Sku::getSkuCode, qo.getSkuCode());
 
 		// SKU名称查询（同时匹配中文名和俄文名）

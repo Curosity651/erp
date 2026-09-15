@@ -14,6 +14,7 @@ import com.erp.admin.order.converter.ErpOrderConverter;
 import com.erp.admin.order.mapper.ErpOrderItemMapper;
 import com.erp.admin.order.mapper.ErpOrderMapper;
 import com.erp.admin.order.model.entity.ErpOrder;
+import com.erp.admin.order.model.enums.OwnerOrderBusinessStatus;
 import com.erp.admin.order.model.entity.ErpOrderItem;
 import com.erp.admin.order.model.qo.ErpOrderQO;
 import com.erp.admin.order.model.vo.OrderItemVO;
@@ -100,6 +101,7 @@ public class OzonOrderQueryService {
 		List<OzonOrderPageVO> voList = new ArrayList<>(entities.size());
 		for (ErpOrder entity : entities) {
 			OzonOrderPageVO vo = ErpOrderConverter.INSTANCE.poToOzonPageVo(entity);
+			vo.setBusinessStatus(OwnerOrderBusinessStatus.resolve(entity).name());
 			parseAndFillOzonInfo(vo, entity);
 			voList.add(vo);
 		}

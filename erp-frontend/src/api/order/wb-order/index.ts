@@ -1,7 +1,6 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult } from '@/api/types'
 import type { ErpOrderPageParam, ErpOrderPageVO } from './types'
-import type { LabelBatchVO } from './types'
 
 /**
  * 订单主表分页查询
@@ -13,15 +12,6 @@ export function pageErpOrder(pageParams: ErpOrderPageParam) {
   })
 }
 
-/** 批量确认订单 */
-export function confirmOrders(orderIds: number[]) {
-  return httpClient.post<ApiResult<void>>('/order/wb-order/confirm', orderIds)
-}
-
-/** 批量打印面单（返回合并后的 PDF 二进制流） */
-export function printLabels(orderIds: number[]) {
-  return httpClient.post<ApiResult<LabelBatchVO>>('/order/wb-order/print-labels', orderIds)
-}
 /** 锁定 */
 export function lockOrder(id: number) {
   return httpClient.patch<ApiResult<void>>(`/order/wb-order/${id}/lock`)

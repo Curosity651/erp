@@ -1,9 +1,14 @@
 {
   "menu": {
-    "statistics": { "dashboard": "Dashboard", "salesTarget": "Sales targets" },
-    "warehouseMgmt": { "locationMgmt": "Location management", "locationInventory": "Location inventory", "rackAssignment": "Location assignment" },
+    "statistics": { "_title": "Data analytics", "dashboard": "Dashboard", "salesTarget": "Sales targets", "platformDashboard": "Platform analytics" },
+    "log": { "_title": "Log management", "operationLog": "Operation logs", "loginLog": "Login logs" },
+    "system": { "_title": "System management", "role": "Role management", "user": "System users", "organization": "Organization structure", "projectGroup": "Project groups", "position": "Positions", "shop": "Shop management", "menu": "Menu permissions", "dict": "Dictionary management", "config": "Configuration" },
+    "customerMgmt": { "_title": "Customer management", "wmsOperators": "WMS service providers" },
+    "warehouseMgmt": { "_title": "Warehouse management", "warehouse": "Warehouse information", "locationMgmt": "Location management", "locationInventory": "Location inventory", "region": "Region management", "rackAssignment": "Location assignment", "pallets": "Pallet management" },
     "outboundOps": { "orderDispatch": "Order dispatch", "pickingTasks": "Picking tasks", "fulfillment": "Outbound operations" },
-    "platformFinance": { "receivableBill": "Receivable bills", "warehouseContracts": "Contracts and funds", "providerFunds": "Provider settlement" },
-    "platformDashboard": "Platform analytics"
+    "platformFinance": { "_title": "Platform finance", "receivableBill": "Receivable bills", "warehouseContracts": "Contracts and funds", "providerFunds": "Provider settlement" },
+    "platformDashboard": "Platform analytics",
+    "wms": { "returnInbound": "Return disposition", "manualInbound": "Goods inbound" },
+    "ops": { "_title": "Overseas warehouse operations", "inboundOps": "Inbound receiving", "putaway": "Inbound putaway", "fulfillmentShelf": "Order dispatch", "fulfillmentPicking": "Picking tasks", "fulfillmentWorkbench": "Outbound operations", "picking": "Outbound operations", "packing": "Packing and sign-out", "returnQc": "Return handling", "stocktake": "Stocktake management", "locationTransfer": "Location transfers" }
   }
 }

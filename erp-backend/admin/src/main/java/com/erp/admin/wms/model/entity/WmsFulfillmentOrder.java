@@ -51,18 +51,6 @@ public class WmsFulfillmentOrder {
 	private LocalDateTime packedTime;
 	private LocalDateTime shippedTime;
 	private Long shippedBy;
-	private String handoverStatus;
-	private String vehiclePlate;
-	private String driverName;
-	private String driverPhone;
-	private LocalDateTime departureTime;
-	private String handoverDestination;
-	private BigDecimal recordedFreightCost;
-	private String recordedFreightCurrency;
-	private String logisticsPhotoFileIds;
-	private String handoverRemark;
-	private LocalDateTime handoverTime;
-	private Long handoverBy;
 	private String cancelReason;
 	private Integer version;
 	private Long createBy;

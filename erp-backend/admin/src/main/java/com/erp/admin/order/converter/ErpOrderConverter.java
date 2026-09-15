@@ -1,14 +1,10 @@
 package com.erp.admin.order.converter;
 
-import com.erp.admin.common.util.TimeZoneUtils;
 import com.erp.admin.order.model.entity.ErpOrder;
 import com.erp.admin.order.model.vo.OzonOrderPageVO;
 import com.erp.admin.order.model.vo.WbOrderPageVO;
 import com.erp.admin.order.model.vo.YdOrderPageVO;
-import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
 import org.mapstruct.factory.Mappers;
 
 /**
@@ -26,13 +22,10 @@ public interface ErpOrderConverter {
 	 * @param erpOrder 订单主表
 	 * @return ErpOrderPageVO 订单主表PageVO
 	 */
-	@Mapping(target = "hasLabel", expression="java(erpOrder.getLabelBase64() != null)")
 	WbOrderPageVO poToWbPageVo(ErpOrder erpOrder);
 
-	@Mapping(target = "hasLabel", expression="java(erpOrder.getLabelBase64() != null)")
 	OzonOrderPageVO poToOzonPageVo(ErpOrder erpOrder);
 
-	@Mapping(target = "hasLabel", expression="java(erpOrder.getLabelBase64() != null)")
 	YdOrderPageVO poToYdPageVo(ErpOrder erpOrder);
 
 }

@@ -101,7 +101,10 @@ const convertToSkuRow = (vo: SkuSelectVO): SkuRow => ({
   skuCode: vo.skuCode,
   chineseName: vo.chineseName,
   mainImage: vo.mainImage,
-  categoryFullPath: vo.categoryFullPath
+  categoryFullPath: vo.categoryFullPath,
+  outerLengthMm: vo.outerLengthMm,
+  outerWidthMm: vo.outerWidthMm,
+  outerHeightMm: vo.outerHeightMm
 })
 
 /**

@@ -193,6 +193,28 @@
         <if test="qo.erpStatus != null and qo.erpStatus != ''">
             AND o.erp_status = #{qo.erpStatus}
         </if>
+        <if test="qo.businessStatus == 'PENDING_CONFIRM'">
+            AND (o.warehouse_fulfillment_status IS NULL OR o.warehouse_fulfillment_status = '')
+            AND COALESCE(o.erp_status, '') NOT IN ('CANCELED', 'CANCELLED', 'RETURNED')
+        </if>
+        <if test="qo.businessStatus == 'WAITING_SHELF'">
+            AND o.warehouse_fulfillment_status = 'WAITING_SHELF'
+        </if>
+        <if test="qo.businessStatus == 'OUTBOUND_PROCESSING'">
+            AND o.warehouse_fulfillment_status IN
+                ('PLATFORM_PROCESSING', 'WAITING_PICK', 'PICKING', 'WAITING_PACK', 'PACKED')
+        </if>
+        <if test="qo.businessStatus == 'HANDED_OVER'">
+            AND o.warehouse_fulfillment_status = 'SHIPPED'
+        </if>
+        <if test="qo.businessStatus == 'CANCELLED'">
+            AND (o.warehouse_fulfillment_status IN ('CANCEL_RETURNING', 'CANCELLED')
+                OR ((o.warehouse_fulfillment_status IS NULL OR o.warehouse_fulfillment_status = '')
+                    AND o.erp_status IN ('CANCELED', 'CANCELLED', 'RETURNED')))
+        </if>
+        <if test="qo.businessStatus == 'EXCEPTION'">
+            AND o.warehouse_fulfillment_status = 'EXCEPTION'
+        </if>
         <if test="qo.platformStatus != null and qo.platformStatus != ''">
             AND o.platform_status = #{qo.platformStatus}
         </if>
@@ -242,13 +264,6 @@
         </if>
         <if test="qo.createdAtEnd != null">
             AND o.platform_created_at &lt;= #{qo.createdAtEnd}
-        </if>
-        <!-- 面单过滤 -->
-        <if test="qo.hasLabel != null and qo.hasLabel">
-            AND o.label_base64 IS NOT NULL AND o.label_base64 != ''
-        </if>
-        <if test="qo.hasLabel != null and !qo.hasLabel">
-            AND (o.label_base64 IS NULL OR o.label_base64 = '')
         </if>
         <!-- 关键字模糊匹配：平台单号 / ERP单号 / item 表的平台商品ID和SKU编码 -->
         <if test="qo.keyword != null and qo.keyword != ''">

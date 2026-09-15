@@ -55,6 +55,12 @@ public class YdOrderPageVO {
 	@Schema(title = "ERP状态")
 	private String erpStatus;
 
+	@Schema(title = "货主业务状态")
+	private String businessStatus;
+
+	private Long fulfillmentOrderId;
+	private String warehouseFulfillmentStatus;
+
 	// ==================== 金额信息 ====================
 
 	@Schema(title = "订单总金额")
@@ -79,9 +85,6 @@ public class YdOrderPageVO {
 	private BigDecimal productAmountCny;
 
 	// ==================== 面单信息 ====================
-
-	@Schema(title = "是否有面单")
-	private Boolean hasLabel;
 
 	// ==================== 时间信息 ====================
 

@@ -3,17 +3,17 @@
     <div class="filter-content">
       <div class="filter-row">
         <div class="filter-group">
-          <label class="filter-label">时间范围</label>
+          <label class="filter-label">{{ t('platform.dashboard.filter.timeRange') }}</label>
           <a-radio-group
             :value="quickTimeRange"
             button-style="solid"
             @change="handleQuickTimeChange"
           >
-            <a-radio-button value="today">今日</a-radio-button>
-            <a-radio-button value="yesterday">昨日</a-radio-button>
-            <a-radio-button value="last7days">最近7天</a-radio-button>
-            <a-radio-button value="thisMonth">本月</a-radio-button>
-            <a-radio-button value="lastMonth">上月</a-radio-button>
+            <a-radio-button value="today">{{ t('platform.dashboard.filter.today') }}</a-radio-button>
+            <a-radio-button value="yesterday">{{ t('platform.dashboard.filter.yesterday') }}</a-radio-button>
+            <a-radio-button value="last7days">{{ t('platform.dashboard.filter.last7Days') }}</a-radio-button>
+            <a-radio-button value="thisMonth">{{ t('platform.dashboard.filter.thisMonth') }}</a-radio-button>
+            <a-radio-button value="lastMonth">{{ t('platform.dashboard.filter.lastMonth') }}</a-radio-button>
           </a-radio-group>
           <a-range-picker
             v-model:value="localDateRange"
@@ -26,11 +26,11 @@
 
       <div class="filter-row">
         <div class="filter-group">
-          <label class="filter-label">仓库</label>
+          <label class="filter-label">{{ t('platform.common.warehouse') }}</label>
           <a-select
             :value="warehouseIds"
             mode="multiple"
-            placeholder="全部仓库"
+            :placeholder="t('platform.dashboard.filter.allWarehouses')"
             allow-clear
             :max-tag-count="2"
             :loading="warehouseLoading"
@@ -41,11 +41,11 @@
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">WMS 服务商</label>
+          <label class="filter-label">{{ t('platform.dashboard.filter.wmsProvider') }}</label>
           <a-select
             :value="wmsTenantIds"
             mode="multiple"
-            placeholder="全部服务商"
+            :placeholder="t('platform.dashboard.filter.allProviders')"
             allow-clear
             :max-tag-count="2"
             :loading="operatorLoading"
@@ -65,21 +65,24 @@
             <template #icon>
               <ReloadOutlined />
             </template>
-            刷新
+            {{ t('platform.common.refresh') }}
           </a-button>
         </div>
       </div>
     </div>
 
     <div class="filter-footer">
-      <span class="moscow-time">莫斯科时间：{{ moscowTime }}</span>
-      <span v-if="lastUpdateTime" class="update-time">最后更新：{{ lastUpdateTime }}</span>
+      <span class="moscow-time">{{ t('platform.dashboard.filter.moscowTime', { time: moscowTime }) }}</span>
+      <span v-if="lastUpdateTime" class="update-time">
+        {{ t('platform.dashboard.filter.lastUpdated', { time: lastUpdateTime }) }}
+      </span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
@@ -88,6 +91,7 @@ import { isSuccess } from '@/api'
 import { getWarehouseOptions } from '@/api/wms/warehouse'
 import { listWmsOperators } from '@/api/tenant'
 
+const { t } = useI18n()
 const props = defineProps<{
   quickTimeRange: string
   dateRange: { start: string; end: string }

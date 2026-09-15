@@ -1,7 +1,6 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult } from '@/api/types'
 import type { YdOrderPageParam, YdOrderPageVO } from './types'
-import type { LabelBatchVO } from '@/api/order/label-batch'
 
 /**
  * Yandex 订单分页查询
@@ -10,20 +9,6 @@ export function pageYdOrder(pageParams: YdOrderPageParam) {
   return httpClient.get<ApiResult<YdOrderPageVO>>('/order/yd-order/page', {
     params: pageParams
   })
-}
-
-/**
- * 批量确认发货
- */
-export function confirmYdOrders(orderIds: number[]) {
-  return httpClient.post<ApiResult<any>>('/order/yd-order/confirm', orderIds)
-}
-
-/**
- * 批量打印面单
- */
-export function printYdLabels(orderIds: number[]) {
-  return httpClient.post<ApiResult<LabelBatchVO>>('/order/yd-order/print-labels', orderIds)
 }
 
 /**

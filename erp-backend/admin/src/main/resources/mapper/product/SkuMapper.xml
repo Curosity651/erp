@@ -34,6 +34,10 @@
     		<result property="packageWidth" column="package_width"/>
     		<result property="packageHeight" column="package_height"/>
     		<result property="packageUnit" column="package_unit"/>
+		<result property="outerLengthMm" column="outer_length_mm"/>
+		<result property="outerWidthMm" column="outer_width_mm"/>
+		<result property="outerHeightMm" column="outer_height_mm"/>
+		<result property="outerGrossWeightG" column="outer_gross_weight_g"/>
     		<result property="functionalRequirements" column="functional_requirements"/>
     		<result property="supplierCode" column="supplier_code"/>
     		<result property="includeTax" column="include_tax"/>
@@ -78,7 +82,11 @@
 		package_length,        
 		package_width,        
 		package_height,        
-		package_unit,        
+		package_unit,
+		outer_length_mm,
+		outer_width_mm,
+		outer_height_mm,
+		outer_gross_weight_g,
 		functional_requirements,        
 		supplier_code,        
 		include_tax,        
@@ -123,7 +131,11 @@
 		s.package_length,        
 		s.package_width,        
 		s.package_height,        
-		s.package_unit,        
+		s.package_unit,
+		s.outer_length_mm,
+		s.outer_width_mm,
+		s.outer_height_mm,
+		s.outer_gross_weight_g,
 		s.functional_requirements,        
 		s.supplier_code,        
 		s.include_tax,        

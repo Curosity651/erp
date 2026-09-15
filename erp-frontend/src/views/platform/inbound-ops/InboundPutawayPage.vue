@@ -1,24 +1,24 @@
 <template>
   <a-card :bordered="false" class="search-card">
     <a-form :model="searchModel" layout="inline" class="inbound-search">
-      <a-form-item label="入库单号">
+      <a-form-item :label="t('platform.inbound.number')">
         <a-input
           v-model:value="searchModel.inboundNo"
-          placeholder="请输入"
+          :placeholder="t('platform.common.enter')"
           allow-clear
           style="width: 150px"
         />
       </a-form-item>
-      <a-form-item label="状态">
+      <a-form-item :label="t('platform.common.status')">
         <a-select
           v-model:value="searchModel.orderStatus"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           allow-clear
           :options="statusOptions"
           style="width: 110px"
         />
       </a-form-item>
-      <a-form-item label="日期范围">
+      <a-form-item :label="t('platform.inbound.dateRange')">
         <a-range-picker
           v-model:value="dateRange"
           value-format="YYYY-MM-DD"
@@ -26,26 +26,26 @@
           allow-clear
         />
       </a-form-item>
-      <a-form-item label="服务商">
+      <a-form-item :label="t('platform.common.provider')">
         <wms-operator-select
           v-model:value="searchModel.wmsTenantId"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           width="140px"
           @change="onOperatorChange"
         />
       </a-form-item>
-      <a-form-item label="货主">
+      <a-form-item :label="t('platform.common.owner')">
         <platform-owner-select
           v-model:value="searchModel.erpTenantId"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           width="140px"
           :operator-id="searchModel.wmsTenantId"
         />
       </a-form-item>
-      <a-form-item label="操作员">
+      <a-form-item :label="t('platform.common.staff')">
         <user-select
           v-model:value="searchModel.putawayBy"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           :options="userOptions"
           :loading="usersLoading"
           style="width: 140px"
@@ -59,7 +59,7 @@
 
   <pro-table
     ref="tableRef"
-    header-title="入库上架"
+    :header-title="t('platform.inbound.putawayTitle')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -68,18 +68,18 @@
   >
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'status'">
-        <span v-if="record.orderStatus === InboundStatus.RECEIVED" class="pending-record">已收货 · 待登记上架</span>
+        <span v-if="record.orderStatus === InboundStatus.RECEIVED" class="pending-record">{{ t('platform.inbound.receivedPendingPutaway') }}</span>
         <inbound-status-badge v-else :status="record.orderStatus" />
       </template>
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a v-if="record.orderStatus === InboundStatus.RECEIVED" @click="openPutaway(record)">
-            登记上架
+            {{ t('platform.inbound.registerPutaway') }}
           </a>
           <a v-else-if="record.orderStatus === InboundStatus.COMPLETED" @click="openDetail(record)">
-            详情
+            {{ t('platform.inbound.detail') }}
           </a>
-          <span v-else style="color: rgba(0, 0, 0, 0.25)">不可操作</span>
+          <span v-else style="color: rgba(0, 0, 0, 0.25)">{{ t('platform.inbound.unavailable') }}</span>
         </operation-group>
       </template>
     </template>
@@ -91,7 +91,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
 import { OperationGroup } from '@/components/Operation'
@@ -99,7 +100,7 @@ import { SearchActions } from '@/components/Search'
 import { mergePageParam } from '@/utils/page-utils'
 import { pageInboundOps } from '@/api/wms/inbound-execution'
 import type { PurchaseInboundPageVO, PurchaseInboundQO } from '@/api/wms/purchase-inbound/types'
-import { InboundStatus, InboundStatusMap } from '@/api/wms/purchase-inbound/types'
+import { InboundStatus } from '@/api/wms/purchase-inbound/types'
 import InboundStatusBadge from '@/views/wms/purchase-inbound/components/InboundStatusBadge.vue'
 import WmsOperatorSelect from '@/components/Lov/WmsOperatorSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
@@ -110,11 +111,20 @@ import PutawayDetailDrawer from './PutawayDetailDrawer.vue'
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 
 const tableRef = ref<ProTableInstanceExpose>()
+const { t } = useI18n()
 const { allUsers: userOptions, loading: usersLoading, loadAllUsers } = useUserData()
 
 // 上架页覆盖「已收货/已完成」：上架后单据保留在本页（状态变已完成），只是上架动作不再可点
 const PUTAWAY_SCOPE = [InboundStatus.RECEIVED, InboundStatus.COMPLETED]
-const statusOptions = PUTAWAY_SCOPE.map(s => ({ value: s, label: InboundStatusMap[s] }))
+const statusKey = (status: InboundStatus) =>
+  ({
+    [InboundStatus.DRAFT]: 'platform.inbound.status.draft',
+    [InboundStatus.SUBMITTED]: 'platform.inbound.status.submitted',
+    [InboundStatus.RECEIVED]: 'platform.inbound.status.received',
+    [InboundStatus.COMPLETED]: 'platform.inbound.status.completed',
+    [InboundStatus.CANCELLED]: 'platform.inbound.status.cancelled'
+  })[status]
+const statusOptions = computed(() => PUTAWAY_SCOPE.map(status => ({ value: status, label: t(statusKey(status)) })))
 
 const searchModel = reactive<PurchaseInboundQO>({
   inboundNo: undefined,
@@ -169,22 +179,22 @@ const resetSearch = () => {
   searchTable()
 }
 
-const columns: ProColumns[] = [
-  { title: '入库单号', dataIndex: 'inboundNo', key: 'inboundNo', width: 220, fixed: 'left' },
-  { title: '货主', dataIndex: 'ownerName', key: 'ownerName', width: 140, ellipsis: true },
-  { title: '服务商', dataIndex: 'operatorName', key: 'operatorName', width: 140, ellipsis: true },
-  { title: '仓库', dataIndex: 'warehouseName', key: 'warehouseName', width: 180 },
+const columns = computed<ProColumns[]>(() => [
+  { title: t('platform.inbound.number'), dataIndex: 'inboundNo', key: 'inboundNo', width: 220, fixed: 'left' },
+  { title: t('platform.common.owner'), dataIndex: 'ownerName', key: 'ownerName', width: 140, ellipsis: true },
+  { title: t('platform.common.provider'), dataIndex: 'operatorName', key: 'operatorName', width: 140, ellipsis: true },
+  { title: t('platform.common.warehouse'), dataIndex: 'warehouseName', key: 'warehouseName', width: 180 },
   {
-    title: '操作员',
+    title: t('platform.common.staff'),
     dataIndex: 'putawayByName',
     key: 'putawayByName',
     width: 90,
     ellipsis: true
   },
-  { title: '状态', key: 'status', width: 110, align: 'center' },
-  { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
-  { title: '操作', key: 'operate', width: 120, align: 'center', fixed: 'right' }
-]
+  { title: t('platform.common.status'), key: 'status', width: 110, align: 'center' },
+  { title: t('platform.common.createdAt'), dataIndex: 'createTime', key: 'createTime', width: 180 },
+  { title: t('platform.common.operation'), key: 'operate', width: 120, align: 'center', fixed: 'right' }
+])
 
 const putawayDrawerRef = ref<InstanceType<typeof PutawayDrawer>>()
 const putawayDetailDrawerRef = ref<InstanceType<typeof PutawayDetailDrawer>>()

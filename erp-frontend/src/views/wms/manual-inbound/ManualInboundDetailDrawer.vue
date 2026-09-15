@@ -1,7 +1,7 @@
 <template>
   <a-drawer
     v-model:open="visible"
-    title="自定义入库单详情"
+    title="商品入库详情"
     :width="760"
     :body-style="{ paddingBottom: '80px' }"
   >
@@ -28,11 +28,19 @@
             :pagination="false"
             size="small"
             row-key="id"
-            :scroll="{ x: 620 }"
+            :scroll="{ x: 900 }"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'skuBrief'">
                 <sku-brief-cell :brief="record.skuBrief" />
+              </template>
+              <template v-else-if="column.key === 'dimensions'">
+                <span :class="{ 'missing-dimension': !hasDimensions(record) }">
+                  {{ dimensionsText(record) }}
+                </span>
+              </template>
+              <template v-else-if="column.key === 'volume'">
+                {{ volumeText(record) }}
               </template>
               <!-- 实到数量：草稿/已提交显示状态文字，已收货/已完成显示平台录入的数字 -->
               <template v-else-if="column.key === 'actualQuantity'">
@@ -73,6 +81,12 @@
               </a-table-summary>
             </template>
           </a-table>
+          <div class="dimension-summary">
+            <a-tag color="blue">累计长：{{ totalLengthText }}</a-tag>
+            <a-tag color="blue">累计宽：{{ totalWidthText }}</a-tag>
+            <a-tag color="blue">累计高：{{ totalHeightText }}</a-tag>
+            <a-tag color="green">总体积：{{ totalVolumeText }}</a-tag>
+          </div>
         </div>
 
         <!-- 备注 -->
@@ -128,7 +142,9 @@ const detail = ref<PurchaseInboundDetailVO | null>(null)
 
 const itemColumns = [
   { title: 'SKU信息', key: 'skuBrief', width: 220 },
+  { title: '包装尺寸（长×宽×高）', key: 'dimensions', width: 180, align: 'center' },
   { title: '应到数量', dataIndex: 'expectedQuantity', width: 100, align: 'center' },
+  { title: '包装体积', key: 'volume', width: 120, align: 'center' },
   { title: '实到数量', key: 'actualQuantity', width: 100, align: 'center' },
   { title: '未到数量', key: 'shortQuantity', width: 100, align: 'center' }
 ]
@@ -145,6 +161,55 @@ const statusText = computed(() =>
 const { totalExpected, totalActual, totalShort } = useInboundItemSummary(
   computed(() => detail.value?.items || [])
 )
+
+const hasDimensions = (record: PurchaseInboundDetailVO['items'][number]) =>
+  [record.outerLengthMm, record.outerWidthMm, record.outerHeightMm].every(
+    value => Number(value) > 0
+  )
+const volumeCbm = (record: PurchaseInboundDetailVO['items'][number]) =>
+  hasDimensions(record)
+    ? (record.outerLengthMm! *
+        record.outerWidthMm! *
+        record.outerHeightMm! *
+        Number(record.expectedQuantity || 0)) /
+      1_000_000_000
+    : 0
+const dimensionsText = (record: PurchaseInboundDetailVO['items'][number]) =>
+  hasDimensions(record)
+    ? (record.outerLengthMm! / 10).toFixed(1) +
+      ' × ' +
+      (record.outerWidthMm! / 10).toFixed(1) +
+      ' × ' +
+      (record.outerHeightMm! / 10).toFixed(1) +
+      ' cm'
+    : '待维护'
+const volumeText = (record: PurchaseInboundDetailVO['items'][number]) =>
+  hasDimensions(record) ? volumeCbm(record).toFixed(4) + ' m³' : '-'
+const totalLengthMm = computed(() =>
+  (detail.value?.items || []).reduce(
+    (sum, item) => sum + (hasDimensions(item) ? item.outerLengthMm! * item.expectedQuantity : 0),
+    0
+  )
+)
+const totalWidthMm = computed(() =>
+  (detail.value?.items || []).reduce(
+    (sum, item) => sum + (hasDimensions(item) ? item.outerWidthMm! * item.expectedQuantity : 0),
+    0
+  )
+)
+const totalHeightMm = computed(() =>
+  (detail.value?.items || []).reduce(
+    (sum, item) => sum + (hasDimensions(item) ? item.outerHeightMm! * item.expectedQuantity : 0),
+    0
+  )
+)
+const totalVolumeCbm = computed(() =>
+  (detail.value?.items || []).reduce((sum, item) => sum + volumeCbm(item), 0)
+)
+const totalLengthText = computed(() => (totalLengthMm.value / 10).toFixed(1) + ' cm')
+const totalWidthText = computed(() => (totalWidthMm.value / 10).toFixed(1) + ' cm')
+const totalHeightText = computed(() => (totalHeightMm.value / 10).toFixed(1) + ' cm')
+const totalVolumeText = computed(() => totalVolumeCbm.value.toFixed(4) + ' m³')
 
 const { canEdit, canSubmit } = useInboundPermission(
   computed(() => detail.value?.orderStatus),
@@ -216,5 +281,17 @@ defineExpose({ open })
 
 .status-placeholder {
   color: #8c8c8c;
+}
+
+.dimension-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.missing-dimension {
+  color: #fa8c16;
 }
 </style>

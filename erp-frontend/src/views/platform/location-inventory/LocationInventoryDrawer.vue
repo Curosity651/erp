@@ -1,17 +1,17 @@
 <template>
-  <a-drawer v-model:open="open" title="库位库存详情" :width="760">
+  <a-drawer v-model:open="open" :title="t('platform.location.detailTitle')" :width="760">
     <a-spin :spinning="loading">
       <template v-if="detail">
         <a-descriptions :column="3" bordered size="small">
-          <a-descriptions-item label="库位">{{ detail.location.locationCode }}</a-descriptions-item>
-          <a-descriptions-item label="类型">{{ detail.location.locationType || '-' }}</a-descriptions-item>
-          <a-descriptions-item label="容量">{{ detail.location.utilizationPercent }}%</a-descriptions-item>
-          <a-descriptions-item label="总件数">{{ detail.location.totalQuantity }}</a-descriptions-item>
-          <a-descriptions-item label="可用">{{ detail.location.availableQuantity }}</a-descriptions-item>
-          <a-descriptions-item label="预占">{{ detail.location.reservedQuantity }}</a-descriptions-item>
-          <a-descriptions-item label="已用体积">{{ formatVolume(detail.location.usedVolumeMm3) }}</a-descriptions-item>
-          <a-descriptions-item label="库位体积">{{ formatVolume(detail.location.capacityVolumeMm3) }}</a-descriptions-item>
-          <a-descriptions-item label="SKU 种类">{{ detail.location.skuKindCount }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.location')">{{ detail.location.locationCode }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.type')">{{ detail.location.locationType || '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.capacity')">{{ detail.location.utilizationPercent }}%</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.totalPieces')">{{ detail.location.totalQuantity }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.available')">{{ detail.location.availableQuantity }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.reservedShort')">{{ detail.location.reservedQuantity }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.usedVolume')">{{ formatVolume(detail.location.usedVolumeMm3) }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.locationVolume')">{{ formatVolume(detail.location.capacityVolumeMm3) }}</a-descriptions-item>
+          <a-descriptions-item :label="t('platform.location.skuKinds')">{{ detail.location.skuKindCount }}</a-descriptions-item>
         </a-descriptions>
 
         <a-table
@@ -46,7 +46,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import { getLocationInventoryDetail } from '@/api/wms/location-inventory'
@@ -54,18 +55,19 @@ import type { LocationInventoryDetail } from '@/api/wms/location-inventory/types
 import { formatVolume } from './location-utilization'
 
 const open = ref(false)
+const { t } = useI18n()
 const loading = ref(false)
 const detail = ref<LocationInventoryDetail>()
 
-const columns = [
-  { title: '货主 / 服务商', key: 'owner', width: 160 },
-  { title: 'SKU', key: 'sku', width: 190 },
-  { title: '品质', dataIndex: 'quality', key: 'quality', width: 90 },
-  { title: '总数', dataIndex: 'quantity', key: 'quantity', width: 80 },
-  { title: '预占', dataIndex: 'reservedQuantity', key: 'reservedQuantity', width: 80 },
-  { title: '可用', dataIndex: 'availableQuantity', key: 'availableQuantity', width: 80 },
-  { title: '外箱尺寸', key: 'outer', width: 210 }
-]
+const columns = computed(() => [
+  { title: t('platform.location.ownerProvider'), key: 'owner', width: 160 },
+  { title: t('platform.common.sku'), key: 'sku', width: 190 },
+  { title: t('platform.location.quality'), dataIndex: 'quality', key: 'quality', width: 90 },
+  { title: t('platform.location.total'), dataIndex: 'quantity', key: 'quantity', width: 80 },
+  { title: t('platform.location.reservedShort'), dataIndex: 'reservedQuantity', key: 'reservedQuantity', width: 80 },
+  { title: t('platform.location.available'), dataIndex: 'availableQuantity', key: 'availableQuantity', width: 80 },
+  { title: t('platform.location.outerSize'), key: 'outer', width: 210 }
+])
 
 const show = async (locationId: number) => {
   open.value = true
@@ -74,7 +76,7 @@ const show = async (locationId: number) => {
   try {
     const response = await getLocationInventoryDetail(locationId)
     if (!isSuccess(response)) {
-      message.error(response.message || '库位详情加载失败')
+      message.error(response.message || t('platform.location.detailLoadFailed'))
       return
     }
     detail.value = response.data

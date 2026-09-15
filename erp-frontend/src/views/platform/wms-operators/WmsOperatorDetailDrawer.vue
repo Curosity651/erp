@@ -1,20 +1,20 @@
 <template>
-  <a-drawer v-model:open="open" :title="`服务商详情 - ${current?.tenantName || ''}`" width="640">
+  <a-drawer v-model:open="open" :title="t('platform.operator.detailTitle', { name: current?.tenantName || '' })" width="640">
     <a-descriptions :column="1" bordered size="small" style="margin-bottom: 16px">
-      <a-descriptions-item label="编码">{{ current?.tenantCode }}</a-descriptions-item>
-      <a-descriptions-item label="名称">{{ current?.tenantName }}</a-descriptions-item>
-      <a-descriptions-item label="联系人">{{ current?.contactName || '-' }}</a-descriptions-item>
-      <a-descriptions-item label="联系电话">{{ current?.contactPhone || '-' }}</a-descriptions-item>
-      <a-descriptions-item label="状态">
+      <a-descriptions-item :label="t('platform.operator.codeShort')">{{ current?.tenantCode }}</a-descriptions-item>
+      <a-descriptions-item :label="t('platform.operator.nameShort')">{{ current?.tenantName }}</a-descriptions-item>
+      <a-descriptions-item :label="t('platform.operator.contactName')">{{ current?.contactName || '-' }}</a-descriptions-item>
+      <a-descriptions-item :label="t('platform.operator.contactPhone')">{{ current?.contactPhone || '-' }}</a-descriptions-item>
+      <a-descriptions-item :label="t('platform.common.status')">
         <a-tag :color="current?.status === 1 ? 'green' : 'red'">
-          {{ current?.status === 1 ? '启用' : '停用' }}
+          {{ current?.status === 1 ? t('platform.operator.enabled') : t('platform.operator.disabled') }}
         </a-tag>
       </a-descriptions-item>
-      <a-descriptions-item label="创建时间">{{ current?.createTime || '-' }}</a-descriptions-item>
+      <a-descriptions-item :label="t('platform.common.createdAt')">{{ current?.createTime || '-' }}</a-descriptions-item>
     </a-descriptions>
 
     <a-divider orientation="left" style="margin: 8px 0">
-      名下货主（{{ clients.length }}）
+      {{ t('platform.operator.clients', { count: clients.length }) }}
     </a-divider>
     <a-table
       :columns="clientColumns"
@@ -27,7 +27,7 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
           <a-tag :color="record.status === 1 ? 'green' : 'red'">
-            {{ record.status === 1 ? '启用' : '停用' }}
+            {{ record.status === 1 ? t('platform.operator.enabled') : t('platform.operator.disabled') }}
           </a-tag>
         </template>
       </template>
@@ -36,17 +36,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { isSuccess } from '@/api'
 import { listErpTenantsByParent } from '@/api/tenant'
 import type { TenantBrief } from '@/api/tenant/types'
 
-const clientColumns = [
-  { title: '编码', dataIndex: 'tenantCode', key: 'tenantCode' },
-  { title: '货主名称', dataIndex: 'tenantName', key: 'tenantName' },
-  { title: '联系人', dataIndex: 'contactName', key: 'contactName' },
-  { title: '状态', dataIndex: 'status', key: 'status' }
-]
+const { t } = useI18n()
+const clientColumns = computed(() => [
+  { title: t('platform.operator.codeShort'), dataIndex: 'tenantCode', key: 'tenantCode' },
+  { title: t('platform.operator.ownerName'), dataIndex: 'tenantName', key: 'tenantName' },
+  { title: t('platform.operator.contactName'), dataIndex: 'contactName', key: 'contactName' },
+  { title: t('platform.common.status'), dataIndex: 'status', key: 'status' }
+])
 
 const open = ref(false)
 const loading = ref(false)

@@ -34,7 +34,7 @@ class PurchaseInboundItemServiceTest {
 
 		PurchaseInboundItemVO item = new PurchaseInboundItemVO();
 		item.setSkuCode("SKU-1");
-		when(mapper.selectItemVOsByInboundOrderId(10L)).thenReturn(Collections.singletonList(item));
+		when(mapper.selectItemVOsByInboundOrderId(10L, 6L)).thenReturn(Collections.singletonList(item));
 		when(warehouseSkuCodeService.build(6L, "SKU-1")).thenReturn("JHIN-SKU-1");
 		doAnswer(invocation -> {
 			assertEquals(6L, TenantContext.getCurrentTenant());

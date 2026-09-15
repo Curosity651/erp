@@ -20,7 +20,7 @@
         />
       </template>
       <template v-else-if="column.key === 'operate' && !record.isRack">
-        <a @click="$emit('select', record.locationId)">查看</a>
+        <a @click="$emit('select', record.locationId)">{{ t('platform.common.view') }}</a>
       </template>
     </template>
   </a-table>
@@ -28,6 +28,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { LocationInventoryGrid, LocationInventoryTree } from '@/api/wms/location-inventory/types'
 
 interface TreeRow extends Partial<LocationInventoryGrid> {
@@ -38,6 +39,7 @@ interface TreeRow extends Partial<LocationInventoryGrid> {
 }
 
 const props = defineProps<{ tree: LocationInventoryTree }>()
+const { t } = useI18n()
 defineEmits<{ (event: 'select', locationId: number): void }>()
 
 const treeRows = computed<TreeRow[]>(() =>
@@ -52,14 +54,14 @@ const treeRows = computed<TreeRow[]>(() =>
   }))
 )
 
-const columns = [
-  { title: '排 / 库位', dataIndex: 'locationCode', key: 'locationCode', width: 220 },
-  { title: '类型', dataIndex: 'locationType', key: 'locationType', width: 120 },
-  { title: '总件数', dataIndex: 'totalQuantity', key: 'totalQuantity', width: 100 },
-  { title: '可用', dataIndex: 'availableQuantity', key: 'availableQuantity', width: 100 },
-  { title: '预占', dataIndex: 'reservedQuantity', key: 'reservedQuantity', width: 100 },
-  { title: 'SKU 种类', dataIndex: 'skuKindCount', key: 'skuKindCount', width: 110 },
-  { title: '容量使用', key: 'capacity', width: 180 },
-  { title: '操作', key: 'operate', width: 80, fixed: 'right' }
-]
+const columns = computed(() => [
+  { title: t('platform.location.rackLocation'), dataIndex: 'locationCode', key: 'locationCode', width: 220 },
+  { title: t('platform.location.type'), dataIndex: 'locationType', key: 'locationType', width: 120 },
+  { title: t('platform.location.totalPieces'), dataIndex: 'totalQuantity', key: 'totalQuantity', width: 100 },
+  { title: t('platform.location.available'), dataIndex: 'availableQuantity', key: 'availableQuantity', width: 100 },
+  { title: t('platform.location.reservedShort'), dataIndex: 'reservedQuantity', key: 'reservedQuantity', width: 100 },
+  { title: t('platform.location.skuKinds'), dataIndex: 'skuKindCount', key: 'skuKindCount', width: 110 },
+  { title: t('platform.location.capacityUsage'), key: 'capacity', width: 180 },
+  { title: t('platform.common.operation'), key: 'operate', width: 80, fixed: 'right' }
+])
 </script>

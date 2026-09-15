@@ -1,16 +1,9 @@
-// 导入共享的面单批次类型
-export type {
-  LabelBatchVO,
-  LabelBatchPageVO,
-  LabelBatchFileVO,
-  LabelBatchItemVO
-} from '@/api/order/label-batch'
 import type { PageParam } from '@/api/types'
 import type { SkuBriefVO } from '@/api/common/sku-types'
 import type { BaseOrderVO } from '@/api/order/types'
 
 // 从共用类型文件 re-export（保持向后兼容）
-export { ERP_STATUS_MAP } from '@/api/order/types'
+export { ERP_STATUS_MAP, OWNER_ORDER_STATUS_MAP } from '@/api/order/types'
 export type { ErpStatusKey } from '@/api/order/types'
 
 export interface ErpOrderQO {
@@ -26,6 +19,7 @@ export interface ErpOrderQO {
   fulfillmentType?: string
   // ERP 状态
   erpStatus?: string
+  businessStatus?: string
   // 平台主状态
   platformStatus?: string
   // 平台子状态
@@ -36,8 +30,6 @@ export interface ErpOrderQO {
   destinationWarehouseId?: string
   // 锁定
   locked?: number
-  // 有面单
-  hasLabel?: boolean
   // 关键字
   keyword?: string
   // SKU编码（ERP SKU）
@@ -119,10 +111,6 @@ export interface ErpOrderPageVO {
   convertedCurrencyCode?: string
   // Ozon专用: 结算信息 (佣金、费用、收入)
   financialData: string
-  // 面单数据
-  labelBase64?: string
-  // 有无面单
-  hasLabel?: boolean
   // 平台订单创建时间
   platformCreatedAt: string
   // 最后一次同步时间

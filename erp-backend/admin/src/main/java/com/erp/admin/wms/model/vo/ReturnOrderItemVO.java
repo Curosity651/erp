@@ -14,11 +14,17 @@ import java.util.List;
 @Schema(title = "退货单明细")
 public class ReturnOrderItemVO {
 
+    private Long id;
+
     private String skuCode;
 
     private String warehouseSkuCode;
 
     private String skuName;
+
+    private String platformOrderId;
+
+    private String returnReason;
 
     @Schema(title = "电子类 → FAIL 是否强制拍照")
     private Boolean electronic;
@@ -35,6 +41,20 @@ public class ReturnOrderItemVO {
     private Integer qualifiedQty;
 
     private Integer damagedQty;
+
+    private Integer restockQty;
+
+    private Integer reworkQty;
+
+    private Integer scrapQty;
+
+    private Integer reworkPassQty;
+
+    private Integer reworkScrapQty;
+
+    private String dispositionRemark;
+
+    private String processedLocationCode;
 
     private String qualifiedZone;
 

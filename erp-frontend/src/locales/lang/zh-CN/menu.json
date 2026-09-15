@@ -1,9 +1,14 @@
 {
   "menu": {
-    "statistics": { "dashboard": "数据看板", "salesTarget": "销售目标" },
-    "warehouseMgmt": { "locationMgmt": "库位管理", "locationInventory": "库位库存", "rackAssignment": "库位分配" },
+    "statistics": { "_title": "数据分析", "dashboard": "数据看板", "salesTarget": "销售目标", "platformDashboard": "平台数据分析" },
+    "log": { "_title": "日志管理", "operationLog": "操作日志", "loginLog": "登录日志" },
+    "system": { "_title": "系统管理", "role": "角色管理", "user": "系统用户", "organization": "组织架构", "projectGroup": "项目组管理", "position": "岗位管理", "shop": "店铺管理", "menu": "菜单权限", "dict": "字典管理", "config": "配置信息" },
+    "customerMgmt": { "_title": "客户管理", "wmsOperators": "WMS 服务商" },
+    "warehouseMgmt": { "_title": "仓库管理", "warehouse": "仓库信息", "locationMgmt": "库位管理", "locationInventory": "库位库存", "region": "区域管理", "rackAssignment": "库位分配", "pallets": "托盘管理" },
     "outboundOps": { "orderDispatch": "订单下架", "pickingTasks": "拣货任务", "fulfillment": "出库作业" },
-    "platformFinance": { "receivableBill": "应收账单", "warehouseContracts": "合同资金", "providerFunds": "服务商结算" },
-    "platformDashboard": "平台数据分析"
+    "platformFinance": { "_title": "平台财务", "receivableBill": "应收账单", "warehouseContracts": "合同资金", "providerFunds": "服务商结算" },
+    "platformDashboard": "平台数据分析",
+    "wms": { "returnInbound": "退货处理", "manualInbound": "商品入库" },
+    "ops": { "_title": "海外仓作业", "inboundOps": "入库收货", "putaway": "入库上架", "fulfillmentShelf": "订单下架", "fulfillmentPicking": "拣货任务", "fulfillmentWorkbench": "出库作业", "picking": "出库作业", "packing": "打包签出", "returnQc": "退货处理", "stocktake": "盘点管理", "locationTransfer": "库位调整" }
   }
 }

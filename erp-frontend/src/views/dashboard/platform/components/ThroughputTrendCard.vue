@@ -3,21 +3,22 @@
     <template #title>
       <div class="card-title">
         <BarChartOutlined class="card-icon" />
-        <span>吞吐趋势</span>
-        <span class="title-hint">（单据数）</span>
+        <span>{{ t('platform.dashboard.throughput.title') }}</span>
+        <span class="title-hint">({{ t('platform.dashboard.throughput.documentCount') }})</span>
       </div>
     </template>
     <div v-if="hasData" class="chart-container">
       <v-chart :option="chartOption" autoresize class="chart" />
     </div>
     <div v-else class="empty-state">
-      <a-empty description="暂无数据" />
+      <a-empty :description="t('platform.dashboard.noData')" />
     </div>
   </a-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { BarChartOutlined } from '@ant-design/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -43,6 +44,7 @@ use([
 ])
 
 const props = defineProps<{ data?: ThroughputTrendVO }>()
+const { t } = useI18n()
 
 const hasData = computed(() => (props.data?.dates?.length ?? 0) > 0)
 
@@ -58,6 +60,9 @@ const chartOption = computed<EChartsOption>(() => {
   const dates = d.dates.map(shortDate)
   const showZoom = d.dates.length > 15
   const start = showZoom ? ((d.dates.length - 15) / d.dates.length) * 100 : 0
+  const inboundName = t('platform.dashboard.throughput.inbound')
+  const outboundName = t('platform.dashboard.throughput.outbound')
+  const returnName = t('platform.dashboard.throughput.returns')
 
   return {
     tooltip: {
@@ -65,7 +70,7 @@ const chartOption = computed<EChartsOption>(() => {
       axisPointer: { type: 'shadow' }
     },
     legend: {
-      data: ['入库单', '出库单', '退货单'],
+      data: [inboundName, outboundName, returnName],
       top: 8,
       right: 16,
       itemWidth: 14,
@@ -99,7 +104,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     yAxis: {
       type: 'value',
-      name: '单据数',
+      name: t('platform.dashboard.throughput.documentCount'),
       nameTextStyle: { fontSize: 12, color: '#8c8c8c' },
       axisLabel: { fontSize: 12, color: '#8c8c8c' },
       axisLine: { show: false },
@@ -108,21 +113,21 @@ const chartOption = computed<EChartsOption>(() => {
     },
     series: [
       {
-        name: '入库单',
+        name: inboundName,
         type: 'bar',
         data: d.inbound,
         itemStyle: { color: '#1890ff', borderRadius: [3, 3, 0, 0] },
         barMaxWidth: 22
       },
       {
-        name: '出库单',
+        name: outboundName,
         type: 'bar',
         data: d.outbound,
         itemStyle: { color: '#52c41a', borderRadius: [3, 3, 0, 0] },
         barMaxWidth: 22
       },
       {
-        name: '退货单',
+        name: returnName,
         type: 'line',
         data: d.returns,
         smooth: true,

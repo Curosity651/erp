@@ -4,7 +4,7 @@ import type { SysMenuRouterVO } from '@/api/system/menu/types'
 import type { RouteMeta, RouteRecordRaw } from 'vue-router'
 import { buildNotFoundRoute, ExceptionComponentImport, HOME_ROUTE } from '@/router/constant-routes'
 import { i18n } from '@/locales'
-import { menuLocaleKey, resolveMenuTitle } from '@/locales/menu'
+import { resolveMenuLocaleKey, resolveMenuTitle } from '@/locales/menu'
 
 type SysMenuRouterTree = SysMenuRouterVO & { key: number; children: SysMenuRouterTree[] }
 
@@ -64,11 +64,16 @@ const menuToRoutes = (menuTree: SysMenuRouterTree[], parent?: RouteRecordRaw) =>
       .map(x => firstUpperCase(x))
       .join('')
 
-    const localeKey = menuLocaleKey(path)
+    const localeKey = resolveMenuLocaleKey(path, key => i18n.global.te(key))
     const meta: RouteMeta = {
-      name: resolveMenuTitle(path, item.title, key => i18n.global.t(key)),
+      name: resolveMenuTitle(
+        path,
+        item.title,
+        key => i18n.global.t(key),
+        key => i18n.global.te(key)
+      ),
       originalName: item.title,
-      locale: i18n.global.te(localeKey) ? localeKey : false,
+      locale: localeKey || false,
       icon: item.icon || undefined,
       targetType: targetType
     }

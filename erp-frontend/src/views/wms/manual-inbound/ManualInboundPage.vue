@@ -4,7 +4,7 @@
 
   <pro-table
     ref="tableRef"
-    header-title="自定义入库单管理"
+    header-title="商品入库管理"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -14,6 +14,10 @@
     <!-- 操作按钮区域 -->
     <template #toolBarRender>
       <new-button v-if="hasPermission('wms:manual-inbound:add')" @click="handleNew" />
+      <a-button :loading="templateLoading" @click="handleDownloadTemplate">
+        <download-outlined />
+        下载入库模板
+      </a-button>
       <a-button :loading="exportLoading" @click="handleExport">
         <download-outlined />
         导出
@@ -142,6 +146,7 @@ import {
 import type { ManualInboundQO } from '@/api/wms/manual-inbound/types'
 import type { PurchaseInboundPageVO } from '@/api/wms/purchase-inbound/types'
 import { InboundStatus } from '@/api/wms/purchase-inbound/types'
+import { downloadManualInboundTemplate } from './manual-inbound-excel'
 
 defineOptions({ name: 'ManualInboundPage' })
 
@@ -155,6 +160,7 @@ const { hasPermission } = useAuthorize()
 const tableRef = ref<ProTableInstanceExpose>()
 const detailDrawerRef = ref<InstanceType<typeof ManualInboundDetailDrawer>>()
 const exportLoading = ref(false)
+const templateLoading = ref(false)
 
 // ==================== 权限判断 ====================
 
@@ -264,6 +270,19 @@ const handleExport = async () => {
     message.error('导出失败')
   } finally {
     exportLoading.value = false
+  }
+}
+
+const handleDownloadTemplate = async () => {
+  templateLoading.value = true
+  try {
+    await downloadManualInboundTemplate()
+    message.success('入库模板已下载')
+  } catch (error) {
+    console.error('下载入库模板失败:', error)
+    message.error('模板下载失败')
+  } finally {
+    templateLoading.value = false
   }
 }
 

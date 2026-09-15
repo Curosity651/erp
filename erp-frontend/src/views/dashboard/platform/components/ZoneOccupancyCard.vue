@@ -3,20 +3,21 @@
     <template #title>
       <div class="card-title">
         <PieChartOutlined class="card-icon" />
-        <span>分区库存分布</span>
+        <span>{{ t('platform.dashboard.zone.title') }}</span>
       </div>
     </template>
     <div v-if="hasData" class="chart-container">
       <v-chart :option="chartOption" autoresize class="chart" />
     </div>
     <div v-else class="empty-state">
-      <a-empty description="暂无数据" />
+      <a-empty :description="t('platform.dashboard.noData')" />
     </div>
   </a-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { PieChartOutlined } from '@ant-design/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -29,13 +30,14 @@ import type { ZoneOccupancyVO, ZoneType } from '@/api/platform-dashboard/types'
 use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent])
 
 const props = defineProps<{ data?: ZoneOccupancyVO[] }>()
+const { t, locale } = useI18n()
 
 // 分区语义配色（与库位网格图例一致：标准蓝/不良红/退货绿/暂存灰）
-const ZONE_META: Record<ZoneType, { name: string; color: string }> = {
-  STANDARD: { name: '标准区', color: '#1890ff' },
-  DEFECTIVE: { name: '不良品区', color: '#ff4d4f' },
-  RETURN: { name: '退货区', color: '#52c41a' },
-  TEMP: { name: '暂存区', color: '#8c8c8c' }
+const ZONE_META: Record<ZoneType, { nameKey: string; color: string }> = {
+  STANDARD: { nameKey: 'platform.dashboard.zone.standard', color: '#1890ff' },
+  DEFECTIVE: { nameKey: 'platform.dashboard.zone.defective', color: '#ff4d4f' },
+  RETURN: { nameKey: 'platform.dashboard.zone.return', color: '#52c41a' },
+  TEMP: { nameKey: 'platform.dashboard.zone.temp', color: '#8c8c8c' }
 }
 
 const hasData = computed(() => (props.data || []).some(z => z.invQty > 0))
@@ -48,9 +50,14 @@ const chartOption = computed<EChartsOption>(() => {
       trigger: 'item',
       formatter: (p: any) => {
         const z = byZone.get(p.data.zone as ZoneType)
-        return `<div style="font-weight:600;margin-bottom:4px;">${p.name}</div>
-          库存件数：${(z?.invQty ?? 0).toLocaleString()}（${p.percent}%）<br/>
-          库位数：${(z?.locationCount ?? 0).toLocaleString()}`
+        const inventory = t('platform.dashboard.zone.inventoryUnits', {
+          count: (z?.invQty ?? 0).toLocaleString(locale.value),
+          percent: p.percent
+        })
+        const locations = t('platform.dashboard.zone.locationCount', {
+          count: (z?.locationCount ?? 0).toLocaleString(locale.value)
+        })
+        return `<div style="font-weight:600;margin-bottom:4px;">${p.name}</div>${inventory}<br/>${locations}`
       }
     },
     legend: {
@@ -61,7 +68,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     series: [
       {
-        name: '分区库存分布',
+        name: t('platform.dashboard.zone.title'),
         type: 'pie',
         radius: ['42%', '66%'],
         center: ['50%', '46%'],
@@ -69,7 +76,7 @@ const chartOption = computed<EChartsOption>(() => {
         itemStyle: { borderColor: '#fff', borderWidth: 2 },
         label: { formatter: '{b}\n{d}%', fontSize: 12, color: '#595959' },
         data: list.map(z => ({
-          name: ZONE_META[z.zone].name,
+          name: t(ZONE_META[z.zone].nameKey),
           value: z.invQty,
           zone: z.zone,
           itemStyle: { color: ZONE_META[z.zone].color }

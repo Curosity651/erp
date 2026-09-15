@@ -269,13 +269,6 @@ public class FulfillmentPickingService {
 				"只有当前拣货员可以释放进行中的任务");
 	}
 
-	public void transferTask(Long taskId, Long targetUserId) {
-		requireTaskDependencies();
-		Assert.notNull(targetUserId, "目标拣货员不能为空");
-		Assert.isTrue(taskMapper.transfer(taskId, targetUserId, LocalDateTime.now()) == 1,
-				"任务状态已变化，请刷新后重试");
-	}
-
 	public FulfillmentPickTaskDetailVO detail(Long taskId) {
 		return detail(taskId, null);
 	}
@@ -552,7 +545,7 @@ public class FulfillmentPickingService {
 		Assert.isTrue("PICKING".equals(task.getTaskStatus()), "当前任务状态不能进入整单作业");
 		requireOperator(task, userId);
 		Assert.isTrue(!"SCAN".equals(task.getOperationMode()),
-				"任务已经开始逐单扫码，请继续使用逐单作业流程");
+				"历史任务已经开始逐单扫码，不能切换为整单作业，请重新生成拣货任务");
 		Assert.isTrue(taskMapper.claimOperationMode(taskId, "SIMPLE") == 1,
 				"任务作业模式已变化，请刷新后重试");
 	}

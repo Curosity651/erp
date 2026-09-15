@@ -12,10 +12,13 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum ReturnQcStatus {
 
-    RETURN_PENDING("待退货收货"),
-    QC_PENDING("待质检"),
-    COMPLETED("退货入库完成"),
-    CLOSED("已关闭");
+    PENDING_OWNER("待货主处置"),
+    PENDING_OPERATION("待仓库处理"),
+    COMPLETED("退货处理完成"),
+    CLOSED("已关闭"),
+    /** Historical states retained only for reading pre-migration records. */
+    RETURN_PENDING("历史待收货"),
+    QC_PENDING("历史待质检");
 
     private final String description;
 

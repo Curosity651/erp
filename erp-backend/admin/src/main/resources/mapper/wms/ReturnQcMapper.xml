@@ -5,6 +5,7 @@
     <sql id="baseColumns">
         o.id,
         o.return_no AS returnNo,
+        o.return_batch_no AS returnBatchNo,
         o.erp_tenant_id AS erpTenantId,
         t.tenant_name AS ownerName,
         t.parent_wms_tenant_id AS operatorId,
@@ -24,6 +25,12 @@
         o.closed_by AS closedBy,
         COALESCE(NULLIF(close_user.nickname, ''), close_user.username) AS closedByName,
         DATE_FORMAT(o.closed_time, '%Y-%m-%d %H:%i:%s') AS closedTime
+        ,o.disposition_by AS dispositionBy
+        ,COALESCE(NULLIF(disposition_user.nickname, ''), disposition_user.username) AS dispositionByName
+        ,DATE_FORMAT(o.disposition_time, '%Y-%m-%d %H:%i:%s') AS dispositionTime
+        ,o.processed_by AS processedBy
+        ,COALESCE(NULLIF(process_user.nickname, ''), process_user.username) AS processedByName
+        ,DATE_FORMAT(o.processed_time, '%Y-%m-%d %H:%i:%s') AS processedTime
     </sql>
 
     <select id="pageOrders" resultType="com.erp.admin.wms.model.vo.ReturnOrderVO">
@@ -36,6 +43,8 @@
         LEFT JOIN sys_user receive_user ON receive_user.user_id = o.received_by AND receive_user.deleted = 0
         LEFT JOIN sys_user qc_user ON qc_user.user_id = o.qc_by AND qc_user.deleted = 0
         LEFT JOIN sys_user close_user ON close_user.user_id = o.closed_by AND close_user.deleted = 0
+        LEFT JOIN sys_user disposition_user ON disposition_user.user_id = o.disposition_by AND disposition_user.deleted = 0
+        LEFT JOIN sys_user process_user ON process_user.user_id = o.processed_by AND process_user.deleted = 0
         <where>
             o.deleted = 0
             <if test="qo.returnNo != null and qo.returnNo != ''">
@@ -71,6 +80,8 @@
         LEFT JOIN sys_user receive_user ON receive_user.user_id = o.received_by AND receive_user.deleted = 0
         LEFT JOIN sys_user qc_user ON qc_user.user_id = o.qc_by AND qc_user.deleted = 0
         LEFT JOIN sys_user close_user ON close_user.user_id = o.closed_by AND close_user.deleted = 0
+        LEFT JOIN sys_user disposition_user ON disposition_user.user_id = o.disposition_by AND disposition_user.deleted = 0
+        LEFT JOIN sys_user process_user ON process_user.user_id = o.processed_by AND process_user.deleted = 0
         WHERE o.id = #{id} AND o.deleted = 0
     </select>
 

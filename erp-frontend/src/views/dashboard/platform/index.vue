@@ -1,6 +1,6 @@
 <template>
   <div class="platform-dashboard-container">
-    <a-spin :spinning="loading" tip="加载中...">
+    <a-spin :spinning="loading" :tip="t('platform.dashboard.loading')">
       <!-- 筛选栏 -->
       <PlatformFilterBar
         :quick-time-range="quickTimeRange"
@@ -42,16 +42,16 @@
         <a-row :gutter="[24, 24]" class="section-row">
           <a-col :xs="24" :lg="12">
             <OwnerRankingCard
-              title="服务商在库占用 TOP10"
-              unit="件"
+              :title="t('platform.dashboard.stockRanking')"
+              :unit="t('platform.dashboard.unit.pieces')"
               color="#1890ff"
               :data="data?.operatorRanking?.byStock"
             />
           </a-col>
           <a-col :xs="24" :lg="12">
             <OwnerRankingCard
-              title="服务商吞吐 TOP10"
-              unit="单"
+              :title="t('platform.dashboard.throughputRanking')"
+              :unit="t('platform.dashboard.unit.orders')"
               color="#52c41a"
               :data="data?.operatorRanking?.byThroughput"
             />
@@ -64,6 +64,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { getPlatformDashboardData } from '@/api/platform-dashboard'
 import type { PlatformDashboardDataVO } from '@/api/platform-dashboard/types'
@@ -81,6 +82,7 @@ import ZoneOccupancyCard from './components/ZoneOccupancyCard.vue'
 import ThroughputTrendCard from './components/ThroughputTrendCard.vue'
 import OwnerRankingCard from './components/OwnerRankingCard.vue'
 
+const { t, locale } = useI18n()
 const loading = ref(false)
 const data = ref<PlatformDashboardDataVO | null>(null)
 const lastUpdateTime = ref('')
@@ -119,10 +121,11 @@ async function loadData() {
       warehouseIds: warehouseIds.value.length ? warehouseIds.value : undefined,
       wmsTenantIds: wmsTenantIds.value.length ? wmsTenantIds.value : undefined
     })
-    lastUpdateTime.value = new Date().toLocaleString('zh-CN')
+    lastUpdateTime.value = new Date().toLocaleString(locale.value)
   } catch (error: any) {
-    message.error(error?.message || '加载平台数据分析失败')
-    console.error('加载平台数据分析失败:', error)
+    const fallbackMessage = t('platform.dashboard.loadFailed')
+    message.error(error?.message || fallbackMessage)
+    console.error(`${fallbackMessage}:`, error)
   } finally {
     loading.value = false
   }

@@ -75,8 +75,8 @@ public class WbOrderExportVO implements ImageData {
 	private String destinationWarehouseAddress;
 
 	@ColumnWidth(12)
-	@ExcelProperty("运营状态")
-	private String labelStatus;
+	@ExcelProperty("锁定状态")
+	private String lockStatus;
 
 	@ColumnWidth(20)
 	@ExcelProperty("订单创建时间（莫斯科时区）")

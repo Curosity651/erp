@@ -1,35 +1,35 @@
 <template>
   <a-modal
     v-model:open="open"
-    title="开通 WMS 服务商"
+    :title="t('platform.operator.openTitle')"
     :confirm-loading="submitting"
     :width="560"
     @ok="submit"
     @cancel="open = false"
   >
     <a-form :model="form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-      <a-form-item label="服务商名称" required>
-        <a-input v-model:value="form.tenantName" placeholder="公司名称" />
+      <a-form-item :label="t('platform.operator.name')" required>
+        <a-input v-model:value="form.tenantName" :placeholder="t('platform.operator.companyPlaceholder')" />
       </a-form-item>
-      <a-form-item label="服务商编码" required>
-        <a-input v-model:value="form.tenantCode" placeholder="英文短码，全局唯一" />
+      <a-form-item :label="t('platform.operator.code')" required>
+        <a-input v-model:value="form.tenantCode" :placeholder="t('platform.operator.uniqueCodePlaceholder')" />
       </a-form-item>
-      <a-form-item label="管理员账号" required>
-        <a-input v-model:value="form.adminUsername" placeholder="登录用户名，全局唯一" />
+      <a-form-item :label="t('platform.operator.adminAccount')" required>
+        <a-input v-model:value="form.adminUsername" :placeholder="t('platform.operator.adminAccountPlaceholder')" />
       </a-form-item>
-      <a-form-item label="初始密码" required>
-        <a-input-password v-model:value="form.adminPassword" placeholder="管理员初始密码" />
+      <a-form-item :label="t('platform.operator.initialPassword')" required>
+        <a-input-password v-model:value="form.adminPassword" :placeholder="t('platform.operator.initialPasswordPlaceholder')" />
       </a-form-item>
-      <a-form-item label="管理员昵称">
-        <a-input v-model:value="form.adminNickname" placeholder="默认取服务商名称" />
+      <a-form-item :label="t('platform.operator.adminNickname')">
+        <a-input v-model:value="form.adminNickname" :placeholder="t('platform.operator.adminNicknamePlaceholder')" />
       </a-form-item>
-      <a-form-item label="联系人">
+      <a-form-item :label="t('platform.operator.contactName')">
         <a-input v-model:value="form.contactName" />
       </a-form-item>
-      <a-form-item label="联系电话">
+      <a-form-item :label="t('platform.operator.contactPhone')">
         <a-input v-model:value="form.contactPhone" />
       </a-form-item>
-      <a-form-item label="备注">
+      <a-form-item :label="t('platform.operator.remark')">
         <a-textarea v-model:value="form.remark" :rows="2" />
       </a-form-item>
     </a-form>
@@ -38,12 +38,14 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import { openWmsOperator } from '@/api/tenant'
 import type { OpenTenantParam } from '@/api/tenant/types'
 
 const emits = defineEmits<{ (e: 'success'): void }>()
+const { t } = useI18n()
 
 const open = ref(false)
 const submitting = ref(false)
@@ -70,18 +72,18 @@ function openCreate() {
 
 async function submit() {
   if (!form.tenantName || !form.tenantCode || !form.adminUsername || !form.adminPassword) {
-    message.warning('服务商名称/编码、管理员账号/密码不能为空')
+    message.warning(t('platform.operator.required'))
     return
   }
   submitting.value = true
   try {
     const res = await openWmsOperator(form)
     if (isSuccess(res)) {
-      message.success('开通成功')
+      message.success(t('platform.operator.opened'))
       open.value = false
       emits('success')
     } else {
-      message.error(res.message || '开通失败')
+      message.error(res.message || t('platform.operator.openFailed'))
     }
   } finally {
     submitting.value = false

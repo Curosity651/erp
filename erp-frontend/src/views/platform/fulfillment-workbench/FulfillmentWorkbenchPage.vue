@@ -1,541 +1,401 @@
 <template>
-  <a-card :bordered="false">
-    <a-tabs v-model:active-key="activeTab">
-      <a-tab-pane key="handover" tab="出库交接">
-        <a-form :model="searchModel" layout="inline" class="shipping-search">
-          <a-form-item label="货主">
-            <platform-owner-select
-              v-model:value="searchModel.erpTenantId"
-              placeholder="全部"
-              width="150px"
-            />
-          </a-form-item>
-          <a-form-item label="仓库">
-            <warehouse-select
-              v-model:value="searchModel.warehouseId"
-              placeholder="全部"
-              width="160px"
-            />
-          </a-form-item>
-          <a-form-item label="交接状态">
-            <a-select
-              v-model:value="searchModel.fulfillmentStatus"
-              :options="statusOptions"
-              placeholder="全部"
-              allow-clear
-              style="width: 130px"
-            />
-          </a-form-item>
-          <a-form-item label="创建日期">
-            <a-range-picker
-              v-model:value="dateRange"
-              value-format="YYYY-MM-DD"
-              allow-clear
-              style="width: 230px"
-            />
-          </a-form-item>
-          <a-form-item>
-            <search-actions
-              :loading="tableRef?.loading"
-              @search="searchTable"
-              @reset="resetSearch"
-            />
-          </a-form-item>
-        </a-form>
+  <div class="review-page">
+    <a-card :bordered="false" class="search-card">
+      <a-form layout="inline" :model="query" class="review-search">
+        <a-form-item label="作业日期">
+          <a-date-picker
+            v-model:value="workDate"
+            value-format="YYYY-MM-DD"
+            :allow-clear="false"
+            style="width: 150px"
+          />
+        </a-form-item>
+        <a-form-item label="仓库">
+          <a-select
+            v-model:value="query.warehouseId"
+            :options="warehouseOptions"
+            allow-clear
+            placeholder="全部"
+            style="width: 170px"
+          />
+        </a-form-item>
+        <a-form-item label="拣货任务号">
+          <a-input
+            v-model:value="query.taskNo"
+            allow-clear
+            placeholder="请输入"
+            style="width: 210px"
+          />
+        </a-form-item>
+        <a-form-item label="任务状态">
+          <a-select
+            v-model:value="query.taskStatus"
+            :options="statusOptions"
+            allow-clear
+            placeholder="全部"
+            style="width: 140px"
+          />
+        </a-form-item>
+        <a-form-item label="拣货人员">
+          <user-select
+            v-model:value="query.operatorId"
+            :options="userOptions"
+            :loading="usersLoading"
+            allow-clear
+            placeholder="全部"
+            style="width: 150px"
+          />
+        </a-form-item>
+        <a-form-item class="search-actions-item">
+          <search-actions :loading="loading" @search="load" @reset="reset" />
+        </a-form-item>
+      </a-form>
+    </a-card>
 
-        <pro-table
-          ref="tableRef"
-          header-title="出库交接单"
-          row-key="id"
-          :request="tableRequest"
-          :columns="columns"
-          :scroll="{ x: 2180 }"
-          size="middle"
-        >
-          <template #toolBarRender>
-            <a-button type="primary" @click="openCreate">新建出库交接单</a-button>
-          </template>
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'source'">
-              <div>{{ record.sourceOrderNo }}</div>
-              <span class="secondary-text">{{ record.sourceType }}</span>
-            </template>
-            <template v-else-if="column.key === 'transport'">
-              <div>{{ record.carrierName || '-' }} / {{ record.shippingMethod || '-' }}</div>
-              <span class="secondary-text">{{ record.trackingNo || '-' }}</span>
-            </template>
-            <template v-else-if="column.key === 'vehicle'">
-              <div>{{ record.vehiclePlate || '-' }}</div>
-              <span class="secondary-text">{{ record.driverName || '-' }}</span>
-            </template>
-            <template v-else-if="column.key === 'freight'">
-              <span>{{ record.freightCost }} {{ record.currency || 'CNY' }}</span>
-              <div class="record-only">仅记录</div>
-            </template>
-            <template v-else-if="column.key === 'status'">
-              <a-badge
-                :status="record.handoverStatus === 'HANDED_OVER' ? 'success' : 'processing'"
-                :text="record.handoverStatus === 'HANDED_OVER' ? '已交接' : '待交接'"
-              />
-            </template>
-            <template v-else-if="column.key === 'operate'">
-              <a-space>
-                <a @click="openEdit(record)">{{ record.handoverStatus === 'HANDED_OVER' ? '查看/编辑' : '编辑' }}</a>
-                <a
-                  v-if="record.handoverStatus === 'READY_HANDOVER'"
-                  @click="confirmHandover(record)"
-                  >确认交接</a
-                >
-                <a v-else @click="downloadPdf(record)">PDF</a>
-              </a-space>
-            </template>
-          </template>
-        </pro-table>
-      </a-tab-pane>
+    <a-card :bordered="false" title="当日出库复核">
+      <template #extra>
+        <a-space>
+          <a-tag :color="reviewTag.color">{{ reviewTag.text }}</a-tag>
+          <a-button
+            type="primary"
+            :disabled="!summary?.allProcessed || summary?.reviewCurrent"
+            @click="confirmOpen = true"
+          >
+            {{ summary?.reviewCurrent ? '已完成复核' : '完成复核' }}
+          </a-button>
+        </a-space>
+      </template>
 
-      <a-tab-pane key="fuel" tab="油费记录">
-        <expense-pane type="FUEL" :active="activeTab === 'fuel'" />
-      </a-tab-pane>
-      <a-tab-pane key="driver" tab="司机月结">
-        <expense-pane type="DRIVER_MONTHLY" :active="activeTab === 'driver'" />
-      </a-tab-pane>
-    </a-tabs>
-  </a-card>
-
-  <a-modal
-    v-model:open="editorOpen"
-    :title="editorMode === 'create' ? '新建出库交接单' : '出库交接单资料'"
-    width="780px"
-    :confirm-loading="saving"
-    :ok-text="editorMode === 'create' ? '创建交接单' : '保存修改'"
-    @ok="submitEditor"
-  >
-    <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
-      <a-form-item v-if="editorMode === 'create'" label="关联已打包货物" name="fulfillmentOrderId">
-        <a-select
-          v-model:value="form.fulfillmentOrderId"
-          show-search
-          :filter-option="filterFulfillment"
-          :options="availableOptions"
-          placeholder="请选择已经拣货并完成打包的履约单"
-          @change="fillFromFulfillment"
-        />
-      </a-form-item>
-
-      <a-descriptions v-if="linkedOrder" size="small" :column="2" bordered class="order-summary">
-        <a-descriptions-item label="履约单号">{{ linkedOrder.fulfillmentNo }}</a-descriptions-item>
-        <a-descriptions-item label="平台订单">{{ linkedOrder.sourceOrderNo }}</a-descriptions-item>
-        <a-descriptions-item label="货主">{{ linkedOrder.ownerName || '-' }}</a-descriptions-item>
-        <a-descriptions-item label="仓库">{{ linkedOrder.warehouseName || '-' }}</a-descriptions-item>
-        <a-descriptions-item label="承运信息">
-          {{ linkedOrder.carrierName || '-' }} / {{ linkedOrder.shippingMethod || '-' }}
-        </a-descriptions-item>
-        <a-descriptions-item label="跟踪号">{{ linkedOrder.trackingNo || '-' }}</a-descriptions-item>
-      </a-descriptions>
-
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="车牌" name="vehiclePlate">
-            <a-input v-model:value="form.vehiclePlate" maxlength="64" />
-          </a-form-item>
+      <a-row :gutter="16" class="summary-row">
+        <a-col :xs="12" :sm="8" :lg="4">
+          <a-statistic title="任务总数" :value="summary?.totalTaskCount || 0" />
         </a-col>
-        <a-col :span="12">
-          <a-form-item label="司机" name="driverName">
-            <a-input v-model:value="form.driverName" maxlength="128" />
-          </a-form-item>
+        <a-col :xs="12" :sm="8" :lg="4">
+          <a-statistic title="已完成" :value="summary?.completedTaskCount || 0" />
         </a-col>
-        <a-col :span="12">
-          <a-form-item label="司机电话" name="driverPhone">
-            <a-input v-model:value="form.driverPhone" maxlength="64" />
-          </a-form-item>
+        <a-col :xs="12" :sm="8" :lg="4">
+          <a-statistic title="已取消" :value="summary?.cancelledTaskCount || 0" />
         </a-col>
-        <a-col :span="12">
-          <a-form-item label="发车时间" name="departureTime">
-            <a-date-picker
-              v-model:value="form.departureTime"
-              show-time
-              value-format="YYYY-MM-DD HH:mm:ss"
-              style="width: 100%"
-            />
-          </a-form-item>
+        <a-col :xs="12" :sm="8" :lg="4">
+          <a-statistic
+            title="未处理完成"
+            :value="summary?.unprocessedTaskCount || 0"
+            :value-style="summary?.unprocessedTaskCount ? { color: '#cf1322' } : undefined"
+          />
         </a-col>
-        <a-col :span="24">
-          <a-form-item label="目的地" name="destination">
-            <a-auto-complete
-              v-model:value="form.destination"
-              :options="destinationOptions"
-              placeholder="请输入或选择最近使用的目的地"
-            />
-          </a-form-item>
+        <a-col :xs="12" :sm="8" :lg="4">
+          <a-statistic
+            title="异常任务"
+            :value="summary?.exceptionTaskCount || 0"
+            :value-style="summary?.exceptionTaskCount ? { color: '#cf1322' } : undefined"
+          />
         </a-col>
-        <a-col :span="12">
-          <a-form-item label="运费（仅记录）" name="freightCost">
-            <a-input-number
-              v-model:value="form.freightCost"
-              :min="0"
-              :precision="2"
-              style="width: 100%"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="币种">
-            <a-select v-model:value="form.currency" :options="currencyOptions" />
-          </a-form-item>
-        </a-col>
-        <a-col :span="24">
-          <a-form-item label="备注">
-            <a-textarea v-model:value="form.remark" :rows="2" maxlength="500" show-count />
-          </a-form-item>
-        </a-col>
-        <a-col :span="24">
-          <a-form-item label="物流照片（最多6张）">
-            <div class="photo-list">
-              <sys-file-upload
-                v-for="(_, index) in photoIds"
-                :key="index"
-                v-model="photoIds[index]"
-                button-text="上传照片"
-                :allowed-types="['image/jpeg', 'image/jpg', 'image/png']"
-                :max-size="10 * 1024 * 1024"
-              />
-              <a-button
-                v-if="photoIds.length < 6"
-                type="dashed"
-                @click="photoIds.push(undefined)"
-                >添加照片</a-button
-              >
-            </div>
-          </a-form-item>
+        <a-col :xs="12" :sm="8" :lg="4">
+          <a-statistic title="已复核" :value="summary?.reviewCurrent ? 1 : 0" />
         </a-col>
       </a-row>
-    </a-form>
-    <a-alert
-      type="warning"
-      show-icon
-      message="本单运费只作为运输记录保存，不会进入原有仓储计费或物流产品计费。"
-    />
-  </a-modal>
+
+      <a-descriptions v-if="summary?.reviewNo" size="small" :column="3" class="review-record">
+        <a-descriptions-item label="复核单号">{{ summary.reviewNo }}</a-descriptions-item>
+        <a-descriptions-item label="复核人员">
+          {{ summary.reviewedBy ? getUserName(summary.reviewedBy) : '-' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="复核时间">{{ summary.reviewedTime || '-' }}</a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
+    <a-card :bordered="false" title="当日拣货任务">
+      <template #extra><a-button @click="load">刷新</a-button></template>
+      <a-table
+        row-key="id"
+        :loading="loading"
+        :data-source="tasks"
+        :columns="columns"
+        :pagination="{ pageSize: 20, showSizeChanger: true }"
+        :scroll="{ x: 1280 }"
+        size="middle"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'warehouse'">
+            {{ warehouseName(record.warehouseId) }}
+          </template>
+          <template v-else-if="column.key === 'progress'">
+            {{ record.completedOrderCount || 0 }} / {{ record.orderCount || 0 }}
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="taskStatusMeta(record.taskStatus).color">
+              {{ taskStatusMeta(record.taskStatus).text }}
+            </a-tag>
+          </template>
+          <template v-else-if="column.key === 'operator'">
+            {{ record.operatorId ? getUserName(record.operatorId) : '-' }}
+          </template>
+          <template v-else-if="column.key === 'exception'">
+            <span :class="{ danger: record.exceptionOrderCount }">
+              {{ record.exceptionOrderCount || 0 }}
+            </span>
+          </template>
+          <template v-else-if="column.key === 'operate'">
+            <a @click="openDetail(record)">查看</a>
+          </template>
+        </template>
+      </a-table>
+    </a-card>
+
+    <a-modal
+      v-model:open="confirmOpen"
+      title="完成出库复核"
+      :confirm-loading="confirming"
+      ok-text="确认复核完成"
+      @ok="confirmReview"
+    >
+      <a-descriptions :column="1" size="small" bordered>
+        <a-descriptions-item label="作业日期">{{ workDate }}</a-descriptions-item>
+        <a-descriptions-item label="仓库范围">
+          {{ query.warehouseId ? warehouseName(query.warehouseId) : '全部仓库' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="任务结果">
+          共 {{ summary?.totalTaskCount || 0 }} 张，已完成
+          {{ summary?.completedTaskCount || 0 }} 张，已取消
+          {{ summary?.cancelledTaskCount || 0 }} 张
+        </a-descriptions-item>
+      </a-descriptions>
+      <a-form-item label="复核备注" class="confirm-remark">
+        <a-textarea v-model:value="reviewRemark" :rows="3" :maxlength="500" show-count />
+      </a-form-item>
+    </a-modal>
+
+    <a-drawer v-model:open="detailOpen" title="拣货任务明细" width="860">
+      <a-spin :spinning="detailLoading">
+        <a-descriptions v-if="taskDetail" :column="2" bordered size="small">
+          <a-descriptions-item label="任务号">{{ taskDetail.task.taskNo }}</a-descriptions-item>
+          <a-descriptions-item label="状态">
+            {{ taskStatusMeta(taskDetail.task.taskStatus).text }}
+          </a-descriptions-item>
+          <a-descriptions-item label="仓库">
+            {{ warehouseName(taskDetail.task.warehouseId) }}
+          </a-descriptions-item>
+          <a-descriptions-item label="拣货人员">
+            {{ taskDetail.task.operatorId ? getUserName(taskDetail.task.operatorId) : '-' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="订单数">{{ taskDetail.task.orderCount }}</a-descriptions-item>
+          <a-descriptions-item label="货物件数">{{ taskDetail.task.totalQuantity }}</a-descriptions-item>
+        </a-descriptions>
+
+        <a-table
+          v-if="taskDetail"
+          row-key="taskOrder.id"
+          :data-source="taskDetail.orderQueue"
+          :columns="detailColumns"
+          :pagination="false"
+          :scroll="{ x: 760 }"
+          class="detail-table"
+          size="small"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'orderNo'">
+              {{ record.fulfillmentOrder.fulfillmentNo }}
+            </template>
+            <template v-else-if="column.key === 'sourceOrder'">
+              {{ record.fulfillmentOrder.sourceOrderNo }}
+            </template>
+            <template v-else-if="column.key === 'goods'">
+              {{ record.skuCount }} 种 / {{ record.totalQuantity }} 件
+            </template>
+            <template v-else-if="column.key === 'picked'">
+              {{ record.pickedQuantity }} / {{ record.totalQuantity }}
+            </template>
+            <template v-else-if="column.key === 'orderStatus'">
+              {{ orderStatusText(record.taskOrder.orderStatus) }}
+            </template>
+          </template>
+        </a-table>
+      </a-spin>
+    </a-drawer>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { Modal, message } from 'ant-design-vue'
+import { computed, onActivated, onMounted, reactive, ref } from 'vue'
 import dayjs from 'dayjs'
-import type { FormInstance } from 'ant-design-vue'
-import ProTable from '#/table'
-import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
-import { SearchActions } from '@/components/Search'
-import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
-import WarehouseSelect from '@/components/Lov/WarehouseSelect.vue'
-import SysFileUpload from '@/components/Upload/SysFileUpload.vue'
-import ExpensePane from './TransportExpensePane.vue'
-import { mergePageParam } from '@/utils/page-utils'
+import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import {
-  confirmOutboundHandover,
-  createOutboundHandover,
-  downloadOutboundHandoverPdf,
-  getOutboundHandover,
-  listAvailableHandoverFulfillments,
-  listRecentHandoverDestinations,
-  pageOutboundHandoverOrders,
-  saveOutboundHandover
+  confirmOutboundPickReview,
+  getFulfillmentPickTask,
+  getOutboundPickReviewSummary,
+  listFulfillmentPickTasks
 } from '@/api/wms/fulfillment'
 import type {
-  FulfillmentHandoverForm,
-  FulfillmentShippingOrder,
-  FulfillmentShippingQuery,
-  OutboundHandoverOrder
+  FulfillmentPickTask,
+  FulfillmentPickTaskDetail,
+  FulfillmentPickTaskQuery,
+  OutboundPickReviewSummary
 } from '@/api/wms/fulfillment/types'
-import { useTableActivateReload } from '@/hooks/useTableActivateReload'
+import { getWarehouseOptions } from '@/api/wms/warehouse'
+import { SearchActions } from '@/components/Search'
+import UserSelect from '@/components/Lov/UserSelect.vue'
+import { useUserData } from '@/hooks/use-user-data'
+import { createReactivationRefresh } from '../fulfillment-picking/reactivation-refresh'
 
 defineOptions({ name: 'FulfillmentWorkbenchPage' })
 
-interface EditorForm extends FulfillmentHandoverForm {
-  fulfillmentOrderId?: number
+const loading = ref(false)
+const confirming = ref(false)
+const confirmOpen = ref(false)
+const detailOpen = ref(false)
+const detailLoading = ref(false)
+const workDate = ref(dayjs().format('YYYY-MM-DD'))
+const reviewRemark = ref('')
+const tasks = ref<FulfillmentPickTask[]>([])
+const summary = ref<OutboundPickReviewSummary>()
+const taskDetail = ref<FulfillmentPickTaskDetail>()
+const warehouses = ref<{ id: number; warehouseName: string }[]>([])
+const query = reactive<FulfillmentPickTaskQuery>({})
+const { allUsers: userOptions, loading: usersLoading, loadAllUsers, getUserName } = useUserData()
+
+const statusMeta: Record<string, { text: string; color: string }> = {
+  PENDING: { text: '待领取', color: 'orange' },
+  PICKING: { text: '拣货中', color: 'blue' },
+  PARTIAL_EXCEPTION: { text: '存在异常', color: 'red' },
+  COMPLETED: { text: '已完成', color: 'green' },
+  CANCELLED: { text: '已取消', color: 'default' }
 }
 
-const activeTab = ref('handover')
-const tableRef = ref<ProTableInstanceExpose>()
-const dateRange = ref<[string, string]>()
-const searchModel = reactive<FulfillmentShippingQuery>({})
-let searchParams: FulfillmentShippingQuery = {}
-const statusOptions = [
-  { label: '待交接', value: 'READY_HANDOVER' },
-  { label: '已交接', value: 'HANDED_OVER' }
+const statusOptions = Object.entries(statusMeta).map(([value, item]) => ({
+  value,
+  label: item.text
+}))
+const warehouseOptions = computed(() =>
+  warehouses.value.map(item => ({ value: item.id, label: item.warehouseName }))
+)
+const reviewTag = computed(() => {
+  if (summary.value?.reviewCurrent) return { text: '已完成复核', color: 'green' }
+  if (!summary.value?.totalTaskCount) return { text: '当日暂无任务', color: 'default' }
+  if (summary.value.allProcessed) return { text: '全部处理完成，可以复核', color: 'green' }
+  return { text: `还有 ${summary.value.unprocessedTaskCount} 张未完成`, color: 'red' }
+})
+
+const columns = [
+  { title: '拣货任务号', dataIndex: 'taskNo', width: 230, fixed: 'left' as const },
+  { title: '仓库', key: 'warehouse', width: 160 },
+  { title: '订单数', dataIndex: 'orderCount', width: 90 },
+  { title: '货物件数', dataIndex: 'totalQuantity', width: 100 },
+  { title: '订单完成进度', key: 'progress', width: 130 },
+  { title: '异常订单', key: 'exception', width: 100 },
+  { title: '任务状态', key: 'status', width: 120 },
+  { title: '拣货人员', key: 'operator', width: 130 },
+  { title: '领取时间', dataIndex: 'claimedTime', width: 180 },
+  { title: '创建时间', dataIndex: 'createTime', width: 180 },
+  { title: '操作', key: 'operate', width: 80, fixed: 'right' as const }
 ]
-const currencyOptions = ['CNY', 'USD', 'EUR', 'RUB'].map(value => ({ label: value, value }))
 
-const tableRequest: TableRequest = (params, sorter, filter) =>
-  pageOutboundHandoverOrders({
-    ...mergePageParam(params, sorter, filter),
-    ...searchParams
-  })
-const reloadTable = (resetPageIndex?: boolean) => tableRef.value?.actionRef?.reload(resetPageIndex)
-useTableActivateReload(() => reloadTable(false))
+const detailColumns = [
+  { title: '履约单号', key: 'orderNo', width: 190 },
+  { title: '平台订单', key: 'sourceOrder', width: 180 },
+  { title: '货物', key: 'goods', width: 110 },
+  { title: '拣货进度', key: 'picked', width: 110 },
+  { title: '处理状态', key: 'orderStatus', width: 110 }
+]
 
-const searchTable = () => {
-  searchParams = {
-    ...searchModel,
-    startDate: dateRange.value?.[0],
-    endDate: dateRange.value?.[1]
-  }
-  reloadTable(true)
-}
-const resetSearch = () => {
-  Object.assign(searchModel, {
-    erpTenantId: undefined,
-    warehouseId: undefined,
-    fulfillmentStatus: undefined,
-    shippedBy: undefined
-  })
-  dateRange.value = undefined
-  searchTable()
-}
+const taskStatusMeta = (status: string) =>
+  statusMeta[status] || { text: status || '-', color: 'default' }
 
-const editorOpen = ref(false)
-const editorMode = ref<'create' | 'edit'>('create')
-const saving = ref(false)
-const formRef = ref<FormInstance>()
-const currentHandover = ref<OutboundHandoverOrder>()
-const availableFulfillments = ref<FulfillmentShippingOrder[]>([])
-const recentDestinations = ref<string[]>([])
-const photoIds = ref<(number | undefined)[]>([undefined])
-const form = reactive<EditorForm>({
-  vehiclePlate: '',
-  driverName: '',
-  driverPhone: '',
-  departureTime: '',
-  destination: '',
-  freightCost: 0,
-  currency: 'CNY',
-  remark: ''
-})
-const rules = {
-  fulfillmentOrderId: [{ required: true, message: '请选择已打包货物' }],
-  vehiclePlate: [{ required: true, message: '请输入车牌' }],
-  driverName: [{ required: true, message: '请输入司机' }],
-  departureTime: [{ required: true, message: '请选择发车时间' }],
-  destination: [{ required: true, message: '请输入目的地' }],
-  freightCost: [{ required: true, message: '请输入运费' }]
-}
+const orderStatusText = (status: string) =>
+  ({
+    PENDING: '待处理',
+    PICKING: '处理中',
+    WAITING_LABEL: '等待打包',
+    COMPLETED: '已完成',
+    EXCEPTION: '异常',
+    CANCELLED: '已取消'
+  })[status] || status
 
-const availableOptions = computed(() =>
-  availableFulfillments.value.map(item => ({
-    value: item.id,
-    label: `${item.fulfillmentNo}｜${item.sourceOrderNo}｜${item.ownerName || '-'}｜${item.warehouseName || '-'}`
-  }))
-)
-const destinationOptions = computed(() =>
-  recentDestinations.value.map(value => ({ label: value, value }))
-)
-const linkedOrder = computed<Partial<FulfillmentShippingOrder> | undefined>(() => {
-  if (editorMode.value === 'edit' && currentHandover.value) return currentHandover.value
-  return availableFulfillments.value.find(item => item.id === form.fulfillmentOrderId)
-})
+const warehouseName = (id: number) =>
+  warehouses.value.find(item => item.id === id)?.warehouseName || `仓库 ${id}`
 
-const resetEditor = () => {
-  Object.assign(form, {
-    fulfillmentOrderId: undefined,
-    vehiclePlate: '',
-    driverName: '',
-    driverPhone: '',
-    departureTime: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    destination: '',
-    freightCost: 0,
-    currency: 'CNY',
-    remark: ''
-  })
-  photoIds.value = [undefined]
-  currentHandover.value = undefined
-  formRef.value?.clearValidate()
-}
-
-const loadCreationOptions = async () => {
-  const [fulfillments, destinations] = await Promise.all([
-    listAvailableHandoverFulfillments(),
-    listRecentHandoverDestinations()
-  ])
-  availableFulfillments.value = isSuccess(fulfillments) ? fulfillments.data || [] : []
-  recentDestinations.value = isSuccess(destinations) ? destinations.data || [] : []
-}
-
-const openCreate = async () => {
-  editorMode.value = 'create'
-  resetEditor()
-  await loadCreationOptions()
-  editorOpen.value = true
-}
-
-const openEdit = async (record: OutboundHandoverOrder) => {
-  const res = await getOutboundHandover(record.id)
-  if (!isSuccess(res)) return
-  editorMode.value = 'edit'
-  currentHandover.value = res.data
-  Object.assign(form, {
-    fulfillmentOrderId: res.data.fulfillmentOrderId,
-    vehiclePlate: res.data.vehiclePlate || '',
-    driverName: res.data.driverName || '',
-    driverPhone: res.data.driverPhone || '',
-    departureTime: res.data.departureTime,
-    destination: res.data.destination || '',
-    freightCost: res.data.freightCost ?? 0,
-    currency: res.data.currency || 'CNY',
-    remark: res.data.remark || ''
-  })
-  const ids = (res.data.logisticsPhotoFileIds || '')
-    .split(',')
-    .map(Number)
-    .filter(Boolean)
-  photoIds.value = ids.length ? ids : [undefined]
-  editorOpen.value = true
-}
-
-const fillFromFulfillment = (id: number) => {
-  const fulfillment = availableFulfillments.value.find(item => item.id === id)
-  if (fulfillment?.recipientAddress) form.destination = fulfillment.recipientAddress
-}
-
-const filterFulfillment = (input: string, option: { label?: string }) =>
-  String(option.label || '')
-    .toLowerCase()
-    .includes(input.toLowerCase())
-
-const handoverPayload = (): FulfillmentHandoverForm => ({
-  vehiclePlate: form.vehiclePlate,
-  driverName: form.driverName,
-  driverPhone: form.driverPhone,
-  departureTime: form.departureTime,
-  destination: form.destination,
-  freightCost: form.freightCost,
-  currency: form.currency,
-  remark: form.remark,
-  photoFileIds: photoIds.value.filter((id): id is number => typeof id === 'number')
-})
-
-const submitEditor = async () => {
-  await formRef.value?.validate()
-  saving.value = true
+const load = async () => {
+  loading.value = true
   try {
-    const payload = handoverPayload()
-    const res =
-      editorMode.value === 'create'
-        ? await createOutboundHandover({
-            ...payload,
-            fulfillmentOrderId: form.fulfillmentOrderId as number
-          })
-        : await saveOutboundHandover(currentHandover.value!.id, payload)
-    if (isSuccess(res)) {
-      message.success(editorMode.value === 'create' ? '出库交接单已创建' : '交接资料已更新')
-      editorOpen.value = false
-      reloadTable(editorMode.value === 'create')
+    const startTime = `${workDate.value} 00:00:00`
+    const endTime = `${workDate.value} 23:59:59`
+    const [taskResult, summaryResult] = await Promise.all([
+      listFulfillmentPickTasks({ ...query, startTime, endTime }),
+      getOutboundPickReviewSummary({
+        workDate: workDate.value,
+        warehouseId: query.warehouseId
+      })
+    ])
+    if (isSuccess(taskResult)) tasks.value = taskResult.data || []
+    if (isSuccess(summaryResult)) {
+      summary.value = summaryResult.data
+      reviewRemark.value = summaryResult.data?.remark || ''
     }
   } finally {
-    saving.value = false
+    loading.value = false
   }
 }
 
-const confirmHandover = (record: OutboundHandoverOrder) => {
-  Modal.confirm({
-    title: `确认交接 ${record.handoverNo}？`,
-    content: '确认后，关联货物的最终状态将变为“已交接”。',
-    async onOk() {
-      const res = await confirmOutboundHandover(record.id, {
-        vehiclePlate: record.vehiclePlate,
-        driverName: record.driverName,
-        driverPhone: record.driverPhone,
-        departureTime: record.departureTime,
-        destination: record.destination,
-        freightCost: record.freightCost,
-        currency: record.currency,
-        remark: record.remark,
-        photoFileIds: (record.logisticsPhotoFileIds || '')
-          .split(',')
-          .map(Number)
-          .filter(Boolean)
-      })
-      if (isSuccess(res)) {
-        message.success('货物已交接')
-        reloadTable(false)
-      }
-    }
+const reset = () => {
+  workDate.value = dayjs().format('YYYY-MM-DD')
+  Object.assign(query, {
+    warehouseId: undefined,
+    taskNo: undefined,
+    taskStatus: undefined,
+    operatorId: undefined
   })
+  load()
 }
 
-const downloadPdf = async (record: OutboundHandoverOrder) => {
-  const response = await downloadOutboundHandoverPdf(record.id)
-  const blob =
-    response.data instanceof Blob
-      ? response.data
-      : new Blob([response.data], { type: 'application/pdf' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `出库交接凭证-${record.handoverNo}.pdf`
-  link.click()
-  URL.revokeObjectURL(link.href)
+const confirmReview = async () => {
+  confirming.value = true
+  try {
+    const result = await confirmOutboundPickReview({
+      workDate: workDate.value,
+      warehouseId: query.warehouseId,
+      remark: reviewRemark.value || undefined
+    })
+    if (isSuccess(result)) {
+      message.success('当日拣货任务复核完成')
+      confirmOpen.value = false
+      await load()
+    }
+  } finally {
+    confirming.value = false
+  }
 }
 
-const columns: ProColumns[] = [
-  { title: '交接单号', dataIndex: 'handoverNo', key: 'handoverNo', width: 220, fixed: 'left' },
-  { title: '履约单号', dataIndex: 'fulfillmentNo', key: 'fulfillmentNo', width: 190 },
-  { title: '平台订单', key: 'source', width: 190 },
-  { title: '货主', dataIndex: 'ownerName', key: 'ownerName', width: 130, ellipsis: true },
-  { title: '仓库', dataIndex: 'warehouseName', key: 'warehouseName', width: 140, ellipsis: true },
-  { title: '承运信息/跟踪号', key: 'transport', width: 240 },
-  { title: '车牌/司机', key: 'vehicle', width: 150 },
-  { title: '发车时间', dataIndex: 'departureTime', key: 'departureTime', width: 170 },
-  { title: '目的地', dataIndex: 'destination', key: 'destination', width: 220, ellipsis: true },
-  { title: '运费', key: 'freight', width: 120 },
-  { title: '状态', key: 'status', width: 100, align: 'center' },
-  { title: '交接人员', dataIndex: 'handoverByName', key: 'handoverByName', width: 110 },
-  { title: '交接时间', dataIndex: 'handoverTime', key: 'handoverTime', width: 170 },
-  { title: '操作', key: 'operate', width: 180, align: 'center', fixed: 'right' }
-]
+const openDetail = async (task: FulfillmentPickTask) => {
+  detailOpen.value = true
+  detailLoading.value = true
+  taskDetail.value = undefined
+  try {
+    const result = await getFulfillmentPickTask(task.id)
+    if (isSuccess(result)) taskDetail.value = result.data
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const refreshOnReactivation = createReactivationRefresh(load)
+onActivated(refreshOnReactivation)
+onMounted(async () => {
+  const warehouseResult = await getWarehouseOptions()
+  if (isSuccess(warehouseResult)) warehouses.value = warehouseResult.data || []
+  await loadAllUsers()
+  await load()
+})
 </script>
 
 <style scoped>
-.shipping-search {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px 20px;
-  margin-bottom: 16px;
-}
-.shipping-search :deep(.ant-form-item) {
-  margin: 0;
-}
-.secondary-text,
-.record-only {
-  color: rgba(0, 0, 0, 0.45);
-  font-size: 12px;
-}
-.record-only {
-  color: #d48806;
-}
-.order-summary {
-  margin-bottom: 20px;
-}
-.photo-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.photo-list :deep(.sys-file-upload) {
-  width: 100%;
-}
-.photo-list :deep(.uploaded-file) {
-  max-width: none;
-}
-:deep(.expense-toolbar) {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-:deep(.record-only-tip) {
-  margin-left: 10px;
-  color: #d48806;
-  font-size: 12px;
-}
+.review-page { display: grid; gap: 16px; min-width: 0; }
+.review-search { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; }
+.review-search :deep(.ant-form-item) { margin: 0; flex: 0 0 auto; }
+.review-search :deep(.ant-form-item-row) { flex-wrap: nowrap; }
+.search-actions-item { margin-left: auto !important; }
+.summary-row { padding: 8px 0 16px; }
+.review-record { padding-top: 12px; border-top: 1px solid #f0f0f0; }
+.confirm-remark { margin-top: 20px; margin-bottom: 0; }
+.detail-table { margin-top: 16px; }
+.danger { color: #cf1322; font-weight: 600; }
 </style>

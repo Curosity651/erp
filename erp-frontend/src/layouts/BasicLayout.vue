@@ -8,7 +8,8 @@
     :routes="routes"
     :match-menu-keys="menuState.matchMenuKeys"
     :menu="{
-      defaultOpenAll: true
+      defaultOpenAll: true,
+      locale: false
     }"
     iconfont-url="//at.alicdn.com/t/font_8d5l8fzk5b87iudi.js"
     :class="className"

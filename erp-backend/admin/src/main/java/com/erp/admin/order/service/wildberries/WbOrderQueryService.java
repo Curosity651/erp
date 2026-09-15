@@ -17,6 +17,7 @@ import com.erp.admin.order.mapper.ErpOrderItemMapper;
 import com.erp.admin.order.mapper.ErpOrderMapper;
 import com.erp.admin.order.mapper.WbOfficeMapper;
 import com.erp.admin.order.model.entity.ErpOrder;
+import com.erp.admin.order.model.enums.OwnerOrderBusinessStatus;
 import com.erp.admin.order.model.entity.ErpOrderItem;
 import com.erp.admin.order.model.entity.WbOffice;
 import com.erp.admin.order.model.qo.ErpOrderQO;
@@ -101,6 +102,7 @@ public class WbOrderQueryService {
 		List<WbOrderPageVO> voList = new ArrayList<>(entities.size());
 		for (ErpOrder entity : entities) {
 			WbOrderPageVO vo = ErpOrderConverter.INSTANCE.poToWbPageVo(entity);
+			vo.setBusinessStatus(OwnerOrderBusinessStatus.resolve(entity).name());
 			voList.add(vo);
 		}
 
@@ -230,7 +232,7 @@ public class WbOrderQueryService {
 		exportVO.setPlatformStatusLabel(mapWbStatusLabel(pageVO.getPlatformStatus()));
 		exportVO.setDestinationWarehouseName(pageVO.getDestinationWarehouseName());
 		exportVO.setDestinationWarehouseAddress(pageVO.getDestinationWarehouseAddress());
-		exportVO.setLabelStatus(buildOperationStatus(pageVO));
+		exportVO.setLockStatus(pageVO.getLocked() != null && pageVO.getLocked() == 1 ? "已锁定" : "未锁定");
 		exportVO.setPlatformCreatedAtMoscow(pageVO.getPlatformCreatedAtMoscow());
 		return exportVO;
 	}
@@ -239,19 +241,6 @@ public class WbOrderQueryService {
 		if (platformStatus == null) return "-";
 		String label = WildberriesWbStatusEnum.getLabelByCode(platformStatus);
 		return label != null ? label : platformStatus;
-	}
-
-	private String buildOperationStatus(WbOrderPageVO pageVO) {
-		List<String> statuses = new ArrayList<>();
-		if (pageVO.getLocked() != null && pageVO.getLocked() == 1) {
-			statuses.add("已锁定");
-		}
-		if (pageVO.getHasLabel() != null && pageVO.getHasLabel()) {
-			statuses.add("面单已获取");
-		} else {
-			statuses.add("面单待获取");
-		}
-		return String.join(", ", statuses);
 	}
 
 }

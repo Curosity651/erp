@@ -34,6 +34,56 @@ export const ERP_STATUS_MAP: Record<ErpStatusKey, { label: string; tip: string; 
   RETURNED: { label: '已退货/拒收', tip: 'Returned', cls: 'erp-returned' }
 }
 
+export type OwnerOrderBusinessStatus =
+  | 'PENDING_CONFIRM'
+  | 'WAITING_SHELF'
+  | 'OUTBOUND_PROCESSING'
+  | 'HANDED_OVER'
+  | 'CANCELLED'
+  | 'EXCEPTION'
+
+export const OWNER_ORDER_STATUS_MAP: Record<
+  OwnerOrderBusinessStatus,
+  { label: string; tip: string; cls: string; dotClass: string }
+> = {
+  PENDING_CONFIRM: {
+    label: '待确认',
+    tip: '订单尚未提交海外仓',
+    cls: 'pending',
+    dotClass: 'status-pending'
+  },
+  WAITING_SHELF: {
+    label: '待下架',
+    tip: '已提交海外仓，等待确认下架',
+    cls: 'warning',
+    dotClass: 'status-readytoship'
+  },
+  OUTBOUND_PROCESSING: {
+    label: '出库作业中',
+    tip: '仓库正在拣货、贴面单、打包或等待签出',
+    cls: 'processing',
+    dotClass: 'status-shipped'
+  },
+  HANDED_OVER: {
+    label: '已交接',
+    tip: '已在打包签出环节完成交接',
+    cls: 'success',
+    dotClass: 'status-delivered'
+  },
+  CANCELLED: {
+    label: '已取消',
+    tip: '订单或仓库履约已取消',
+    cls: 'gray',
+    dotClass: 'status-canceled'
+  },
+  EXCEPTION: {
+    label: '异常',
+    tip: '仓库履约处理异常',
+    cls: 'error',
+    dotClass: 'status-canceled'
+  }
+}
+
 /**
  * 订单基础 VO（三平台公共字段）
  */
@@ -49,11 +99,11 @@ export interface BaseOrderVO {
   platformStatus: string
   platformSubstatus?: string
   erpStatus: string
+  businessStatus?: OwnerOrderBusinessStatus
   totalAmount?: number
   currencyCode?: string
   convertedAmount?: number
   convertedCurrencyCode?: string
-  hasLabel: boolean
   locked: number
   fulfillmentOrderId?: number
   warehouseFulfillmentStatus?: string

@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 退货入库单详情VO
@@ -21,6 +22,8 @@ public class ReturnInboundDetailVO {
 
     @Schema(title = "退货单号")
     private String returnNo;
+
+    private String returnBatchNo;
 
     @Schema(title = "ERP订单ID")
     private Long erpOrderId;
@@ -81,5 +84,11 @@ public class ReturnInboundDetailVO {
 
     @Schema(title = "创建时间")
     private LocalDateTime createTime;
+
+    private String dispositionTime;
+
+    private String processedTime;
+
+    private List<ReturnOrderItemVO> items;
 
 }

@@ -22,30 +22,12 @@
           <a @click.prevent> 批量操作&nbsp;<DownOutlined /> </a>
           <template #overlay>
             <a-menu>
-              <!-- 只有全部是 FBS 订单时才显示确认和打印 -->
+              <!-- 只有全部是 FBS 订单时才显示确认 -->
               <a-menu-item
                 v-if="isAllFbsOrders(slotProps.selectedRows)"
                 key="confirm"
                 @click="handleBatchAction('confirm', slotProps.selectedRows)"
                 >批量确认
-              </a-menu-item>
-              <a-menu-item
-                v-if="isAllFbsOrders(slotProps.selectedRows)"
-                key="print"
-                @click="handleBatchAction('print', slotProps.selectedRows)"
-                >批量打印面单
-              </a-menu-item>
-              <a-menu-item
-                v-if="isAllFbsOrders(slotProps.selectedRows)"
-                key="pick"
-                @click="handleBatchAction('pick', slotProps.selectedRows)"
-                >打印拣货单
-              </a-menu-item>
-              <a-menu-item
-                v-if="isAllFbsOrders(slotProps.selectedRows)"
-                key="act"
-                @click="handleBatchAction('act', slotProps.selectedRows)"
-                >准备发运
               </a-menu-item>
               <a-menu-item key="sync" @click="handleBatchAction('sync', slotProps.selectedRows)"
                 >同步选中
@@ -61,12 +43,7 @@
 
     <!-- 操作按钮区域 -->
     <template #toolBarRender>
-      <a-button @click="ruleDialogOpen = true">交接规则</a-button>
       <export-confirm-button title="确认导出当前查询条件下的订单?" :on-export="handleExport" />
-      <a-button @click="openHistory">
-        <HistoryOutlined />
-        打印历史
-      </a-button>
       <a-popconfirm
         title="是否确认进行全量订单信息同步?"
         ok-text="是"
@@ -125,14 +102,8 @@
           :currency-code="record.currencyCode"
           :converted-amount="record.convertedAmount"
           :converted-currency-code="record.convertedCurrencyCode || 'CNY'"
-          :erp-status="record.erpStatus"
-          :erp-status-mapping="mapErpStatus(record.erpStatus)"
-          :platform-status="record.platformStatus"
-          :platform-status-mapping="mapOzonStatus(record.platformStatus)"
-          :platform-substatus="record.platformSubstatus"
-          :platform-substatus-mapping="mapOzonSubstatus(record.platformSubstatus)"
-          platform-status-label="平台状态"
-          platform-substatus-label="子状态"
+          :erp-status="record.businessStatus"
+          :erp-status-mapping="mapOwnerOrderStatus(record.businessStatus)"
           amount-order="total-first"
         />
       </template>
@@ -185,24 +156,19 @@
         </div>
       </template>
 
-      <!-- 运营状态（锁定 + 面单） -->
+      <!-- 锁定状态 -->
       <template v-else-if="column.key === 'operationStatus'">
-        <OrderOperationStatusCell :locked="record.locked" :has-label="record.hasLabel" />
+        <OrderOperationStatusCell :locked="record.locked" />
       </template>
 
       <!-- 操作列 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <!-- 只有 FBS 订单且未锁定才显示确认和打印 -->
+          <!-- 只有 FBS 订单且未锁定才显示确认 -->
           <a
             v-if="record.fulfillmentType === 'FBS' && record.locked !== 1"
             @click="onOpenConfirmDialog([record])"
             >确认</a
-          >
-          <a
-            v-if="record.fulfillmentType === 'FBS' && record.locked !== 1"
-            @click="onOpenPrintDialog([record])"
-            >打印面单</a
           >
           <a-popconfirm title="是否确认进行同步操作?" @confirm="onSync([record])">
             <a>同步</a>
@@ -213,31 +179,6 @@
       </template>
     </template>
   </pro-table>
-
-  <OzonOrderPrintDialog
-    v-model:open="printDialog.open"
-    :rows="printDialog.rows"
-    @printed="onPrinted"
-  />
-
-  <!-- 拣货单对话框（按店铺一份） -->
-  <OzonOrderPickListDialog
-    v-model:open="pickDialog.open"
-    :rows="pickDialog.rows"
-    @generated="reloadTable"
-  />
-
-  <!-- 准备发运（生成运单 act）对话框 -->
-  <OzonOrderActDialog
-    v-model:open="actDialog.open"
-    :rows="actDialog.rows"
-    @generated="reloadTable"
-  />
-
-  <OzonDeliveryRuleDialog v-model:open="ruleDialogOpen" />
-
-  <!-- 打印历史对话框 -->
-  <LabelBatchHistoryDialog v-model:open="historyDialog.open" platform="Ozon" />
 
   <!-- 确认前弹窗 -->
   <OrderConfirmModal
@@ -259,23 +200,16 @@ import { OperationGroup } from '@/components/Operation'
 import { mergePageParam } from '@/utils/page-utils'
 import {
   pageOzonOrder,
-  confirmOzonOrders,
   lockOzonOrder,
   unlockOzonOrder,
   syncOzonOrders,
   syncAllOzonOrders,
   exportOzonOrders
 } from '@/api/order/ozon-order'
-import { OZON_STATUS_MAP, OZON_SUBSTATUS_MAP } from '@/api/order/ozon-order/types'
 import type { OzonOrderQO, OzonOrderPageVO } from '@/api/order/ozon-order/types'
-import OzonOrderPrintDialog from './OzonOrderPrintDialog.vue'
-import OzonOrderPickListDialog from './OzonOrderPickListDialog.vue'
-import OzonOrderActDialog from './OzonOrderActDialog.vue'
-import OzonDeliveryRuleDialog from './OzonDeliveryRuleDialog.vue'
 import { warehouseTypeOf, WAREHOUSE_TYPE_META } from './warehouse-type'
-import LabelBatchHistoryDialog from '@/views/order/label/LabelBatchHistoryDialog.vue'
 import { ExportConfirmButton } from '@/components/Button'
-import { message, Modal } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { formatAmount } from '@/utils/currency-utils'
 import {
   OrderBasicInfoCell,
@@ -284,23 +218,17 @@ import {
   OrderConfirmModal
 } from '@/views/order/components'
 import { remoteFileDownload } from '@/utils/file-utils'
-import { HistoryOutlined, InteractionOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { InteractionOutlined, DownOutlined } from '@ant-design/icons-vue'
 import SkuInfoCell from '@/components/Sku/SkuInfoCell.vue'
-import { mapErpStatus, createStatusMapper } from '@/utils/order-status-mapper'
+import { mapOwnerOrderStatus } from '@/utils/order-status-mapper'
 import { useOrderConfirm } from '@/views/order/hooks/useOrderConfirm.ts'
 import { useOrderLock } from '@/views/order/hooks/useOrderLock.ts'
 import { useOrderSync } from '@/views/order/hooks/useOrderSync.ts'
-import { useOrderPrint } from '@/views/order/hooks/useOrderPrint.ts'
 
 defineOptions({ name: 'OzonOrderPage' })
 
-// 状态映射
-const mapOzonStatus = createStatusMapper(OZON_STATUS_MAP)
-const mapOzonSubstatus = createStatusMapper(OZON_SUBSTATUS_MAP)
-
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
-const ruleDialogOpen = ref(false)
 
 /* 刷新表格 */
 const reloadTable = (resetPageIndex?: boolean) => {
@@ -351,28 +279,6 @@ const isAllFbsOrders = (orders: OzonOrderPageVO[]) => {
   return orders && orders.length > 0 && orders.every(o => o?.fulfillmentType === 'FBS')
 }
 
-// Ozon 确认响应处理（逐条检查，展示失败明细）
-const handleOzonConfirmSuccess = (res: any) => {
-  const data = res?.data
-  if (data?.items) {
-    const successCount = data.items.filter((i: any) => i.success).length
-    const failCount = data.items.filter((i: any) => !i.success).length
-    if (failCount > 0) {
-      const failMessages = data.items
-        .filter((i: any) => !i.success)
-        .map((i: any) => `订单${i.orderId}: ${i.message}`)
-        .join('\n')
-      Modal.warning({
-        title: `确认完成：成功 ${successCount}，失败 ${failCount}`,
-        content: failMessages,
-        width: 520
-      })
-    } else {
-      message.success(`确认发货成功：${successCount} 单`)
-    }
-  }
-}
-
 // 使用 composables
 const {
   confirmModal,
@@ -393,9 +299,7 @@ const {
     if (row?.erpStatus !== 'READY_TO_SHIP') return `状态不支持：${row?.erpStatus || '-'}`
     return '未知原因'
   },
-  confirmApi: confirmOzonOrders,
-  reloadTable: () => reloadTable(),
-  onConfirmSuccess: handleOzonConfirmSuccess
+  reloadTable: () => reloadTable()
 })
 
 const { onLock, onUnlock } = useOrderLock({
@@ -411,30 +315,15 @@ const { onSync, handleSyncAllOrders } = useOrderSync({
   reloadTable: () => reloadTable()
 })
 
-const {
-  printDialog,
-  historyDialog,
-  pickDialog,
-  actDialog,
-  openPrintDialog: onOpenPrintDialog,
-  openHistory,
-  openPickDialog: onOpenPickDialog,
-  openActDialog: onOpenActDialog
-} = useOrderPrint<OzonOrderPageVO>()
-
-const onPrinted = () => {
-  reloadTable()
-}
-
 // 批量操作处理（Ozon 特有：FBS/FBO 验证）
 const handleBatchAction = (
-  action: 'confirm' | 'print' | 'pick' | 'act' | 'sync',
+  action: 'confirm' | 'sync',
   rows: OzonOrderPageVO[]
 ) => {
   const list = Array.isArray(rows) ? rows : []
   if (!list.length) return
 
-  // 确认/打印面单/拣货单/准备发运 均仅支持 FBS 订单
+  // 确认仅支持 FBS 订单
   if (action !== 'sync' && !isAllFbsOrders(list)) {
     message.warning('该操作仅支持 FBS 订单')
     return
@@ -442,12 +331,6 @@ const handleBatchAction = (
 
   if (action === 'confirm') {
     onOpenConfirmDialog(list)
-  } else if (action === 'print') {
-    onOpenPrintDialog(list)
-  } else if (action === 'pick') {
-    onOpenPickDialog(list)
-  } else if (action === 'act') {
-    onOpenActDialog(list)
   } else if (action === 'sync') {
     onSync(list)
   }

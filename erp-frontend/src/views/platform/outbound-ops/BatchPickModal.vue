@@ -1,11 +1,12 @@
 <template>
   <a-modal
     :open="open"
-    title="批量创建拣货任务"
+    :title="t('platform.batchPick.title')"
     :width="920"
     :confirm-loading="submitting"
     :ok-button-props="{ disabled: !preview || !pickerId }"
-    ok-text="确认生成任务"
+    :ok-text="t('platform.batchPick.confirm')"
+    :cancel-text="t('platform.common.cancel')"
     @ok="handleCreate"
     @cancel="handleClose"
   >
@@ -13,20 +14,20 @@
       <a-alert
         type="info"
         show-icon
-        message="默认拣货完成后直接按平台订单复核打包。大型波次需要临时分货时，可在下方主动启用格口。"
+        :message="t('platform.batchPick.description')"
         style="margin-bottom: 16px"
       />
 
       <a-row v-if="preview" :gutter="12" class="metrics">
-        <a-col :span="4"><a-statistic title="已选出库单" :value="preview.selectedOrderCount" /></a-col>
-        <a-col :span="4"><a-statistic title="销售订单" :value="preview.selectedSalesOrderCount" /></a-col>
-        <a-col :span="4"><a-statistic title="生成任务" :value="preview.taskCount" /></a-col>
-        <a-col :span="4"><a-statistic title="总件数" :value="preview.totalQuantity" /></a-col>
-        <a-col :span="4"><a-statistic title="整托" :value="preview.wholePalletCount" /></a-col>
-        <a-col :span="4"><a-statistic title="格口包裹" :value="preview.secondaryOrderCount" /></a-col>
+        <a-col :span="4"><a-statistic :title="t('platform.batchPick.selected')" :value="preview.selectedOrderCount" /></a-col>
+        <a-col :span="4"><a-statistic :title="t('platform.batchPick.salesOrders')" :value="preview.selectedSalesOrderCount" /></a-col>
+        <a-col :span="4"><a-statistic :title="t('platform.batchPick.tasks')" :value="preview.taskCount" /></a-col>
+        <a-col :span="4"><a-statistic :title="t('platform.picking.totalPieces')" :value="preview.totalQuantity" /></a-col>
+        <a-col :span="4"><a-statistic :title="t('platform.batchPick.wholePallet')" :value="preview.wholePalletCount" /></a-col>
+        <a-col :span="4"><a-statistic :title="t('platform.batchPick.sortPackages')" :value="preview.secondaryOrderCount" /></a-col>
       </a-row>
 
-      <div v-if="preview" class="section-title">自动拆分结果</div>
+      <div v-if="preview" class="section-title">{{ t('platform.batchPick.splitResult') }}</div>
       <a-table
         v-if="preview"
         :data-source="preview.tasks"
@@ -35,13 +36,13 @@
         size="small"
         :scroll="{ y: 280 }"
       >
-        <a-table-column title="仓库 / 货主" :width="220">
+        <a-table-column :title="t('platform.batchPick.warehouseOwner')" :width="220">
           <template #default="{ record }">
             <div>{{ record.warehouseName }}</div>
             <div class="muted">{{ record.ownerName }}</div>
           </template>
         </a-table-column>
-        <a-table-column title="类型" :width="90">
+        <a-table-column :title="t('platform.batchPick.type')" :width="90">
           <template #default="{ record }">
               <a-tag
                 :color="
@@ -54,48 +55,48 @@
               >
                 {{
                   record.taskType === 'WAVE'
-                    ? '波次拣货'
+                    ? t('platform.outbound.mode.wave')
                     : record.taskType === 'PALLET_DIRECT'
-                      ? '整托直发'
-                      : '按单拣货'
+                      ? t('platform.batchPick.palletDirect')
+                      : t('platform.outbound.mode.single')
                 }}
             </a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="出库单" data-index="orderCount" :width="70" align="right" />
-        <a-table-column title="销售订单" data-index="salesOrderCount" :width="80" align="right" />
+        <a-table-column :title="t('platform.batchPick.outboundOrders')" data-index="orderCount" :width="70" align="right" />
+        <a-table-column :title="t('platform.batchPick.salesOrders')" data-index="salesOrderCount" :width="80" align="right" />
         <a-table-column title="SKU" data-index="skuCount" :width="65" align="right" />
-        <a-table-column title="件数" data-index="totalQuantity" :width="65" align="right" />
-        <a-table-column title="整托" data-index="wholePalletCount" :width="65" align="right" />
-        <a-table-column title="分货包裹" data-index="secondaryOrderCount" :width="82" align="right" />
+        <a-table-column :title="t('platform.batchPick.pieces')" data-index="totalQuantity" :width="65" align="right" />
+        <a-table-column :title="t('platform.batchPick.wholePallet')" data-index="wholePalletCount" :width="65" align="right" />
+        <a-table-column :title="t('platform.batchPick.sortedPackages')" data-index="secondaryOrderCount" :width="82" align="right" />
       </a-table>
 
       <a-form layout="vertical" class="task-form">
         <a-row :gutter="16">
           <a-col :span="9">
-            <a-form-item label="统一指定拣货员" required>
+            <a-form-item :label="t('platform.batchPick.unifiedPicker')" required>
               <a-select
                 v-model:value="pickerId"
                 :options="pickerOptions"
                 :loading="pickerLoading"
-                placeholder="请选择当前平台拣货员"
+                :placeholder="t('platform.batchPick.selectPicker')"
               />
             </a-form-item>
           </a-col>
           <a-col :span="6">
-            <a-form-item label="单任务最大包裹数">
+            <a-form-item :label="t('platform.batchPick.maxPackages')">
               <a-input-number v-model:value="maxOrders" :min="1" :max="50" style="width: 100%" />
             </a-form-item>
           </a-col>
           <a-col :span="4">
-            <a-form-item label="整托优先">
+            <a-form-item :label="t('platform.batchPick.palletPriority')">
               <a-switch v-model:checked="wholePalletPriority" />
             </a-form-item>
           </a-col>
           <a-col :span="5">
-            <a-form-item label="格口分货">
+            <a-form-item :label="t('platform.batchPick.sortSlots')">
               <a-switch v-model:checked="useSortSlots" />
-              <span class="switch-copy">{{ useSortSlots ? '启用' : '不启用' }}</span>
+              <span class="switch-copy">{{ useSortSlots ? t('platform.batchPick.enabled') : t('platform.batchPick.disabled') }}</span>
             </a-form-item>
           </a-col>
         </a-row>
@@ -106,12 +107,14 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import { createBatchPick, listPickers, previewBatchPick } from '@/api/wms/outbound-picking'
 import type { BatchPickPreviewVO } from '@/api/wms/outbound-picking/types'
 
 const props = defineProps<{ open: boolean; orderIds: number[] }>()
+const { t } = useI18n()
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'success'): void
@@ -192,13 +195,16 @@ async function handleCreate() {
     })
     if (isSuccess(res) && res.data) {
       const taskNos = res.data.taskNos.join('、')
-      message.success(
-        `已生成 ${res.data.taskCount} 个任务（${taskNos}），包含 ${res.data.orderCount} 张出库单、${res.data.salesOrderCount} 个销售订单`
-      )
+      message.success(t('platform.batchPick.success', {
+        tasks: res.data.taskCount,
+        numbers: taskNos,
+        outbounds: res.data.orderCount,
+        orders: res.data.salesOrderCount
+      }))
       emit('success')
       emit('update:open', false)
     } else {
-      message.error(res.message || '创建拣货任务失败')
+      message.error(res.message || t('platform.batchPick.failed'))
     }
   } finally {
     submitting.value = false

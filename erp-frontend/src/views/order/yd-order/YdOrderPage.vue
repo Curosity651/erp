@@ -17,7 +17,6 @@
   >
     <!-- 操作按钮区域 -->
     <template #toolBarRender>
-      <a-button @click="openHistory"> 打印历史 </a-button>
       <a-popconfirm
         title="是否确认进行全量订单信息同步?"
         ok-text="是"
@@ -40,9 +39,6 @@
             <a-menu>
               <a-menu-item @click="handleBatchAction('confirm', slotProps.selectedRows)">
                 批量确认
-              </a-menu-item>
-              <a-menu-item @click="handleBatchAction('print', slotProps.selectedRows)">
-                批量打印面单
               </a-menu-item>
               <a-menu-item @click="handleBatchAction('sync', slotProps.selectedRows)">
                 同步选中
@@ -95,14 +91,8 @@
           :currency-code="record.currencyCode"
           :converted-amount="record.convertedAmount"
           :converted-currency-code="record.convertedCurrencyCode || 'CNY'"
-          :erp-status="record.erpStatus"
-          :erp-status-mapping="mapErpStatus(record.erpStatus)"
-          :platform-status="record.platformStatus"
-          :platform-status-mapping="mapYdStatus(record.platformStatus)"
-          :platform-substatus="record.platformSubstatus"
-          :platform-substatus-mapping="mapYdSubstatus(record.platformSubstatus)"
-          platform-status-label="平台状态"
-          platform-substatus-label="子状态"
+          :erp-status="record.businessStatus"
+          :erp-status-mapping="mapOwnerOrderStatus(record.businessStatus)"
           amount-order="total-first"
         />
       </template>
@@ -117,14 +107,13 @@
 
       <!-- 运营状态 -->
       <template v-else-if="column.key === 'operationStatus'">
-        <OrderOperationStatusCell :locked="record.locked" :has-label="record.hasLabel" />
+        <OrderOperationStatusCell :locked="record.locked" />
       </template>
 
       <!-- 操作列 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a v-if="record.locked !== 1" @click="openConfirmDialog([record])">确认</a>
-          <a v-if="record.locked !== 1" @click="openPrintDialog([record])">打印面单</a>
           <a-popconfirm title="是否确认进行同步操作?" @confirm="onSync(record)">
             <a>同步</a>
           </a-popconfirm>
@@ -134,16 +123,6 @@
       </template>
     </template>
   </pro-table>
-
-  <!-- 打印面单弹窗 -->
-  <YdOrderPrintDialog
-    v-model:open="printDialog.open"
-    :rows="printDialog.rows"
-    @printed="reloadTable"
-  />
-
-  <!-- 打印历史弹窗 -->
-  <LabelBatchHistoryDialog v-model:open="historyDialog.open" platform="yandex" />
 
   <!-- 确认发货弹窗 -->
   <OrderConfirmModal
@@ -167,29 +146,24 @@ import {
   pageYdOrder,
   syncYdOrdersByIds,
   syncAllYdOrders,
-  confirmYdOrders,
   lockYdOrder,
   unlockYdOrder
 } from '@/api/order/yd-order'
-import { YD_STATUS_MAP, YD_SUBSTATUS_MAP } from '@/api/order/yd-order/types'
 import type { YdOrderQO, YdOrderPageVO } from '@/api/order/yd-order/types'
-import { message, Modal } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { formatAmount } from '@/utils/currency-utils'
 import SkuInfoCell from '@/components/Sku/SkuInfoCell.vue'
 import { InteractionOutlined, DownOutlined } from '@ant-design/icons-vue'
-import YdOrderPrintDialog from './YdOrderPrintDialog.vue'
-import LabelBatchHistoryDialog from '@/views/order/label/LabelBatchHistoryDialog.vue'
 import {
   OrderBasicInfoCell,
   OrderAmountStatusCell,
   OrderOperationStatusCell,
   OrderConfirmModal
 } from '@/views/order/components'
-import { mapErpStatus, createUpperStatusMapper } from '@/utils/order-status-mapper'
+import { mapOwnerOrderStatus } from '@/utils/order-status-mapper'
 import { useOrderConfirm } from '@/views/order/hooks/useOrderConfirm.ts'
 import { useOrderLock } from '@/views/order/hooks/useOrderLock.ts'
 import { useOrderSync } from '@/views/order/hooks/useOrderSync.ts'
-import { useOrderPrint } from '@/views/order/hooks/useOrderPrint.ts'
 
 defineOptions({ name: 'YdOrderPage' })
 
@@ -234,10 +208,6 @@ const rowSelection = {
   alwaysShowAlert: true
 }
 
-// 状态映射
-const mapYdStatus = createUpperStatusMapper(YD_STATUS_MAP)
-const mapYdSubstatus = createUpperStatusMapper(YD_SUBSTATUS_MAP)
-
 // Yandex 确认条件
 const canConfirm = (row: YdOrderPageVO) => {
   const isYandex = (row?.platform || '').toLowerCase() === 'yandex'
@@ -255,35 +225,11 @@ const confirmReasonOf = (row: YdOrderPageVO) => {
   return '未知原因'
 }
 
-// Yandex 确认响应处理（逐条检查）
-const handleYdConfirmSuccess = (res: any) => {
-  const data = res?.data
-  if (data?.items) {
-    const successCount = data.items.filter((i: any) => i.success).length
-    const failCount = data.items.filter((i: any) => !i.success).length
-    if (failCount > 0) {
-      const failMessages = data.items
-        .filter((i: any) => !i.success)
-        .map((i: any) => `订单${i.orderId}: ${i.message}`)
-        .join('\n')
-      Modal.warning({
-        title: `确认完成：成功 ${successCount}，失败 ${failCount}`,
-        content: failMessages,
-        width: 520
-      })
-    } else {
-      message.success(`确认发货成功：${successCount} 单`)
-    }
-  }
-}
-
 // 使用 composables
 const { confirmModal, openConfirmDialog, submitConfirm } = useOrderConfirm<YdOrderPageVO>({
   canConfirm,
   reasonOf: confirmReasonOf,
-  confirmApi: confirmYdOrders,
   reloadTable: () => reloadTable(),
-  onConfirmSuccess: handleYdConfirmSuccess
 })
 
 const { onLock, onUnlock } = useOrderLock({
@@ -299,16 +245,11 @@ const { onSync, handleSyncAllOrders } = useOrderSync({
   reloadTable: () => reloadTable()
 })
 
-const { printDialog, historyDialog, openPrintDialog, openHistory } = useOrderPrint<YdOrderPageVO>()
-
 // 批量操作
 function handleBatchAction(action: string, selectedRows: YdOrderPageVO[]) {
   switch (action) {
     case 'confirm':
       openConfirmDialog(selectedRows)
-      break
-    case 'print':
-      openPrintDialog(selectedRows)
       break
     case 'sync':
       onSync(selectedRows)

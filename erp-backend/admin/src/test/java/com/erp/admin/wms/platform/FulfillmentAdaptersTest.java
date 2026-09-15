@@ -53,16 +53,15 @@ class FulfillmentAdaptersTest {
 	}
 
 	@Test
-	void yandex_accept_is_local_and_platform_confirmation_waits_for_mark_ready() {
+	void yandex_confirms_platform_on_warehouse_accept() {
 		YdOrderConfirmService confirmService = mock(YdOrderConfirmService.class);
 		LabelPrintOrchestrator labels = mock(LabelPrintOrchestrator.class);
 		when(confirmService.confirmOrders(anyList())).thenReturn(successConfirm(20L));
 		YandexFulfillmentAdapter adapter = new YandexFulfillmentAdapter(confirmService, labels);
 
 		assertThat(adapter.accept(order("YANDEX")).isSuccess()).isTrue();
-		verify(confirmService, never()).confirmOrders(anyList());
-		assertThat(adapter.markReady(order("YANDEX")).isSuccess()).isTrue();
 		verify(confirmService).confirmOrders(Collections.singletonList(20L));
+		assertThat(adapter.markReady(order("YANDEX")).isSuccess()).isTrue();
 	}
 
 	@Test

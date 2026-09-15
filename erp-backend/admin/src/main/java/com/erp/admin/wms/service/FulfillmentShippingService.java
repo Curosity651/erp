@@ -53,7 +53,7 @@ public class FulfillmentShippingService {
 
 	public List<WmsFulfillmentOrder> listWorkOrders() {
 		return orderMapper.selectList(Wrappers.<WmsFulfillmentOrder>lambdaQuery()
-				.in(WmsFulfillmentOrder::getFulfillmentStatus,
+				.in(WmsFulfillmentOrder::getFulfillmentStatus, FulfillmentStatus.WAITING_PACK,
 						FulfillmentStatus.PACKED, FulfillmentStatus.SHIPPED)
 				.orderByAsc(WmsFulfillmentOrder::getCreateTime));
 	}
@@ -162,9 +162,6 @@ public class FulfillmentShippingService {
 		order.setTrackingNo(dto.getTrackingNo());
 		order.setPackageWeightKg(dto.getPackageWeightKg());
 		order.setPackedTime(LocalDateTime.now());
-		if (!hasText(order.getHandoverDestination())) {
-			order.setHandoverDestination(order.getRecipientAddress());
-		}
 		orderMapper.updateById(order);
 		Assert.isTrue(orderMapper.transit(fulfillmentId, FulfillmentStatus.WAITING_PACK,
 				FulfillmentStatus.PACKED) == 1, "订单状态已变化，请刷新后重试");
@@ -202,11 +199,6 @@ public class FulfillmentShippingService {
 		Assert.notNull(current, "履约订单不存在");
 		if (current.getFulfillmentStatus() == FulfillmentStatus.SHIPPED) return;
 		Assert.isTrue(current.getFulfillmentStatus() == FulfillmentStatus.PACKED, "订单尚未完成打包");
-		Assert.hasText(current.getVehiclePlate(), "请先填写交接车牌");
-		Assert.hasText(current.getDriverName(), "请先填写交接司机");
-		Assert.notNull(current.getDepartureTime(), "请先填写发车时间");
-		Assert.hasText(current.getHandoverDestination(), "请先填写交接目的地");
-		Assert.notNull(current.getRecordedFreightCost(), "请先填写记录运费");
 		platformActions.finalizeShipment(fulfillmentId);
 		transactionTemplate.executeWithoutResult(status -> completeLocalShipment(fulfillmentId, userId));
 	}
@@ -216,7 +208,6 @@ public class FulfillmentShippingService {
 		Assert.notNull(order, "履约订单不存在");
 		if (order.getFulfillmentStatus() == FulfillmentStatus.SHIPPED) return;
 		Assert.isTrue(order.getFulfillmentStatus() == FulfillmentStatus.PACKED, "订单状态已变化");
-		LocalDateTime handoverTime = LocalDateTime.now();
 		inventoryService.ship(fulfillmentId, com.erp.admin.wms.model.dto.InventoryMutationContext.builder()
 				.eventType(com.erp.admin.wms.model.enums.InventoryEventType.SHIP)
 				.sourceType("FULFILLMENT").sourceId(order.getId()).sourceNo(order.getSourceOrderNo())
@@ -228,11 +219,8 @@ public class FulfillmentShippingService {
 		billingService.recordFulfillmentOutbound(order, quantity);
 		Assert.notNull(logisticsFeeService, "物流产品计费服务未初始化");
 		logisticsFeeService.record(order);
-		order.setShippedTime(handoverTime);
+		order.setShippedTime(LocalDateTime.now());
 		order.setShippedBy(userId);
-		order.setHandoverStatus("HANDED_OVER");
-		order.setHandoverTime(handoverTime);
-		order.setHandoverBy(userId);
 		orderMapper.updateById(order);
 		Assert.isTrue(orderMapper.transit(fulfillmentId, FulfillmentStatus.PACKED,
 				FulfillmentStatus.SHIPPED) == 1, "签出状态更新失败");

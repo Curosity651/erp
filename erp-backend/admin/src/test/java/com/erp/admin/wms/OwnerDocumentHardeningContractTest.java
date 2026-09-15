@@ -24,15 +24,16 @@ class OwnerDocumentHardeningContractTest {
 	void inbound_endpoints_and_mutations_enforce_source_type() throws Exception {
 		String service = read("src/main/java/com/erp/admin/wms/service/PurchaseInboundService.java");
 		String facade = read("src/main/java/com/erp/admin/wms/facade/PurchaseInboundFacade.java");
-		String purchaseController = read("src/main/java/com/erp/admin/wms/controller/PurchaseInboundController.java");
 		String manualController = read("src/main/java/com/erp/admin/wms/controller/ManualInboundController.java");
 		String returnController = read("src/main/java/com/erp/admin/wms/controller/CustomReturnController.java");
+		Path retiredPurchaseController = Paths
+			.get("src/main/java/com/erp/admin/wms/controller/PurchaseInboundController.java");
 
 		assertThat(service).contains("assertSourceType(order, InboundSourceType.PURCHASE)");
 		assertThat(service).contains("assertSourceType(order, InboundSourceType.MANUAL)");
 		assertThat(service).contains("assertSourceType(order, InboundSourceType.CUSTOM_RETURN)");
 		assertThat(facade).contains("validateForSubmission(order)");
-		assertThat(purchaseController).contains("InboundSourceType.PURCHASE");
+		assertThat(retiredPurchaseController).doesNotExist();
 		assertThat(manualController).contains("InboundSourceType.MANUAL");
 		assertThat(returnController).contains("InboundSourceType.CUSTOM_RETURN");
 	}

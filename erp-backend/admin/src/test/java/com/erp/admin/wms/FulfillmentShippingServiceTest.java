@@ -63,11 +63,6 @@ class FulfillmentShippingServiceTest {
 		WmsFulfillmentOrder order = new WmsFulfillmentOrder();
 		order.setId(1L);
 		order.setFulfillmentStatus(FulfillmentStatus.PACKED);
-		order.setVehiclePlate("TEST-001");
-		order.setDriverName("测试司机");
-		order.setDepartureTime(LocalDateTime.now());
-		order.setHandoverDestination("测试目的地");
-		order.setRecordedFreightCost(BigDecimal.ZERO);
 		when(orderMapper.selectById(1L)).thenReturn(order);
 		when(orderMapper.selectForUpdate(1L)).thenReturn(order);
 		when(itemMapper.selectList(any())).thenReturn(Collections.emptyList());
@@ -86,8 +81,6 @@ class FulfillmentShippingServiceTest {
 		service.ship(Collections.singletonList(1L), 99L);
 
 		org.assertj.core.api.Assertions.assertThat(order.getShippedBy()).isEqualTo(99L);
-		org.assertj.core.api.Assertions.assertThat(order.getHandoverStatus()).isEqualTo("HANDED_OVER");
-		org.assertj.core.api.Assertions.assertThat(order.getHandoverBy()).isEqualTo(99L);
 		verify(orderMapper).updateById(order);
 	}
 
@@ -111,7 +104,6 @@ class FulfillmentShippingServiceTest {
 
 		verify(pickingService).assertTaskOperator(1L, 99L);
 		verify(pickingService).completePackedOrder(1L);
-		org.assertj.core.api.Assertions.assertThat(order.getHandoverStatus()).isNull();
 	}
 
 	@Test

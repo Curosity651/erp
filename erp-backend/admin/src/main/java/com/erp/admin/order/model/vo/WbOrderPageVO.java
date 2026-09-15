@@ -67,6 +67,12 @@ public class WbOrderPageVO {
 	
 	@Schema(title = "ERP状态")
 	private String erpStatus;
+
+	@Schema(title = "货主业务状态")
+	private String businessStatus;
+
+	private Long fulfillmentOrderId;
+	private String warehouseFulfillmentStatus;
 	
 	// ==================== 金额信息 ====================
 	
@@ -83,9 +89,6 @@ public class WbOrderPageVO {
 	private String convertedCurrencyCode;
 	
 	// ==================== 面单信息 ====================
-	
-	@Schema(title = "是否有面单")
-	private Boolean hasLabel;
 	
 	// ==================== 时间信息 ====================
 	
@@ -112,4 +115,3 @@ public class WbOrderPageVO {
 	@Schema(title = "商品明细列表")
 	private List<OrderItemVO> items;
 }
-

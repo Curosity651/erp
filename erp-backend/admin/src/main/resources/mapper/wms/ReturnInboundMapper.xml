@@ -7,6 +7,8 @@
         SELECT
             ri.id,
             ri.return_no,
+            ri.return_batch_no,
+            (SELECT COUNT(*) FROM wms_return_qc_item qi WHERE qi.return_order_id = ri.id) AS sku_kinds,
             ri.erp_order_id,
             ri.platform_order_id,
             ri.platform,
@@ -25,6 +27,8 @@
             ri.create_by,
             u.nickname AS create_by_name,
             ri.create_time
+            ,DATE_FORMAT(ri.disposition_time, '%Y-%m-%d %H:%i:%s') AS disposition_time
+            ,DATE_FORMAT(ri.processed_time, '%Y-%m-%d %H:%i:%s') AS processed_time
         FROM wms_return_inbound_order ri
         LEFT JOIN wms_warehouse w ON ri.warehouse_id = w.id
         LEFT JOIN sys_user u ON ri.create_by = u.user_id
@@ -40,10 +44,14 @@
                 AND ri.platform = #{qo.platform}
             </if>
             <if test="qo.skuCode != null and qo.skuCode != ''">
-                AND ri.sku_code = #{qo.skuCode}
+                AND EXISTS (SELECT 1 FROM wms_return_qc_item qsku
+                    WHERE qsku.return_order_id = ri.id AND qsku.sku_code = #{qo.skuCode})
             </if>
             <if test="qo.warehouseId != null">
                 AND ri.warehouse_id = #{qo.warehouseId}
+            </if>
+            <if test="qo.returnStatus != null and qo.returnStatus != ''">
+                AND ri.return_status = #{qo.returnStatus}
             </if>
             <if test="qo.returnDateStart != null">
                 AND ri.return_date &gt;= #{qo.returnDateStart}
@@ -60,6 +68,7 @@
         SELECT
             ri.id,
             ri.return_no,
+            ri.return_batch_no,
             ri.erp_order_id,
             ri.platform_order_id,
             ri.platform,
@@ -79,6 +88,8 @@
             ri.create_by,
             u.nickname AS create_by_name,
             ri.create_time
+            ,DATE_FORMAT(ri.disposition_time, '%Y-%m-%d %H:%i:%s') AS disposition_time
+            ,DATE_FORMAT(ri.processed_time, '%Y-%m-%d %H:%i:%s') AS processed_time
         FROM wms_return_inbound_order ri
         LEFT JOIN wms_warehouse w ON ri.warehouse_id = w.id
         LEFT JOIN sys_user u ON ri.create_by = u.user_id

@@ -17,17 +17,16 @@ public class YandexFulfillmentAdapter extends PlatformAdapterSupport implements 
 
 	@Override public String sourceType() { return "YANDEX"; }
 	@Override public PlatformActionResult accept(WmsFulfillmentOrder order) {
-		return PlatformActionResult.success("Yandex 订单已由仓库接单", order.getSourceOrderNo());
+		return result(confirmService.confirmOrders(Collections.singletonList(order.getSourceOrderId())),
+				order.getSourceOrderId());
 	}
 	@Override public PlatformLabelResult fetchLabel(WmsFulfillmentOrder order) {
 		return printLabel(PlatformEnum.Yandex.code(), order, labelOrchestrator);
 	}
 	@Override public PlatformActionResult markReady(WmsFulfillmentOrder order) {
-		return result(confirmService.confirmOrders(Collections.singletonList(order.getSourceOrderId())),
-				order.getSourceOrderId());
+		return PlatformActionResult.success("Yandex 面单已准备", order.getSourceOrderNo());
 	}
 	@Override public PlatformActionResult finalizeShipment(WmsFulfillmentOrder order) {
 		return PlatformActionResult.success("Yandex 仓库签出完成", order.getSourceOrderNo());
 	}
 }
-

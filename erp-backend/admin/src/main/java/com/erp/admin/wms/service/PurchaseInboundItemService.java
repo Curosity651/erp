@@ -55,7 +55,7 @@ public class PurchaseInboundItemService extends ExtendServiceImpl<PurchaseInboun
     }
 
 	public List<PurchaseInboundItemVO> getVoListByInboundOrderId(Long inboundOrderId, Long erpTenantId) {
-		List<PurchaseInboundItemVO> itemVOS = baseMapper.selectItemVOsByInboundOrderId(inboundOrderId);
+		List<PurchaseInboundItemVO> itemVOS = baseMapper.selectItemVOsByInboundOrderId(inboundOrderId, erpTenantId);
 		if (erpTenantId == null) {
 			this.skuBriefService.enrichForQuery(itemVOS, PurchaseInboundItemVO::getSkuCode,
 					PurchaseInboundItemVO::setSkuBrief);

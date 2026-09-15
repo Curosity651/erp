@@ -5,7 +5,7 @@
   <!-- ② 列表 -->
   <pro-table
     ref="tableRef"
-    header-title="WMS 服务商管理"
+    :header-title="t('platform.operator.title')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -36,16 +36,16 @@
       <!-- 状态列 -->
       <template v-else-if="column.key === 'status'">
         <a-tag :color="record.status === 1 ? 'green' : 'red'">
-          {{ record.status === 1 ? '启用' : '停用' }}
+          {{ record.status === 1 ? t('platform.operator.enabled') : t('platform.operator.disabled') }}
         </a-tag>
       </template>
 
       <!-- 操作列 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
-          <a @click="handleDetail(record)">详情</a>
-          <a v-if="record.status === 1" class="danger-link" @click="handleToggle(record)">停用</a>
-          <a v-else @click="handleToggle(record)">启用</a>
+          <a @click="handleDetail(record)">{{ t('platform.operator.detail') }}</a>
+          <a v-if="record.status === 1" class="danger-link" @click="handleToggle(record)">{{ t('platform.operator.disabled') }}</a>
+          <a v-else @click="handleToggle(record)">{{ t('platform.operator.enabled') }}</a>
         </operation-group>
       </template>
     </template>
@@ -57,7 +57,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Modal, message } from 'ant-design-vue'
 import ProTable from '#/table'
 import type { ProColumns, ProTableInstanceExpose, TableRequest } from '#/table'
@@ -72,6 +73,7 @@ import WmsOperatorFormModal from './WmsOperatorFormModal.vue'
 import WmsOperatorDetailDrawer from './WmsOperatorDetailDrawer.vue'
 
 const tableRef = ref<ProTableInstanceExpose>()
+const { t } = useI18n()
 const formModalRef = ref<InstanceType<typeof WmsOperatorFormModal>>()
 const detailDrawerRef = ref<InstanceType<typeof WmsOperatorDetailDrawer>>()
 
@@ -91,13 +93,13 @@ const searchTable = (params: TenantPageParam) => {
   reloadTable(true)
 }
 
-const columns: ProColumns[] = [
-  { title: '服务商', key: 'operatorInfo', width: 220, fixed: 'left' },
-  { title: '联系方式', key: 'contact', width: 160 },
-  { title: '状态', key: 'status', width: 90, align: 'center' },
-  { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
-  { title: '操作', key: 'operate', width: 140, align: 'center', fixed: 'right' }
-]
+const columns = computed<ProColumns[]>(() => [
+  { title: t('platform.common.provider'), key: 'operatorInfo', width: 220, fixed: 'left' },
+  { title: t('platform.operator.contact'), key: 'contact', width: 160 },
+  { title: t('platform.common.status'), key: 'status', width: 90, align: 'center' },
+  { title: t('platform.common.createdAt'), dataIndex: 'createTime', key: 'createTime', width: 170 },
+  { title: t('platform.common.operation'), key: 'operate', width: 140, align: 'center', fixed: 'right' }
+])
 
 const handleNew = () => formModalRef.value?.openCreate()
 const handleDetail = (record: TenantBrief) => detailDrawerRef.value?.openDetail(record)
@@ -105,19 +107,19 @@ const handleDetail = (record: TenantBrief) => detailDrawerRef.value?.openDetail(
 const handleToggle = (record: TenantBrief) => {
   const toEnable = record.status !== 1
   Modal.confirm({
-    title: toEnable ? '启用服务商' : '停用服务商',
+    title: toEnable ? t('platform.operator.enableTitle') : t('platform.operator.disableTitle'),
     content: toEnable
-      ? `确定启用「${record.tenantName}」吗？`
-      : `确定停用「${record.tenantName}」吗？停用将级联禁止其名下所有货主登录。`,
-    okText: '确定',
-    cancelText: '取消',
+      ? t('platform.operator.enableConfirm', { name: record.tenantName })
+      : t('platform.operator.disableConfirm', { name: record.tenantName }),
+    okText: t('platform.operator.confirm'),
+    cancelText: t('platform.common.cancel'),
     onOk: async () => {
       const res = await setWmsOperatorStatus(record.id, toEnable ? 1 : 0)
       if (isSuccess(res)) {
-        message.success(toEnable ? '已启用' : '已停用')
+        message.success(toEnable ? t('platform.operator.enabledSuccess') : t('platform.operator.disabledSuccess'))
         reloadTable()
       } else {
-        message.error(res.message || '操作失败')
+        message.error(res.message || t('platform.operator.operationFailed'))
       }
     }
   })

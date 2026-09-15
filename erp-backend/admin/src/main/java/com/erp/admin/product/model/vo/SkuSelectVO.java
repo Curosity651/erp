@@ -42,4 +42,13 @@ public class SkuSelectVO {
 	@Schema(title = "品类全路径名称")
 	private String categoryFullPath;
 
+	/** 外箱长度（毫米） */
+	private Integer outerLengthMm;
+
+	/** 外箱宽度（毫米） */
+	private Integer outerWidthMm;
+
+	/** 外箱高度（毫米） */
+	private Integer outerHeightMm;
+
 }

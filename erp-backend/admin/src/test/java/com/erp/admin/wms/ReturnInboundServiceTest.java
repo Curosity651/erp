@@ -67,7 +67,10 @@ class ReturnInboundServiceTest {
         when(values.increment(any(String.class))).thenReturn(1L);
 
         ReturnInboundService service = new ReturnInboundService(skuBriefService, identityService,
-                tenantMapper, warehouseService, rackService, redis);
+                tenantMapper, warehouseService, rackService, redis,
+                mock(com.erp.admin.wms.mapper.WmsReturnQcItemMapper.class),
+                mock(com.erp.admin.wms.mapper.WmsSkuLookupMapper.class),
+                mock(com.erp.admin.product.service.WarehouseSkuCodeService.class));
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
 
         ReturnInboundDTO dto = new ReturnInboundDTO();

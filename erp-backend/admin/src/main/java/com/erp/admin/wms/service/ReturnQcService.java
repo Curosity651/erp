@@ -18,6 +18,9 @@ import com.erp.admin.wms.model.dto.InboundPutawayDTO;
 import com.erp.admin.wms.model.dto.PutawayDTO;
 import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
+import com.erp.admin.wms.model.dto.ReturnReceiptDTO;
+import com.erp.admin.wms.model.dto.ReturnDispositionDTO;
+import com.erp.admin.wms.model.dto.ReturnProcessDTO;
 import com.erp.admin.wms.model.entity.ReturnInboundOrder;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.entity.WmsLocation;
@@ -43,6 +46,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.ballcat.security.core.PrincipalAttributeAccessor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,6 +59,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.Duration;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 
 /**
  * 海外仓平台出库作业·退货质检（业务需求 1.4）。退货=带质检的重新入库。
@@ -71,8 +79,8 @@ import java.time.LocalDateTime;
 public class ReturnQcService {
 
     private static final List<String> ALL_SCOPE = Arrays.asList(
-            ReturnQcStatus.RETURN_PENDING.name(),
-            ReturnQcStatus.QC_PENDING.name(),
+            ReturnQcStatus.PENDING_OWNER.name(),
+            ReturnQcStatus.PENDING_OPERATION.name(),
             ReturnQcStatus.COMPLETED.name(),
             ReturnQcStatus.CLOSED.name());
 
@@ -125,6 +133,8 @@ public class ReturnQcService {
 
     private final PrincipalAttributeAccessor principalAttributeAccessor;
 
+    private final StringRedisTemplate stringRedisTemplate;
+
     // ==================== 查询 ====================
 
     public PageResult<ReturnOrderVO> page(PageParam pageParam, ReturnQO qo) {
@@ -155,6 +165,220 @@ public class ReturnQcService {
                 "退货质检完成后才能打印托盘单");
 
         return Collections.emptyList();
+    }
+
+    // ==================== 新版退货处置 ====================
+
+    /** 海外仓收到实物后登记；系统按货主拆成独立处理单。 */
+    @Transactional(rollbackFor = Exception.class)
+    public List<Long> registerReceipt(ReturnReceiptDTO dto) {
+        assertPlatform();
+        Assert.notNull(dto.getWarehouseId(), "请选择收货仓库");
+        warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
+        Assert.notEmpty(dto.getItems(), "退货商品不能为空");
+
+        String batchNo = generateNo("RB", "batch");
+        Map<Long, List<ReturnReceiptDTO.Line>> byOwner = dto.getItems().stream()
+                .collect(Collectors.groupingBy(ReturnReceiptDTO.Line::getErpTenantId,
+                        LinkedHashMap::new, Collectors.toList()));
+        List<Long> ids = new ArrayList<>();
+        for (Map.Entry<Long, List<ReturnReceiptDTO.Line>> entry : byOwner.entrySet()) {
+            Long ownerId = entry.getKey();
+            Assert.notNull(ownerId, "退货商品必须指定货主");
+            com.erp.admin.tenant.model.entity.SysTenant owner = sysTenantMapper.selectById(ownerId);
+            Assert.notNull(owner, "货主不存在: " + ownerId);
+            Assert.notNull(owner.getParentWmsTenantId(), "货主未绑定WMS服务商: " + ownerId);
+            Assert.isTrue(!wmsRackAssignmentService.activeRackNos(dto.getWarehouseId(), owner.getParentWmsTenantId()).isEmpty(),
+                    "货主无权使用所选仓库: " + owner.getTenantName());
+
+            Set<String> skuCodes = new HashSet<>();
+            int total = 0;
+            for (ReturnReceiptDTO.Line line : entry.getValue()) {
+                Assert.hasText(line.getSkuCode(), "SKU不能为空");
+                Assert.isTrue(skuCodes.add(line.getSkuCode()), "同一货主的SKU不能重复: " + line.getSkuCode());
+                Assert.notNull(skuLookupMapper.findByTenantAndSku(ownerId, line.getSkuCode()),
+                        "SKU不存在或不属于所选货主: " + line.getSkuCode());
+                Assert.isTrue(nz(line.getReceivedQty()) > 0, "实收数量必须大于0: " + line.getSkuCode());
+                validatePhotoIds(line.getPhotoFileIds());
+                total += line.getReceivedQty();
+            }
+
+            ReturnInboundOrder order = new ReturnInboundOrder();
+            order.setErpTenantId(ownerId);
+            order.setReturnNo(generateNo("RT", "order"));
+            order.setReturnBatchNo(batchNo);
+            order.setErpOrderId(0L);
+            order.setPlatformOrderId(entry.getValue().size() == 1
+                    ? entry.getValue().get(0).getPlatformOrderId() : null);
+            order.setPlatform("WAREHOUSE_RETURN");
+            order.setSkuCode(entry.getValue().size() == 1 ? entry.getValue().get(0).getSkuCode() : null);
+            order.setWarehouseId(dto.getWarehouseId());
+            order.setReturnDate(dto.getReturnDate() == null ? LocalDate.now() : dto.getReturnDate());
+            order.setReturnReason(entry.getValue().size() == 1
+                    ? normalizedReason(entry.getValue().get(0).getReturnReason()) : "MIXED");
+            order.setTotalQuantity(total);
+            order.setReturnableQuantity(total);
+            order.setQualifiedQuantity(0);
+            order.setUnqualifiedQuantity(0);
+            order.setToDamagedQuantity(0);
+            order.setScrapQuantity(0);
+            order.setReturnStatus(ReturnQcStatus.PENDING_OWNER.name());
+            order.setReceivedBy(currentUserId());
+            order.setReceivedTime(LocalDateTime.now());
+            order.setRemark(dto.getRemark());
+            Assert.isTrue(returnInboundMapper.insert(order) == 1, "退货处理单创建失败");
+
+            for (ReturnReceiptDTO.Line line : entry.getValue()) {
+                WmsReturnQcItem item = new WmsReturnQcItem();
+                item.setReturnOrderId(order.getId());
+                item.setSkuCode(line.getSkuCode());
+                item.setPlatformOrderId(line.getPlatformOrderId());
+                item.setReturnReason(normalizedReason(line.getReturnReason()));
+                SkuLookupVO sku = skuLookupMapper.findByTenantAndSku(ownerId, line.getSkuCode());
+                item.setElectronic(sku != null && Boolean.TRUE.equals(sku.getNeedsPower()) ? 1 : 0);
+                item.setExpectedQty(line.getReceivedQty());
+                item.setReceivedQty(line.getReceivedQty());
+                item.setRestockQty(0);
+                item.setReworkQty(0);
+                item.setScrapQty(0);
+                item.setReworkPassQty(0);
+                item.setReworkScrapQty(0);
+                item.setQcPhotos(joinPhotoIds(line.getPhotoFileIds()));
+                Assert.isTrue(returnQcItemMapper.insert(item) == 1, "退货明细创建失败");
+            }
+            ids.add(order.getId());
+        }
+        log.info("海外仓登记退货批次, batchNo={}, ownerOrders={}, items={}", batchNo, ids.size(), dto.getItems().size());
+        return ids;
+    }
+
+    /** ERP货主决定每个SKU的直接上架、返工或销毁数量。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void submitDisposition(ReturnDispositionDTO dto) {
+        com.erp.admin.tenant.model.vo.TenantIdentityVO identity =
+                tenantIdentityService.currentIdentity(TenantIdentityService.IDENTITY_ERP_USER);
+        ReturnInboundOrder order = returnInboundMapper.selectById(dto.getReturnOrderId());
+        Assert.notNull(order, "退货处理单不存在");
+        Assert.isTrue(order.getErpTenantId().equals(identity.getTenantId()), "无权处理其他货主的退货单");
+        Assert.isTrue(ReturnQcStatus.PENDING_OWNER.name().equals(order.getReturnStatus()), "仅待货主处置的单据可以提交");
+
+        Map<Long, WmsReturnQcItem> items = returnQcItemMapper.selectByReturnOrderId(order.getId()).stream()
+                .collect(Collectors.toMap(WmsReturnQcItem::getId, value -> value));
+        Set<Long> submitted = new HashSet<>();
+        for (ReturnDispositionDTO.Line line : dto.getItems()) {
+            WmsReturnQcItem item = items.get(line.getItemId());
+            Assert.notNull(item, "退货明细不存在: " + line.getItemId());
+            Assert.isTrue(submitted.add(item.getId()), "退货明细重复提交: " + item.getSkuCode());
+            int restock = nz(line.getRestockQty());
+            int rework = nz(line.getReworkQty());
+            int scrap = nz(line.getScrapQty());
+            Assert.isTrue(restock + rework + scrap == nz(item.getReceivedQty()),
+                    "SKU处置数量之和必须等于实收数量: " + item.getSkuCode());
+            item.setRestockQty(restock);
+            item.setReworkQty(rework);
+            item.setScrapQty(scrap);
+            item.setDispositionRemark(line.getRemark());
+            Assert.isTrue(returnQcItemMapper.updateById(item) == 1, "退货处置明细保存失败");
+        }
+        Assert.isTrue(submitted.size() == items.size(), "请处理退货单内全部SKU");
+        if (returnInboundMapper.casReturnStatus(order.getId(), ReturnQcStatus.PENDING_OWNER.name(),
+                ReturnQcStatus.PENDING_OPERATION.name()) != 1) {
+            throw new BusinessException(409, "退货单状态已变化，请刷新后重试");
+        }
+        order.setReturnStatus(ReturnQcStatus.PENDING_OPERATION.name());
+        order.setDispositionBy(currentUserId());
+        order.setDispositionTime(LocalDateTime.now());
+        returnInboundMapper.updateById(order);
+    }
+
+    /** 海外仓执行货主决定；返工数量必须在本次给出最终合格/销毁结果。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void processDisposition(ReturnProcessDTO dto) {
+        assertPlatform();
+        ReturnInboundOrder order = returnInboundMapper.selectById(dto.getReturnOrderId());
+        Assert.notNull(order, "退货处理单不存在");
+        Assert.isTrue(ReturnQcStatus.PENDING_OPERATION.name().equals(order.getReturnStatus()),
+                "仅待仓库处理的退货单可以执行");
+        Map<Long, WmsReturnQcItem> items = returnQcItemMapper.selectByReturnOrderId(order.getId()).stream()
+                .collect(Collectors.toMap(WmsReturnQcItem::getId, value -> value));
+        Map<Long, ReturnProcessDTO.Line> submitted = dto.getItems().stream()
+                .collect(Collectors.toMap(ReturnProcessDTO.Line::getItemId, value -> value,
+                        (left, right) -> { throw new IllegalArgumentException("退货处理明细不能重复"); }));
+        Assert.isTrue(submitted.size() == items.size() && submitted.keySet().containsAll(items.keySet()),
+                "请处理退货单内全部SKU");
+        if (returnInboundMapper.casReturnStatus(order.getId(), ReturnQcStatus.PENDING_OPERATION.name(),
+                ReturnQcStatus.COMPLETED.name()) != 1) {
+            throw new BusinessException(409, "退货单状态已变化，请刷新后重试");
+        }
+
+        Set<String> allowedRacks = resolveAllowedRacks(order.getErpTenantId(), order.getWarehouseId());
+        int stocked = 0;
+        int scrapped = 0;
+        int reworked = 0;
+        for (WmsReturnQcItem item : items.values()) {
+            ReturnProcessDTO.Line line = submitted.get(item.getId());
+            int reworkPass = nz(line.getReworkPassQty());
+            int reworkScrap = nz(line.getReworkScrapQty());
+            Assert.isTrue(reworkPass + reworkScrap == nz(item.getReworkQty()),
+                    "返工结果数量之和必须等于返工数量: " + item.getSkuCode());
+            int putawayQty = nz(item.getRestockQty()) + reworkPass;
+            WmsLocation location = null;
+            if (putawayQty > 0) {
+                String zone = line.getTargetZone();
+                Assert.isTrue(ZONE_RETURN.equals(zone) || "STANDARD".equals(zone), "上架分区只能是退货区或标准区");
+                location = putawayLogical(order, item.getSkuCode(), putawayQty, "GOOD",
+                        line.getTargetLocationCode(), zone, allowedRacks);
+            }
+            item.setReworkPassQty(reworkPass);
+            item.setReworkScrapQty(reworkScrap);
+            item.setQualifiedQty(putawayQty);
+            item.setDamagedQty(nz(item.getScrapQty()) + reworkScrap);
+            item.setQualifiedZone(putawayQty > 0 ? line.getTargetZone() : null);
+            item.setQualifiedLocationCode(location == null ? null : location.getLocationCode());
+            item.setQualifiedLocationId(location == null ? null : location.getId());
+            item.setProcessedLocationCode(location == null ? null : location.getLocationCode());
+            item.setProcessedLocationId(location == null ? null : location.getId());
+            item.setQcResult(item.getDamagedQty() == 0 ? PASS : putawayQty == 0 ? FAIL : "MIXED");
+            Assert.isTrue(returnQcItemMapper.updateById(item) == 1, "退货处理结果保存失败");
+            stocked += putawayQty;
+            scrapped += item.getDamagedQty();
+            reworked += nz(item.getReworkQty());
+        }
+        order.setQualifiedQuantity(stocked);
+        order.setUnqualifiedQuantity(scrapped);
+        order.setToDamagedQuantity(reworked);
+        order.setScrapQuantity(scrapped);
+        order.setReturnStatus(ReturnQcStatus.COMPLETED.name());
+        order.setProcessedBy(currentUserId());
+        order.setProcessedTime(LocalDateTime.now());
+        returnInboundMapper.updateById(order);
+    }
+
+    private String generateNo(String prefix, String kind) {
+        String today = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
+        String key = "wms:return:" + kind + ":" + today;
+        Long seq = stringRedisTemplate.opsForValue().increment(key);
+        Assert.notNull(seq, "退货单号生成失败");
+        if (seq == 1L) {
+            stringRedisTemplate.expire(key, Duration.ofDays(2));
+        }
+        return String.format("%s%s%04d", prefix, today, seq);
+    }
+
+    private String normalizedReason(String reason) {
+        return reason == null || reason.trim().isEmpty() ? "OTHER" : reason.trim();
+    }
+
+    private void validatePhotoIds(List<Long> ids) {
+        List<Long> values = ids == null ? Collections.emptyList() : ids.stream().filter(java.util.Objects::nonNull)
+                .distinct().collect(Collectors.toList());
+        Assert.isTrue(values.size() <= 6, "每个SKU最多上传6张收货凭证");
+        for (Long id : values) {
+            SysFile file = sysFileService.getById(id);
+            Assert.notNull(file, "收货凭证不存在: " + id);
+            Assert.isTrue(file.getContentType() != null && QC_PHOTO_TYPES.contains(file.getContentType().toLowerCase()),
+                    "收货凭证仅支持JPG、JPEG、PNG格式");
+        }
     }
 
     // ==================== 收货 ====================
@@ -216,9 +440,9 @@ public class ReturnQcService {
         assertPlatform();
         Assert.notNull(returnInboundMapper.selectById(returnOrderId), "退货单不存在");
         int closed = returnInboundMapper.casReturnStatus(returnOrderId,
-                ReturnQcStatus.RETURN_PENDING.name(), ReturnQcStatus.CLOSED.name());
+                ReturnQcStatus.PENDING_OWNER.name(), ReturnQcStatus.CLOSED.name());
         if (closed != 1) {
-            throw new BusinessException(400, "仅待收货的退货单可以按未收到/拒收关闭");
+            throw new BusinessException(400, "仅待货主处置的退货处理单可以关闭");
         }
 		Assert.isTrue(returnInboundMapper.markClosedAudit(returnOrderId, currentUserId()) == 1,
 				"退货关闭操作记录失败");
@@ -684,6 +908,7 @@ public class ReturnQcService {
         if (!items.isEmpty()) {
             for (WmsReturnQcItem it : items) {
                 ReturnOrderItemVO vo = new ReturnOrderItemVO();
+                vo.setId(it.getId());
                 vo.setSkuCode(it.getSkuCode());
                 vo.setWarehouseSkuCode(warehouseSkuCodeService.build(
                         order.getErpTenantId(), it.getSkuCode()));
@@ -693,10 +918,19 @@ public class ReturnQcService {
                         || sku != null && Boolean.TRUE.equals(sku.getNeedsPower()));
                 vo.setQuantityPerPallet(sku == null ? null : sku.getQuantityPerPallet());
                 vo.setSkuName(sku == null ? null : sku.getChineseName());
+                vo.setPlatformOrderId(it.getPlatformOrderId());
+                vo.setReturnReason(it.getReturnReason());
                 vo.setExpectedQty(it.getExpectedQty());
                 vo.setReceivedQty(it.getReceivedQty());
                 vo.setQualifiedQty(it.getQualifiedQty());
                 vo.setDamagedQty(it.getDamagedQty());
+                vo.setRestockQty(it.getRestockQty());
+                vo.setReworkQty(it.getReworkQty());
+                vo.setScrapQty(it.getScrapQty());
+                vo.setReworkPassQty(it.getReworkPassQty());
+                vo.setReworkScrapQty(it.getReworkScrapQty());
+                vo.setDispositionRemark(it.getDispositionRemark());
+                vo.setProcessedLocationCode(it.getProcessedLocationCode());
                 vo.setQualifiedZone(it.getQualifiedZone());
                 vo.setQualifiedLocationCode(it.getQualifiedLocationCode());
                 vo.setQualifiedPalletId(it.getQualifiedPalletId());

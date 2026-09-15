@@ -38,23 +38,11 @@
           <a-col v-bind="colConfig">
             <div class="search-group">
               <label class="search-label">订单状态</label>
-              <a-select v-model:value="formModel.erpStatus" allow-clear placeholder="选择订单状态">
-                <a-select-option v-for="(value, key) in ERP_STATUS_MAP" :key="key" :value="key"
-                  >{{ value.label }}
-                </a-select-option>
-              </a-select>
-            </div>
-          </a-col>
-
-          <a-col v-bind="colConfig">
-            <div class="search-group">
-              <label class="search-label">平台状态</label>
-              <a-select
-                v-model:value="formModel.platformStatus"
-                allow-clear
-                placeholder="选择平台状态"
-              >
-                <a-select-option v-for="(value, key) in YD_STATUS_MAP" :key="key" :value="key"
+              <a-select v-model:value="formModel.businessStatus" allow-clear placeholder="选择订单状态">
+                <a-select-option
+                  v-for="(value, key) in OWNER_ORDER_STATUS_MAP"
+                  :key="key"
+                  :value="key"
                   >{{ value.label }}
                 </a-select-option>
               </a-select>
@@ -99,7 +87,7 @@
 
 <script setup lang="ts">
 import { Form } from 'ant-design-vue'
-import { ERP_STATUS_MAP, YD_STATUS_MAP, type YdOrderQO } from '@/api/order/yd-order/types'
+import { OWNER_ORDER_STATUS_MAP, type YdOrderQO } from '@/api/order/yd-order/types'
 import dayjs from 'dayjs'
 import ShopSelectInput from '@/components/ShopSelectInput.vue'
 import SkuSelectInput from '@/components/Sku/SkuSelectInput.vue'
@@ -124,8 +112,7 @@ const emits = defineEmits<{
 
 const formModel = reactive<YdOrderQO>({
   shopId: undefined,
-  erpStatus: undefined,
-  platformStatus: undefined,
+  businessStatus: undefined,
   platformOrderId: undefined,
   skuCode: undefined,
   createdAtStart: undefined,

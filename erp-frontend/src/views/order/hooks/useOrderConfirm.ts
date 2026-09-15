@@ -9,15 +9,8 @@ export interface UseOrderConfirmOptions<T extends BaseOrderVO> {
   canConfirm: (row: T) => boolean
   /** 不可确认时返回原因文字 */
   reasonOf: (row: T) => string
-  /** 确认 API 调用 */
-  confirmApi: (ids: number[]) => Promise<any>
   /** 确认完成后刷新表格 */
   reloadTable: () => void
-  /**
-   * 可选：自定义确认成功处理（Yandex 需要逐条检查响应）
-   * 若不传，则使用 doRequest 标准流程
-   */
-  onConfirmSuccess?: (res: any) => void
 }
 
 /**

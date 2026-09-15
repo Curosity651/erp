@@ -44,12 +44,18 @@
             pioi.purchase_order_item_id,
             pioi.sku_code,
             pioi.expected_quantity,
+            s.outer_length_mm,
+            s.outer_width_mm,
+            s.outer_height_mm,
             pioi.actual_quantity,
             pioi.expected_quality,
             (pioi.expected_quantity - pioi.actual_quantity) AS short_quantity,
             pioi.remark
         FROM wms_purchase_inbound_order_item pioi
         LEFT JOIN wms_purchase_order po ON pioi.purchase_order_id = po.id
+        LEFT JOIN sku s ON s.sku_code = pioi.sku_code
+            AND s.tenant_id = #{erpTenantId}
+            AND s.deleted = 0
         WHERE pioi.inbound_order_id = #{inboundOrderId}
         ORDER BY pioi.id ASC
     </select>

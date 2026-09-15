@@ -54,11 +54,8 @@ export interface FulfillmentShippingOrder {
   fulfillmentNo: string
   sourceType: string
   sourceOrderNo: string
-  fulfillmentStatus: 'PACKED' | 'SHIPPED'
-  /** 出库作业对外状态；底层仍保留履约状态用于兼容平台回传。 */
-  handoverStatus?: 'READY_HANDOVER' | 'HANDED_OVER'
+  fulfillmentStatus: 'WAITING_PACK' | 'PACKED' | 'SHIPPED'
   recipientName?: string
-  recipientAddress?: string
   logisticsProductName?: string
   logisticsProductActualFee?: number
   logisticsProductCurrency?: string
@@ -66,18 +63,6 @@ export interface FulfillmentShippingOrder {
   shippingMethod?: string
   trackingNo?: string
   packageWeightKg?: number
-  vehiclePlate?: string
-  driverName?: string
-  driverPhone?: string
-  departureTime?: string
-  handoverDestination?: string
-  recordedFreightCost?: number
-  recordedFreightCurrency?: string
-  logisticsPhotoFileIds?: string
-  handoverRemark?: string
-  handoverBy?: number
-  handoverByName?: string
-  handoverTime?: string
   shippedBy?: number
   shippedByName?: string
   shippedTime?: string
@@ -87,80 +72,10 @@ export interface FulfillmentShippingOrder {
 export interface FulfillmentShippingQuery extends PageParam {
   erpTenantId?: number
   warehouseId?: number
-  fulfillmentStatus?: 'READY_HANDOVER' | 'HANDED_OVER'
+  fulfillmentStatus?: 'WAITING_PACK' | 'PACKED' | 'SHIPPED'
   shippedBy?: number
   startDate?: string
   endDate?: string
-}
-
-export interface FulfillmentHandoverForm {
-  vehiclePlate: string
-  driverName: string
-  driverPhone?: string
-  departureTime: string
-  destination: string
-  freightCost: number
-  currency?: string
-  remark?: string
-  photoFileIds?: number[]
-}
-
-export interface OutboundHandoverCreateForm extends FulfillmentHandoverForm {
-  fulfillmentOrderId: number
-}
-
-export interface OutboundHandoverOrder {
-  id: number
-  handoverNo: string
-  fulfillmentOrderId: number
-  handoverStatus: 'READY_HANDOVER' | 'HANDED_OVER'
-  erpTenantId: number
-  ownerName?: string
-  warehouseId: number
-  warehouseName?: string
-  fulfillmentNo: string
-  sourceType: string
-  sourceOrderNo: string
-  recipientName?: string
-  recipientAddress?: string
-  carrierName?: string
-  shippingMethod?: string
-  trackingNo?: string
-  vehiclePlate: string
-  driverName: string
-  driverPhone?: string
-  departureTime: string
-  destination: string
-  freightCost: number
-  currency: string
-  logisticsPhotoFileIds?: string
-  remark?: string
-  handoverBy?: number
-  handoverByName?: string
-  handoverTime?: string
-  createTime?: string
-}
-
-export interface TransportExpenseRecord {
-  id: number
-  expenseType: 'FUEL' | 'DRIVER_MONTHLY'
-  expenseDate?: string
-  settlementMonth?: string
-  driverName?: string
-  amount: number
-  currency: string
-  note?: string
-  createTime?: string
-}
-
-export interface TransportExpenseForm {
-  expenseType: 'FUEL' | 'DRIVER_MONTHLY'
-  expenseDate?: string
-  settlementMonth?: string
-  driverName?: string
-  amount: number
-  currency?: string
-  note?: string
 }
 
 export interface FulfillmentShelfOrderQuery {
@@ -259,6 +174,61 @@ export interface FulfillmentPickTaskQuery {
   operatorId?: number
   startTime?: string
   endTime?: string
+}
+
+export interface FulfillmentPickPackage {
+  batchNo: string
+  taskId: number
+  snapshotHash: string
+  warehouseFileName: string
+  warehouseDownloadUrl: string
+  warehouseSha256: string
+  archiveFileName: string
+  archiveDownloadUrl: string
+  archiveSha256: string
+  orderCount: number
+  totalQuantity: number
+  generatedTime: string
+}
+
+export interface OutboundPickReviewSummary {
+  workDate: string
+  warehouseId?: number
+  totalTaskCount: number
+  completedTaskCount: number
+  cancelledTaskCount: number
+  pendingTaskCount: number
+  pickingTaskCount: number
+  exceptionTaskCount: number
+  unprocessedTaskCount: number
+  allProcessed: boolean
+  reviewCurrent: boolean
+  reviewId?: number
+  reviewNo?: string
+  reviewedBy?: number
+  reviewedTime?: string
+  remark?: string
+}
+
+export interface OutboundPickReviewRecord {
+  id: number
+  reviewNo: string
+  workDate: string
+  warehouseId: number
+  reviewStatus: 'COMPLETED'
+  taskCount: number
+  completedCount: number
+  cancelledCount: number
+  exceptionCount: number
+  reviewedBy: number
+  reviewedTime: string
+  remark?: string
+}
+
+export interface OutboundPickReviewConfirmForm {
+  workDate: string
+  warehouseId?: number
+  remark?: string
 }
 
 export interface PlatformLabelResult {

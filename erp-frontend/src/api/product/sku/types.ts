@@ -472,4 +472,10 @@ export interface SkuSelectVO {
   mainImage?: string
   /** 品类全路径名称 */
   categoryFullPath?: string
+  /** 外箱长度（毫米） */
+  outerLengthMm?: number
+  /** 外箱宽度（毫米） */
+  outerWidthMm?: number
+  /** 外箱高度（毫米） */
+  outerHeightMm?: number
 }

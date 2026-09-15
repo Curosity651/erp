@@ -9,21 +9,12 @@
       <span class="operation-text">{{ locked === 1 ? '已锁定' : '未锁定' }}</span>
     </div>
 
-    <!-- 面单状态 -->
-    <div
-      class="operation-item"
-      :class="hasLabel ? 'chip chip-label-available' : 'chip chip-label-empty'"
-    >
-      <span class="operation-icon">{{ hasLabel ? '📋' : '📄' }}</span>
-      <span class="operation-text">{{ hasLabel ? '面单已获取' : '面单待获取' }}</span>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 interface Props {
   locked: number
-  hasLabel: boolean
 }
 
 defineProps<Props>()
@@ -64,17 +55,6 @@ defineProps<Props>()
   color: #237804;
   border-color: #b7eb8f;
 }
-.chip-label-available {
-  background: #e6f4ff;
-  color: #0958d9;
-  border-color: #91caff;
-}
-.chip-label-empty {
-  background: #fafafa;
-  color: #8c8c8c;
-  border-color: #e8e8e8;
-}
-
 @media (max-width: 1200px) {
   .operation-item { gap: 4px; }
   .operation-text {

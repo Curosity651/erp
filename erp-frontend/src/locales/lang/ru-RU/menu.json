@@ -1,9 +1,14 @@
 {
   "menu": {
-    "statistics": { "dashboard": "Панель данных", "salesTarget": "Цели продаж" },
-    "warehouseMgmt": { "locationMgmt": "Управление ячейками", "locationInventory": "Запасы по ячейкам", "rackAssignment": "Распределение ячеек" },
+    "statistics": { "_title": "Аналитика данных", "dashboard": "Панель данных", "salesTarget": "Цели продаж", "platformDashboard": "Аналитика платформы" },
+    "log": { "_title": "Управление журналами", "operationLog": "Журнал операций", "loginLog": "Журнал входов" },
+    "system": { "_title": "Управление системой", "role": "Управление ролями", "user": "Системные пользователи", "organization": "Организационная структура", "projectGroup": "Проектные группы", "position": "Должности", "shop": "Управление магазинами", "menu": "Права меню", "dict": "Управление словарями", "config": "Конфигурация" },
+    "customerMgmt": { "_title": "Управление клиентами", "wmsOperators": "WMS-провайдеры" },
+    "warehouseMgmt": { "_title": "Управление складом", "warehouse": "Информация о складе", "locationMgmt": "Управление ячейками", "locationInventory": "Запасы по ячейкам", "region": "Управление зонами", "rackAssignment": "Распределение ячеек", "pallets": "Управление палетами" },
     "outboundOps": { "orderDispatch": "Снятие заказов", "pickingTasks": "Задания на отбор", "fulfillment": "Исходящие операции" },
-    "platformFinance": { "receivableBill": "Счета к получению", "warehouseContracts": "Контракты и средства", "providerFunds": "Расчёты с провайдерами" },
-    "platformDashboard": "Аналитика платформы"
+    "platformFinance": { "_title": "Финансы платформы", "receivableBill": "Счета к получению", "warehouseContracts": "Контракты и средства", "providerFunds": "Расчёты с провайдерами" },
+    "platformDashboard": "Аналитика платформы",
+    "wms": { "returnInbound": "Обработка возвратов", "manualInbound": "Приёмка товаров" },
+    "ops": { "_title": "Операции зарубежного склада", "inboundOps": "Приёмка товаров", "putaway": "Размещение товаров", "fulfillmentShelf": "Снятие заказов", "fulfillmentPicking": "Задания на отбор", "fulfillmentWorkbench": "Исходящие операции", "picking": "Исходящие операции", "packing": "Упаковка и отгрузка", "returnQc": "Обработка возвратов", "stocktake": "Инвентаризация", "locationTransfer": "Перемещение между ячейками" }
   }
 }

@@ -1203,6 +1203,9 @@ public class SkuService extends ExtendServiceImpl<SkuMapper, Sku> {
 			vo.setSkuCode(sku.getSkuCode());
 			vo.setChineseName(sku.getChineseName());
 			vo.setMainImage(mainImageMap.get(sku.getId()));
+			vo.setOuterLengthMm(sku.getOuterLengthMm());
+			vo.setOuterWidthMm(sku.getOuterWidthMm());
+			vo.setOuterHeightMm(sku.getOuterHeightMm());
 			CategoryHierarchyVO categoryHierarchyVO = this.categoryService.buildCategoryHierarchy(sku.getCategoryId());
 			if(categoryHierarchyVO != null) {
 				vo.setCategoryFullPath(categoryHierarchyVO.getFullPathName());

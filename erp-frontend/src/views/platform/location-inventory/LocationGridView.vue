@@ -1,5 +1,5 @@
 <template>
-  <a-empty v-if="!rows.length" description="暂无库位" />
+  <a-empty v-if="!rows.length" :description="t('platform.location.empty')" />
   <div v-else class="rack-list">
     <section v-for="rack in groupedRows" :key="rack.name" class="rack-band">
       <h3>{{ rack.name }}</h3>
@@ -20,7 +20,7 @@
           <span class="cell-content">
             <strong>{{ row.locationCode }}</strong>
             <span>{{ row.utilizationPercent.toFixed(1) }}%</span>
-            <small>{{ row.totalQuantity }} 件 · {{ row.skuKindCount }} SKU</small>
+            <small>{{ t('platform.location.cellSummary', { pieces: row.totalQuantity, skus: row.skuKindCount }) }}</small>
           </span>
         </button>
       </div>
@@ -30,16 +30,18 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { LocationInventoryGrid } from '@/api/wms/location-inventory/types'
 import { calculateUtilization, utilizationLevel } from './location-utilization'
 
 const props = defineProps<{ rows: LocationInventoryGrid[] }>()
+const { t } = useI18n()
 defineEmits<{ (event: 'select', locationId: number): void }>()
 
 const groupedRows = computed(() => {
   const groups = new Map<string, LocationInventoryGrid[]>()
   props.rows.forEach(row => {
-    const name = row.rackNo || '未分排'
+    const name = row.rackNo || t('platform.location.unassignedRack')
     groups.set(name, [...(groups.get(name) || []), row])
   })
   return Array.from(groups.entries()).map(([name, rows]) => ({ name, rows }))

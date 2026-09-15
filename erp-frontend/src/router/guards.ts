@@ -42,7 +42,19 @@ const routerGuards = (router: Router) => {
       // 如果是 layout 内部的页面，且没有动态路由，则更新
       const userStore = useUserStore()
       if (!to.meta.withoutLayout && (!userStore.userMenus || userStore.userMenus.length === 0)) {
-        const userMenus = await userStore.fetchUserMenus()
+        let userMenus
+        try {
+          userMenus = await userStore.fetchUserMenus()
+        } catch {
+          // A persisted token can outlive the server session. Do not leave the
+          // initial navigation rejected (a blank page); reset it and log in again.
+          userStore.clean()
+          NProgress.done()
+          return {
+            path: loginPath,
+            query: { redirect: to.fullPath }
+          }
+        }
         // 仅当拉到非空菜单才重建动态路由并重导航；
         // 空菜单直接放行（fail-closed，空侧边栏），避免 length===0 反复重导航形成死循环
         if (userMenus && userMenus.length > 0) {

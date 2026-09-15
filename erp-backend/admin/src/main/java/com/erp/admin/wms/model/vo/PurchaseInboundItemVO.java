@@ -40,6 +40,15 @@ public class PurchaseInboundItemVO {
     @Schema(title = "应到数量")
     private Integer expectedQuantity;
 
+    @Schema(title = "外箱长度（毫米）")
+    private Integer outerLengthMm;
+
+    @Schema(title = "外箱宽度（毫米）")
+    private Integer outerWidthMm;
+
+    @Schema(title = "外箱高度（毫米）")
+    private Integer outerHeightMm;
+
     @Schema(title = "实到数量")
     private Integer actualQuantity;
 

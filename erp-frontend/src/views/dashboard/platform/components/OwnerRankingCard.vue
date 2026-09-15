@@ -4,20 +4,21 @@
       <div class="card-title">
         <TrophyOutlined class="card-icon" />
         <span>{{ title }}</span>
-        <span class="title-hint">（{{ unit }}）</span>
+        <span class="title-hint">({{ unit }})</span>
       </div>
     </template>
     <div v-if="hasData" class="chart-container">
       <v-chart :option="chartOption" autoresize class="chart" />
     </div>
     <div v-else class="empty-state">
-      <a-empty description="暂无数据" />
+      <a-empty :description="t('platform.dashboard.noData')" />
     </div>
   </a-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { TrophyOutlined } from '@ant-design/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -35,6 +36,7 @@ const props = defineProps<{
   unit: string
   color?: string
 }>()
+const { t, locale } = useI18n()
 
 const hasData = computed(() => (props.data?.length ?? 0) > 0)
 
@@ -49,7 +51,7 @@ const chartOption = computed<EChartsOption>(() => {
       axisPointer: { type: 'shadow' },
       formatter: (params: any) => {
         const p = params[0]
-        return `${p.name}<br/><b>${p.value.toLocaleString()}</b> ${props.unit}`
+        return `${p.name}<br/><b>${p.value.toLocaleString(locale.value)}</b> ${props.unit}`
       }
     },
     grid: { left: 8, right: 40, top: 10, bottom: 10, containLabel: true },
@@ -78,7 +80,7 @@ const chartOption = computed<EChartsOption>(() => {
           position: 'right',
           fontSize: 12,
           color: '#8c8c8c',
-          formatter: (p: any) => p.value.toLocaleString()
+          formatter: (p: any) => p.value.toLocaleString(locale.value)
         }
       }
     ]

@@ -4,13 +4,10 @@ import java.util.List;
 import java.util.function.BiFunction;
 
 import com.erp.admin.order.model.qo.ErpOrderQO;
-import com.erp.admin.order.model.vo.LabelBatchVO;
 import com.erp.admin.order.model.vo.SyncSummaryVO;
 import com.erp.admin.order.model.vo.WbOrderExportVO;
 import com.erp.admin.order.model.vo.WbOrderPageVO;
-import com.erp.admin.order.service.label.LabelPrintOrchestrator;
 import com.erp.admin.order.service.ErpOrderService;
-import com.erp.admin.order.service.wildberries.WbOrderConfirmService;
 import com.erp.admin.order.service.wildberries.WbOrderQueryService;
 import com.erp.admin.order.service.wildberries.WbOrderSyncService;
 import com.erp.admin.platform.PlatformEnum;
@@ -27,7 +24,6 @@ import org.ballcat.common.model.result.BaseResultCode;
 import org.ballcat.fastexcel.annotation.ResponseExcel;
 import org.ballcat.fastexcel.handler.DataFetchIterableSheetDataProvider;
 import org.ballcat.fastexcel.handler.PageDataFetcher;
-import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.ballcat.web.accesslog.annotation.AccessLoggingRule;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,10 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Wb订单管理")
 public class WbOrderController {
 
-	private final LabelPrintOrchestrator labelPrintOrchestrator;
-	private final PrincipalAttributeAccessor principalAttributeAccessor;
 	private final WbOrderQueryService wbOrderQueryService;
-	private final WbOrderConfirmService wbOrderConfirmService;
 	private final ErpOrderService erpOrderService;
 	private final WbOrderSyncService wbOrderSyncService;
 	private final OkHttpClient okHttpClient;
@@ -78,17 +71,6 @@ public class WbOrderController {
 
 
 	/**
-	 * 批量确认订单
-	 */
-	@Operation(summary = "批量确认订单")
-	@PostMapping("/confirm")
-	@PreAuthorize("@per.hasPermission('order:erp-order:edit')")
-	public ApiResult<Void> confirm(@RequestBody List<Long> orderIds) {
-		wbOrderConfirmService.confirmOrders(orderIds);
-		return ApiResult.ok();
-	}
-
-	/**
 	 * 设置锁定
 	 */
 	@Operation(summary = "锁定订单")
@@ -106,19 +88,6 @@ public class WbOrderController {
 	@PreAuthorize("@per.hasPermission('order:erp-order:edit')")
 	public ApiResult<Void> unlock(@PathVariable Long id) {
 		return erpOrderService.setLocked(id, 0) ? ApiResult.ok() : ApiResult.failed(BaseResultCode.UPDATE_DATABASE_ERROR);
-	}
-
-	/**
-	 * 批量打印面单（WB 平台），返回合并后的 PDF
-	 */
-	@Operation(summary = "批量打印面单（创建打印批次并返回批次信息）")
-	@PostMapping(value = "/print-labels")
-	@PreAuthorize("@per.hasPermission('order:erp-order:read')")
-	public ApiResult<LabelBatchVO> printLabels(@RequestBody List<Long> orderIds) {
-		Long currentUserId = principalAttributeAccessor.getUserId();
-		LabelBatchVO vo = labelPrintOrchestrator.printLabels(
-				PlatformEnum.Wildberries.code(), orderIds, currentUserId, "批量打印");
-		return ApiResult.ok(vo);
 	}
 
 	/**

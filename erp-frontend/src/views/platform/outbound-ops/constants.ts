@@ -1,5 +1,23 @@
 import type { OutboundStatus, PickMode } from '@/api/wms/outbound-picking/types'
 
+export const OUTBOUND_STATUS_I18N_KEYS: Record<OutboundStatus, string> = {
+  PENDING: 'platform.outbound.status.pending',
+  PICKING: 'platform.outbound.status.picking',
+  BACKORDER: 'platform.outbound.status.backorder',
+  PICKED: 'platform.outbound.status.picked',
+  PACKED: 'platform.outbound.status.packed',
+  SHIPPED: 'platform.outbound.status.shipped',
+  COMPLETED: 'platform.outbound.status.completed'
+}
+
+export const PICK_MODE_I18N_KEYS: Record<PickMode, string> = {
+  SINGLE: 'platform.outbound.mode.single',
+  WAVE: 'platform.outbound.mode.wave',
+  CENTRALIZED: 'platform.outbound.mode.centralized',
+  BY_ORDER: 'platform.outbound.mode.byOrder',
+  SECONDARY: 'platform.outbound.mode.secondary'
+}
+
 /** 出库单状态文案 */
 export const OUTBOUND_STATUS_TEXT: Record<OutboundStatus, string> = {
   PENDING: '待下架',

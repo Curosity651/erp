@@ -1,11 +1,12 @@
 <template>
   <a-modal
     :open="open"
-    title="创建按单拣货任务"
+    :title="t('platform.pick.createTitle')"
     :width="820"
     :confirm-loading="submitting"
     :ok-button-props="{ disabled: hasShortage }"
-    ok-text="确认下架"
+    :ok-text="t('platform.pick.confirm')"
+    :cancel-text="t('platform.common.cancel')"
     @ok="handleConfirm"
     @cancel="handleClose"
   >
@@ -22,7 +23,7 @@
         type="error"
         show-icon
         style="margin: 12px 0"
-        message="存在缺货 SKU：按规则整单挂起（backorder），不可部分下架。请补货后再下架。"
+        :message="t('platform.pick.shortageAlert')"
       />
 
       <a-alert
@@ -30,11 +31,11 @@
         type="success"
         show-icon
         style="margin: 12px 0"
-        message="该订单库存已预留，可以创建拣货任务；下方显示本订单自己的预留批次。"
+        :message="t('platform.pick.reservedAlert')"
       />
 
       <!-- 需求 vs 可用 -->
-      <div class="section-title">出库明细</div>
+      <div class="section-title">{{ t('platform.pick.details') }}</div>
       <a-table
         :data-source="order?.items || []"
         :pagination="false"
@@ -48,15 +49,15 @@
             <div class="sku-name">{{ record.skuName }}</div>
           </template>
         </a-table-column>
-        <a-table-column title="需求数" data-index="requiredQty" :width="80" align="right" />
-        <a-table-column title="本单预留" data-index="ownReservedQty" :width="90" align="right" />
-        <a-table-column title="公共可用" data-index="publicAvailableQty" :width="90" align="right" />
-        <a-table-column title="缺口" :width="80" align="right">
+        <a-table-column :title="t('platform.pick.required')" data-index="requiredQty" :width="80" align="right" />
+        <a-table-column :title="t('platform.pick.ownReserved')" data-index="ownReservedQty" :width="90" align="right" />
+        <a-table-column :title="t('platform.pick.publicAvailable')" data-index="publicAvailableQty" :width="90" align="right" />
+        <a-table-column :title="t('platform.pick.shortage')" :width="80" align="right">
           <template #default="{ record }">
             <span v-if="record.shortage" class="shortage">
               -{{ record.requiredQty - record.availableQty }}
             </span>
-            <span v-else style="color: #52c41a">充足</span>
+            <span v-else style="color: #52c41a">{{ t('platform.pick.sufficient') }}</span>
           </template>
         </a-table-column>
       </a-table>
@@ -64,25 +65,25 @@
       <!-- FIFO 分配预览 -->
       <template v-if="!hasShortage">
         <div class="section-title" style="margin-top: 16px">
-          FIFO 分配预览
-          <span class="hint">（按 入库日期→批次 升序锁定良品批次）</span>
+          {{ t('platform.pick.allocation') }}
+          <span class="hint">{{ t('platform.pick.allocationHint') }}</span>
         </div>
         <a-table :data-source="allocations" :pagination="false" row-key="batchNo" size="small">
-          <a-table-column title="库位" data-index="locationCode" :width="110" />
+          <a-table-column :title="t('platform.pick.location')" data-index="locationCode" :width="110" />
           <a-table-column title="SKU" data-index="skuCode" :width="140" />
-          <a-table-column title="批次" data-index="batchNo" :width="140" />
-          <a-table-column title="入库日" data-index="inboundDate" :width="110" />
-          <a-table-column title="取货数" data-index="takeQty" :width="80" align="right" />
+          <a-table-column :title="t('platform.pick.batch')" data-index="batchNo" :width="140" />
+          <a-table-column :title="t('platform.pick.inboundDate')" data-index="inboundDate" :width="110" />
+          <a-table-column :title="t('platform.pick.takeQty')" data-index="takeQty" :width="80" align="right" />
         </a-table>
 
         <!-- 拣货员 -->
         <a-form :label-col="{ style: { width: '80px' } }" style="margin-top: 16px">
-          <a-form-item label="拣货员" required>
+          <a-form-item :label="t('platform.picking.operator')" required>
             <a-select
               v-model:value="pickerId"
               :options="pickerOptions"
               :loading="pickerLoading"
-              placeholder="请指定拣货员"
+              :placeholder="t('platform.pick.assignPicker')"
               style="width: 240px"
             />
           </a-form-item>
@@ -94,6 +95,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import {
@@ -105,6 +107,7 @@ import {
 import type { OutboundOrderVO, PickAllocationVO } from '@/api/wms/outbound-picking/types'
 
 const props = defineProps<{ open: boolean; orderId?: number }>()
+const { t } = useI18n()
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
   (e: 'success'): void
@@ -177,7 +180,7 @@ function handleClose() {
 async function handleConfirm() {
   if (hasShortage.value || !order.value) return
   if (!pickerId.value) {
-    message.warning('请指定拣货员')
+    message.warning(t('platform.pick.assignPicker'))
     return
   }
   submitting.value = true
@@ -188,14 +191,14 @@ async function handleConfirm() {
       pickerId: pickerId.value
     })
     if (isSuccess(res)) {
-      message.success('下架成功，已生成拣货单')
+      message.success(t('platform.pick.success'))
       emit('success')
       emit('update:open', false)
     } else {
-      message.error(res.message || '下架失败')
+      message.error(res.message || t('platform.pick.failed'))
     }
   } catch (e: any) {
-    message.error(e?.message || '下架失败')
+    message.error(e?.message || t('platform.pick.failed'))
   } finally {
     submitting.value = false
   }

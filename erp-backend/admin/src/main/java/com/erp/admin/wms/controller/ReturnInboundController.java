@@ -2,14 +2,13 @@ package com.erp.admin.wms.controller;
 
 import java.util.List;
 
-import com.erp.admin.wms.model.dto.ReturnInboundDTO;
+import com.erp.admin.wms.model.dto.ReturnDispositionDTO;
 import com.erp.admin.wms.model.qo.ReturnInboundQO;
-import com.erp.admin.wms.model.qo.ReturnableOrderQO;
 import com.erp.admin.wms.model.vo.ReturnInboundDetailVO;
 import com.erp.admin.wms.model.vo.ReturnInboundExportVO;
 import com.erp.admin.wms.model.vo.ReturnInboundPageVO;
-import com.erp.admin.wms.model.vo.ReturnableOrderVO;
 import com.erp.admin.wms.service.ReturnInboundService;
+import com.erp.admin.wms.service.ReturnQcService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -35,11 +34,13 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/wms/return-inbound")
-@Tag(name = "退货入库单管理")
+@Tag(name = "货主退货处理")
 @RequiredArgsConstructor
 public class ReturnInboundController {
 
     private final ReturnInboundService returnInboundService;
+
+    private final ReturnQcService returnQcService;
 
     @GetMapping("/page")
     @PreAuthorize("@per.hasPermission('wms:return-inbound:read')")
@@ -55,19 +56,13 @@ public class ReturnInboundController {
         return ApiResult.ok(returnInboundService.getDetail(id));
     }
 
-    @GetMapping("/returnable-orders")
+    @PostMapping("/disposition")
     @PreAuthorize("@per.hasPermission('wms:return-inbound:read')")
-    @Operation(summary = "获取可退货订单列表")
-    public ApiResult<PageResult<ReturnableOrderVO>> getReturnableOrders(PageParam pageParam, ReturnableOrderQO qo) {
-        return ApiResult.ok(returnInboundService.getReturnableOrders(pageParam, qo));
-    }
-
-    @PostMapping
-    @PreAuthorize("@per.hasPermission('wms:return-inbound:add')")
-    @OperationLog(bizType = "退货入库单管理", successMessage = "退货入库成功")
-    @Operation(summary = "创建退货入库单（一步到位）")
-    public ApiResult<Long> create(@Validated @RequestBody ReturnInboundDTO dto) {
-        return ApiResult.ok(returnInboundService.create(dto));
+    @OperationLog(bizType = "退货处理", successMessage = "处置决定已提交")
+    @Operation(summary = "货主提交退货处置决定")
+    public ApiResult<Void> disposition(@Validated @RequestBody ReturnDispositionDTO dto) {
+        returnQcService.submitDisposition(dto);
+        return ApiResult.ok();
     }
 
     @GetMapping("/export")

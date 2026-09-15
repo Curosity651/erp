@@ -30,6 +30,9 @@ public class ReturnInboundQO {
     @Schema(title = "入库仓库ID")
     private Long warehouseId;
 
+    @Schema(title = "退货处理状态")
+    private String returnStatus;
+
 	@DateTimeFormat(pattern = "yyyy-MM-dd")
     @Schema(title = "退货日期开始")
     private LocalDate returnDateStart;

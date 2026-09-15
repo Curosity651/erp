@@ -10,8 +10,8 @@
 
 /** 退货单状态 */
 export type ReturnStatus =
-  | 'RETURN_PENDING' // 待退货收货
-  | 'QC_PENDING' // 待质检
+  | 'PENDING_OWNER' // 待货主处置
+  | 'PENDING_OPERATION' // 待仓库执行
   | 'COMPLETED' // 退货入库完成
   | 'CLOSED' // 未收到或拒收关闭
 
@@ -25,9 +25,12 @@ export type ReturnZone =
 
 /** 退货单明细 */
 export interface ReturnOrderItemVO {
+  id: number
   skuCode: string
   warehouseSkuCode?: string
   skuName?: string
+  platformOrderId?: string
+  returnReason?: string
   // 电子类（影响 QC_FAIL 是否强制拍照）
   electronic: boolean
   quantityPerPallet?: number
@@ -37,6 +40,13 @@ export interface ReturnOrderItemVO {
   receivedQty?: number
   qualifiedQty?: number
   damagedQty?: number
+  restockQty?: number
+  reworkQty?: number
+  scrapQty?: number
+  reworkPassQty?: number
+  reworkScrapQty?: number
+  dispositionRemark?: string
+  processedLocationCode?: string
   qualifiedZone?: ReturnZone
   qualifiedLocationCode?: string
   qualifiedPalletId?: number
@@ -60,6 +70,7 @@ export interface ReturnOrderItemVO {
 export interface ReturnOrderVO {
   id: number
   returnNo: string
+  returnBatchNo?: string
   erpTenantId: number
   ownerName: string
   // 所属WMS服务商ID
@@ -81,6 +92,12 @@ export interface ReturnOrderVO {
   closedBy?: number
   closedByName?: string
   closedTime?: string
+  dispositionBy?: number
+  dispositionByName?: string
+  dispositionTime?: string
+  processedBy?: number
+  processedByName?: string
+  processedTime?: string
   // 详情才带
   items?: ReturnOrderItemVO[]
 }
@@ -127,4 +144,29 @@ export interface ReturnQcDTO {
   returnOrderId: number
   warehouseId: number
   lines: ReturnQcLineDTO[]
+}
+
+export interface ReturnReceiptDTO {
+  warehouseId: number
+  returnDate?: string
+  remark?: string
+  items: {
+    erpTenantId: number
+    skuCode: string
+    receivedQty: number
+    platformOrderId?: string
+    returnReason?: string
+    photoFileIds?: number[]
+  }[]
+}
+
+export interface ReturnProcessDTO {
+  returnOrderId: number
+  items: {
+    itemId: number
+    reworkPassQty: number
+    reworkScrapQty: number
+    targetZone?: 'RETURN' | 'STANDARD'
+    targetLocationCode?: string
+  }[]
 }

@@ -59,8 +59,10 @@ public interface PurchaseInboundItemMapper extends ExtendMapper<PurchaseInboundO
     /**
      * 查询入库单明细VO列表（含采购单号、SKU名称）
      * @param inboundOrderId 入库单ID
+     * @param erpTenantId 货主租户ID，用于按货主读取 SKU 包装尺寸
      * @return List<PurchaseInboundItemVO> 明细VO列表
      */
-    List<PurchaseInboundItemVO> selectItemVOsByInboundOrderId(@Param("inboundOrderId") Long inboundOrderId);
+    List<PurchaseInboundItemVO> selectItemVOsByInboundOrderId(
+            @Param("inboundOrderId") Long inboundOrderId, @Param("erpTenantId") Long erpTenantId);
 
 }

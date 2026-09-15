@@ -97,13 +97,32 @@
           <inbox-outlined class="section-icon" />
           入库明细
         </div>
+        <div class="detail-toolbar">
+          <span class="detail-tip">包装尺寸自动取自 SKU 资料</span>
+          <a-space>
+            <a-button size="small" :loading="templateLoading" @click="downloadTemplate">
+              <download-outlined />
+              下载模板
+            </a-button>
+            <a-upload
+              accept=".xlsx"
+              :show-upload-list="false"
+              :before-upload="beforeImportTemplate"
+            >
+              <a-button size="small" :loading="templateLoading">
+                <upload-outlined />
+                导入模板
+              </a-button>
+            </a-upload>
+          </a-space>
+        </div>
         <a-table
           :data-source="inboundItems"
           :columns="itemColumns"
           :pagination="false"
           row-key="rowKey"
           size="small"
-          :scroll="{ x: 640 }"
+          :scroll="{ x: 980 }"
         >
           <template #bodyCell="{ column, record, index }">
             <template v-if="column.key === 'skuCode'">
@@ -112,6 +131,14 @@
                 placeholder="请选择SKU"
                 @sku-selected="row => handleSkuSelected(record, row)"
               />
+            </template>
+            <template v-else-if="column.key === 'dimensions'">
+              <span :class="{ 'missing-dimension': !hasDimensions(record) }">
+                {{ dimensionsText(record) }}
+              </span>
+            </template>
+            <template v-else-if="column.key === 'volume'">
+              {{ volumeText(record) }}
             </template>
             <template v-else-if="column.key === 'expectedQuantity'">
               <a-input-number
@@ -138,6 +165,15 @@
           <plus-outlined />
           添加明细
         </a-button>
+        <div class="dimension-summary">
+          <a-tag color="blue">累计长：{{ totalLengthText }}</a-tag>
+          <a-tag color="blue">累计宽：{{ totalWidthText }}</a-tag>
+          <a-tag color="blue">累计高：{{ totalHeightText }}</a-tag>
+          <a-tag color="green">总体积：{{ totalVolumeText }}</a-tag>
+          <span v-if="missingDimensionCount > 0" class="missing-dimension">
+            {{ missingDimensionCount }} 个 SKU 缺少包装尺寸
+          </span>
+        </div>
       </div>
 
       <!-- 备注区块 -->
@@ -180,7 +216,9 @@ import {
   ProfileOutlined,
   InboxOutlined,
   EditOutlined,
-  PlusOutlined
+  PlusOutlined,
+  DownloadOutlined,
+  UploadOutlined
 } from '@ant-design/icons-vue'
 import PageContainer from '#/layout/components/PageContainer'
 import { emitter } from '@/hooks/mitt'
@@ -193,11 +231,16 @@ import {
   getManualInboundDetail,
   submitManualInbound
 } from '@/api/wms/manual-inbound'
+import { listSkuByCodes } from '@/api/product/sku'
 import type { ManualInboundDTO, ManualInboundItemDTO } from '@/api/wms/manual-inbound/types'
 import { InboundStatusMap, InboundStatus } from '@/api/wms/purchase-inbound/types'
 import type { SkuRow } from '@/components/Sku/types'
 import { doRequest } from '@/utils/axios/request'
 import { isSuccess } from '@/api'
+import {
+  downloadManualInboundTemplate,
+  parseManualInboundTemplateFile
+} from './manual-inbound-excel'
 
 defineOptions({ name: 'ManualInboundFormPage' })
 
@@ -215,6 +258,7 @@ const inboundOrderId = computed(() => {
 
 const loading = ref(false)
 const submitLoading = ref(false)
+const templateLoading = ref(false)
 const hasUnsavedChanges = ref(false)
 
 const { confirmIfDirty, resetDirty, useRouteLeaveGuard } = useUnsavedChangesGuard(hasUnsavedChanges)
@@ -224,7 +268,7 @@ const orderStatus = ref<string>('')
 
 const isUpdateForm = computed(() => formMode.value === 'edit')
 
-const pageTitle = computed(() => (isUpdateForm.value ? '编辑自定义入库单' : '新建自定义入库单'))
+const pageTitle = computed(() => (isUpdateForm.value ? '编辑商品入库' : '新建商品入库'))
 
 const inboundDateValue = ref<string>()
 
@@ -233,6 +277,9 @@ interface ItemRow {
   rowKey: number
   skuCode?: string
   expectedQuantity: number
+  outerLengthMm?: number
+  outerWidthMm?: number
+  outerHeightMm?: number
   remark?: string
 }
 let rowKeySeq = 0
@@ -240,7 +287,9 @@ const inboundItems = ref<ItemRow[]>([])
 
 const itemColumns = [
   { title: 'SKU', key: 'skuCode', width: 280 },
+  { title: '包装尺寸（长×宽×高）', key: 'dimensions', width: 180, align: 'center' },
   { title: '应到数量', key: 'expectedQuantity', width: 140, align: 'center' },
+  { title: '包装体积', key: 'volume', width: 120, align: 'center' },
   { title: '备注', key: 'remark', width: 180 },
   { title: '操作', key: 'operate', width: 80, align: 'center' }
 ]
@@ -257,6 +306,60 @@ const formModel = reactive<ManualInboundDTO>({
 const markDirty = () => {
   hasUnsavedChanges.value = true
 }
+
+const hasDimensions = (record: ItemRow) =>
+  [record.outerLengthMm, record.outerWidthMm, record.outerHeightMm].every(
+    value => Number(value) > 0
+  )
+
+const dimensionsText = (record: ItemRow) =>
+  hasDimensions(record)
+    ? (record.outerLengthMm! / 10).toFixed(1) +
+      ' × ' +
+      (record.outerWidthMm! / 10).toFixed(1) +
+      ' × ' +
+      (record.outerHeightMm! / 10).toFixed(1) +
+      ' cm'
+    : '待维护'
+
+const volumeCbm = (record: ItemRow) =>
+  hasDimensions(record)
+    ? (record.outerLengthMm! *
+        record.outerWidthMm! *
+        record.outerHeightMm! *
+        Number(record.expectedQuantity || 0)) /
+      1_000_000_000
+    : 0
+
+const volumeText = (record: ItemRow) =>
+  hasDimensions(record) ? volumeCbm(record).toFixed(4) + ' m³' : '-'
+
+const totalLengthMm = computed(() =>
+  inboundItems.value.reduce(
+    (sum, item) => sum + (hasDimensions(item) ? item.outerLengthMm! * item.expectedQuantity : 0),
+    0
+  )
+)
+const totalWidthMm = computed(() =>
+  inboundItems.value.reduce(
+    (sum, item) => sum + (hasDimensions(item) ? item.outerWidthMm! * item.expectedQuantity : 0),
+    0
+  )
+)
+const totalHeightMm = computed(() =>
+  inboundItems.value.reduce(
+    (sum, item) => sum + (hasDimensions(item) ? item.outerHeightMm! * item.expectedQuantity : 0),
+    0
+  )
+)
+const totalVolumeCbm = computed(() => inboundItems.value.reduce((sum, item) => sum + volumeCbm(item), 0))
+const missingDimensionCount = computed(() =>
+  inboundItems.value.filter(item => !hasDimensions(item)).length
+)
+const totalLengthText = computed(() => (totalLengthMm.value / 10).toFixed(1) + ' cm')
+const totalWidthText = computed(() => (totalWidthMm.value / 10).toFixed(1) + ' cm')
+const totalHeightText = computed(() => (totalHeightMm.value / 10).toFixed(1) + ' cm')
+const totalVolumeText = computed(() => totalVolumeCbm.value.toFixed(4) + ' m³')
 
 const getStatusColor = (status: string): string => {
   const colorMap: Record<string, string> = {
@@ -287,7 +390,132 @@ const removeItem = (index: number) => {
 const handleSkuSelected = (record: ItemRow, row: SkuRow | SkuRow[] | null) => {
   const sku = Array.isArray(row) ? row[0] : row
   record.skuCode = sku?.skuCode
+  record.outerLengthMm = sku?.outerLengthMm
+  record.outerWidthMm = sku?.outerWidthMm
+  record.outerHeightMm = sku?.outerHeightMm
   markDirty()
+}
+
+const downloadTemplate = async () => {
+  templateLoading.value = true
+  try {
+    await downloadManualInboundTemplate({
+      inboundNo: formModel.inboundNo,
+      inboundDate: formModel.inboundDate,
+      warehouseId: formModel.warehouseId
+    })
+    message.success('入库模板已下载')
+  } catch (error) {
+    console.error('下载入库模板失败:', error)
+    message.error('模板下载失败')
+  } finally {
+    templateLoading.value = false
+  }
+}
+
+const beforeImportTemplate = async (file: File) => {
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    message.error('仅支持导入 .xlsx 文件')
+    return false
+  }
+  templateLoading.value = true
+  try {
+    const rows = await parseManualInboundTemplateFile(file)
+    const errors: string[] = []
+    if (rows.length === 0) errors.push('模板中没有可导入的明细行')
+
+    const first = rows[0]
+    const inboundNo = String(first?.inboundNo || '').trim()
+    const inboundDate = String(first?.inboundDate || '').trim()
+    const warehouseId = Number(first?.warehouseId)
+    const codes = new Set<string>()
+    if (isUpdateForm.value && inboundNo !== formModel.inboundNo.trim()) {
+      errors.push('编辑已有入库单时，模板中的入库单号必须与当前单据一致')
+    }
+
+    rows.forEach((row, index) => {
+      const excelRow = index + 2
+      const code = String(row.skuCode || '').trim()
+      const rowWarehouseId = Number(row.warehouseId)
+      if (!String(row.inboundNo || '').trim()) errors.push('第 ' + excelRow + ' 行：入库单号不能为空')
+      if (!String(row.inboundDate || '').trim()) errors.push('第 ' + excelRow + ' 行：入库日期不能为空')
+      if (
+        String(row.inboundDate || '').trim() &&
+        !/^\d{4}-\d{2}-\d{2}$/.test(String(row.inboundDate || '').trim())
+      ) {
+        errors.push('第 ' + excelRow + ' 行：入库日期格式必须为 YYYY-MM-DD')
+      }
+      if (!Number.isInteger(rowWarehouseId) || rowWarehouseId <= 0) {
+        errors.push('第 ' + excelRow + ' 行：入库仓库ID必须是正整数')
+      }
+      if (String(row.inboundNo || '').trim() !== inboundNo) {
+        errors.push('第 ' + excelRow + ' 行：同一模板内入库单号必须一致')
+      }
+      if (String(row.inboundDate || '').trim() !== inboundDate) {
+        errors.push('第 ' + excelRow + ' 行：同一模板内入库日期必须一致')
+      }
+      if (rowWarehouseId !== warehouseId) {
+        errors.push('第 ' + excelRow + ' 行：同一模板内入库仓库ID必须一致')
+      }
+      if (!code) errors.push('第 ' + excelRow + ' 行：SKU编码不能为空')
+      if (!Number.isInteger(row.expectedQuantity) || row.expectedQuantity <= 0) {
+        errors.push('第 ' + excelRow + ' 行：应到数量必须是大于0的整数')
+      }
+      const normalizedCode = code.toUpperCase()
+      if (normalizedCode && codes.has(normalizedCode)) {
+        errors.push('第 ' + excelRow + ' 行：SKU重复，请合并数量')
+      }
+      if (normalizedCode) codes.add(normalizedCode)
+    })
+
+    if (errors.length === 0) {
+      const skuResult = await listSkuByCodes([...codes])
+      const skuMap = new Map(
+        (isSuccess(skuResult) ? skuResult.data || [] : []).map(sku => [
+          sku.skuCode.trim().toUpperCase(),
+          sku
+        ])
+      )
+      rows.forEach((row, index) => {
+        if (!skuMap.has(row.skuCode.trim().toUpperCase())) {
+          errors.push('第 ' + (index + 2) + ' 行：SKU不存在或当前货主无权使用')
+        }
+      })
+      if (errors.length === 0) {
+        formModel.inboundNo = inboundNo
+        formModel.inboundDate = inboundDate
+        formModel.warehouseId = warehouseId
+        inboundDateValue.value = inboundDate
+        inboundItems.value = rows.map(row => {
+          const sku = skuMap.get(row.skuCode.trim().toUpperCase())!
+          return {
+            rowKey: rowKeySeq++,
+            skuCode: sku.skuCode,
+            expectedQuantity: row.expectedQuantity,
+            outerLengthMm: sku.outerLengthMm,
+            outerWidthMm: sku.outerWidthMm,
+            outerHeightMm: sku.outerHeightMm,
+            remark: row.remark || undefined
+          }
+        })
+        markDirty()
+        message.success('已导入 ' + rows.length + ' 条入库明细，请核对后保存')
+      }
+    }
+
+    if (errors.length > 0) {
+      Modal.error({
+        title: '入库模板校验未通过',
+        width: 680,
+        content: errors.slice(0, 30).join('；')
+      })
+    }
+  } catch (error: any) {
+    message.error(error?.message || '模板读取失败，请重新下载模板后填写')
+  } finally {
+    templateLoading.value = false
+  }
+  return false
 }
 
 const validateForm = async (): Promise<boolean> => {
@@ -431,6 +659,9 @@ const loadInboundDetail = (id: number) => {
         rowKey: rowKeySeq++,
         skuCode: item.skuCode,
         expectedQuantity: item.expectedQuantity,
+        outerLengthMm: item.outerLengthMm,
+        outerWidthMm: item.outerWidthMm,
+        outerHeightMm: item.outerHeightMm,
         remark: item.remark
       }))
     },
@@ -513,6 +744,30 @@ onMounted(() => {
   margin-right: 8px;
   color: #1890ff;
   font-size: 16px;
+}
+
+.detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -4px 0 12px;
+}
+
+.detail-tip {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.dimension-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.missing-dimension {
+  color: #fa8c16;
 }
 
 .del-link {

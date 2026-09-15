@@ -1,9 +1,14 @@
 {
   "menu": {
-    "statistics": { "dashboard": "Панель даних", "salesTarget": "Цілі продажів" },
-    "warehouseMgmt": { "locationMgmt": "Керування місцями", "locationInventory": "Запаси за місцями", "rackAssignment": "Розподіл місць" },
+    "statistics": { "_title": "Аналітика даних", "dashboard": "Панель даних", "salesTarget": "Цілі продажів", "platformDashboard": "Аналітика платформи" },
+    "log": { "_title": "Керування журналами", "operationLog": "Журнал операцій", "loginLog": "Журнал входів" },
+    "system": { "_title": "Керування системою", "role": "Керування ролями", "user": "Системні користувачі", "organization": "Організаційна структура", "projectGroup": "Проєктні групи", "position": "Посади", "shop": "Керування магазинами", "menu": "Дозволи меню", "dict": "Керування словниками", "config": "Конфігурація" },
+    "customerMgmt": { "_title": "Керування клієнтами", "wmsOperators": "WMS-провайдери" },
+    "warehouseMgmt": { "_title": "Керування складом", "warehouse": "Інформація про склад", "locationMgmt": "Керування місцями", "locationInventory": "Запаси за місцями", "region": "Керування зонами", "rackAssignment": "Розподіл місць", "pallets": "Керування палетами" },
     "outboundOps": { "orderDispatch": "Зняття замовлень", "pickingTasks": "Завдання відбору", "fulfillment": "Вихідні операції" },
-    "platformFinance": { "receivableBill": "Рахунки до отримання", "warehouseContracts": "Контракти та кошти", "providerFunds": "Розрахунки з провайдерами" },
-    "platformDashboard": "Аналітика платформи"
+    "platformFinance": { "_title": "Фінанси платформи", "receivableBill": "Рахунки до отримання", "warehouseContracts": "Контракти та кошти", "providerFunds": "Розрахунки з провайдерами" },
+    "platformDashboard": "Аналітика платформи",
+    "wms": { "returnInbound": "Обробка повернень", "manualInbound": "Приймання товарів" },
+    "ops": { "_title": "Операції закордонного складу", "inboundOps": "Приймання товарів", "putaway": "Розміщення товарів", "fulfillmentShelf": "Зняття замовлень", "fulfillmentPicking": "Завдання відбору", "fulfillmentWorkbench": "Вихідні операції", "picking": "Вихідні операції", "packing": "Пакування та відвантаження", "returnQc": "Обробка повернень", "stocktake": "Інвентаризація", "locationTransfer": "Переміщення між місцями" }
   }
 }

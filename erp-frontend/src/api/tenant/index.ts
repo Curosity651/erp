@@ -56,7 +56,7 @@ export function listErpTenants() {
   return httpClient.get<ApiResult<TenantBrief[]>>('/tenant/erp-tenants')
 }
 
-/** 全部货主列表（平台超管，含所属服务商，报废单等平台侧下拉用） */
+/** 全部货主列表（平台超管，含所属服务商，供平台侧业务下拉使用） */
 export function listAllErpTenants() {
   return httpClient.get<ApiResult<TenantBrief[]>>('/tenant/all-erp-tenants')
 }

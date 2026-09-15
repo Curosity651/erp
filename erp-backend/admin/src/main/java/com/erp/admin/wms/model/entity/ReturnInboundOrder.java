@@ -33,6 +33,9 @@ public class ReturnInboundOrder {
     @Schema(title = "退货单号")
     private String returnNo;
 
+    @Schema(title = "海外仓退货批次号")
+    private String returnBatchNo;
+
     @Schema(title = "ERP订单ID")
     private Long erpOrderId;
 
@@ -81,6 +84,14 @@ public class ReturnInboundOrder {
     private Long receivedBy;
 
     private LocalDateTime receivedTime;
+
+    private Long dispositionBy;
+
+    private LocalDateTime dispositionTime;
+
+    private Long processedBy;
+
+    private LocalDateTime processedTime;
 
     private Long qcBy;
 

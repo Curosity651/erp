@@ -3,7 +3,7 @@
     <template #title>
       <div class="card-title">
         <AppstoreOutlined class="card-icon" />
-        <span>库位占用率</span>
+        <span>{{ t('platform.dashboard.capacity.title') }}</span>
       </div>
     </template>
     <div v-if="rows.length > 0" class="wh-list">
@@ -24,17 +24,19 @@
       </div>
     </div>
     <div v-else class="empty-state">
-      <a-empty description="暂无数据" />
+      <a-empty :description="t('platform.dashboard.noData')" />
     </div>
   </a-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { AppstoreOutlined } from '@ant-design/icons-vue'
 import type { WarehouseCapacityVO } from '@/api/platform-dashboard/types'
 
 const props = defineProps<{ data?: WarehouseCapacityVO[] }>()
+const { t } = useI18n()
 
 const rows = computed(() =>
   (props.data || [])

@@ -5,29 +5,29 @@
         <a-select
           v-model:value="warehouseId"
           :options="warehouseOptions"
-          placeholder="选择仓库"
+          :placeholder="t('platform.location.selectWarehouse')"
           style="width: 220px"
         />
         <a-segmented v-model:value="viewMode" :options="viewOptions" />
-        <a-button :loading="loading" @click="load">刷新</a-button>
+        <a-button :loading="loading" @click="load">{{ t('platform.common.refresh') }}</a-button>
         <a-input
           v-model:value="skuKeyword"
           allow-clear
-          placeholder="搜索 SKU"
+          :placeholder="t('platform.location.searchSku')"
           style="width: 200px"
         />
         <a-select
           v-model:value="zoneId"
           allow-clear
           :options="zoneOptions"
-          placeholder="全部分区"
+          :placeholder="t('platform.location.allZones')"
           style="width: 160px"
         />
       </a-space>
       <a-space>
-        <span>库位 {{ filteredRows.length }}</span>
-        <span>库存 {{ totalQuantity }} 件</span>
-        <span>预占 {{ reservedQuantity }} 件</span>
+        <span>{{ t('platform.location.locations', { count: filteredRows.length }) }}</span>
+        <span>{{ t('platform.location.stock', { count: totalQuantity }) }}</span>
+        <span>{{ t('platform.location.reserved', { count: reservedQuantity }) }}</span>
       </a-space>
     </div>
 
@@ -46,6 +46,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
@@ -63,6 +64,7 @@ import { buildZoneOptions, filterLocationInventory } from './location-inventory-
 defineOptions({ name: 'LocationInventoryPage' })
 
 const route = useRoute()
+const { t } = useI18n()
 const loading = ref(false)
 const warehouseId = ref<number>()
 const warehouseOptions = ref<{ value: number; label: string }[]>([])
@@ -71,10 +73,10 @@ const rows = ref<LocationInventoryGrid[]>([])
 const skuKeyword = ref('')
 const zoneId = ref<number>()
 const drawerRef = ref<InstanceType<typeof LocationInventoryDrawer>>()
-const viewOptions = [
-  { label: '网格视图', value: 'grid' },
-  { label: '列表视图', value: 'tree' }
-]
+const viewOptions = computed(() => [
+  { label: t('platform.location.grid'), value: 'grid' },
+  { label: t('platform.location.list'), value: 'tree' }
+])
 
 const filteredRows = computed(() =>
   filterLocationInventory(rows.value, skuKeyword.value, zoneId.value)
@@ -88,7 +90,7 @@ const reservedQuantity = computed(() =>
 )
 const tree = computed<LocationInventoryTree>(() =>
   filteredRows.value.reduce<LocationInventoryTree>((groups, row) => {
-    const rack = row.rackNo || '未分排'
+    const rack = row.rackNo || t('platform.location.unassignedRack')
     groups[rack] = [...(groups[rack] || []), row]
     return groups
   }, {})
@@ -100,7 +102,7 @@ const load = async () => {
   try {
     const gridResponse = await getLocationInventoryGrid(warehouseId.value)
     if (!isSuccess(gridResponse)) {
-      message.error(gridResponse.message || '库位库存加载失败')
+      message.error(gridResponse.message || t('platform.location.loadFailed'))
       return
     }
     rows.value = gridResponse.data || []

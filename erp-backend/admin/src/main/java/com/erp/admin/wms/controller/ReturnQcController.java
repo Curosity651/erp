@@ -1,12 +1,9 @@
 package com.erp.admin.wms.controller;
 
-import com.erp.admin.wms.model.dto.ReturnQcDTO;
-import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
+import com.erp.admin.wms.model.dto.ReturnReceiptDTO;
+import com.erp.admin.wms.model.dto.ReturnProcessDTO;
 import com.erp.admin.wms.model.qo.ReturnQO;
-import com.erp.admin.wms.model.vo.PalletSlotVO;
-import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.model.vo.ReturnOrderVO;
-import com.erp.admin.wms.model.vo.WarehouseOptionVO;
 import com.erp.admin.wms.service.ReturnQcService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,7 +28,7 @@ import java.util.List;
  *
  * @author erp
  */
-@Tag(name = "出库作业·退货质检")
+@Tag(name = "退货处理")
 @RestController
 @RequestMapping("/wms/return-qc")
 @RequiredArgsConstructor
@@ -53,36 +50,18 @@ public class ReturnQcController {
         return ApiResult.ok(returnQcService.getDetail(id));
     }
 
-    @Operation(summary = "查询退货质检完成后需要打印或更新的托盘标签")
-    @GetMapping("/{id}/pallets")
+    @Operation(summary = "海外仓登记已收到的退货，按货主自动拆单")
+    @PostMapping("/receipts")
     @PreAuthorize("hasAuthority('wms:return-qc:oper')")
-    public ApiResult<List<PalletSummaryVO>> pallets(@PathVariable("id") Long id) {
-        return ApiResult.ok(returnQcService.listQcPallets(id));
+    public ApiResult<List<Long>> registerReceipt(@Validated @RequestBody ReturnReceiptDTO dto) {
+        return ApiResult.ok(returnQcService.registerReceipt(dto));
     }
 
-    @Operation(summary = "查询本退货单货主可使用的退货仓库")
-    @GetMapping("/warehouses")
+    @Operation(summary = "海外仓执行货主处置决定")
+    @PostMapping("/process")
     @PreAuthorize("hasAuthority('wms:return-qc:oper')")
-    public ApiResult<List<WarehouseOptionVO>> warehouses(
-            @RequestParam("returnOrderId") Long returnOrderId) {
-        return ApiResult.ok(returnQcService.listAuthorizedWarehouses(returnOrderId));
-    }
-
-    @Operation(summary = "查询退货质检可用的三层托盘层位")
-    @GetMapping("/slots")
-    @PreAuthorize("hasAuthority('wms:return-qc:oper')")
-    public ApiResult<List<PalletSlotVO>> slots(
-            @RequestParam("returnOrderId") Long returnOrderId,
-            @RequestParam("warehouseId") Long warehouseId,
-            @RequestParam("zone") String zone) {
-        return ApiResult.ok(returnQcService.listAvailableSlots(returnOrderId, warehouseId, zone));
-    }
-
-    @Operation(summary = "退货收货 RETURN_PENDING→QC_PENDING")
-    @PostMapping("/receive")
-    @PreAuthorize("hasAuthority('wms:return-qc:oper')")
-    public ApiResult<Void> receive(@Validated @RequestBody ReturnReceiveDTO dto) {
-        returnQcService.receive(dto);
+    public ApiResult<Void> process(@Validated @RequestBody ReturnProcessDTO dto) {
+        returnQcService.processDisposition(dto);
         return ApiResult.ok();
     }
 
@@ -91,14 +70,6 @@ public class ReturnQcController {
     @PreAuthorize("hasAuthority('wms:return-qc:oper')")
     public ApiResult<Void> close(@PathVariable("id") Long id) {
         returnQcService.close(id);
-        return ApiResult.ok();
-    }
-
-    @Operation(summary = "质检+上架 QC_PENDING→COMPLETED")
-    @PostMapping("/qc")
-    @PreAuthorize("hasAuthority('wms:return-qc:oper')")
-    public ApiResult<Void> qc(@Validated @RequestBody ReturnQcDTO dto) {
-        returnQcService.qc(dto);
         return ApiResult.ok();
     }
 

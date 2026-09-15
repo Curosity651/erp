@@ -27,9 +27,6 @@
                 @click="handleBatchAction('confirm', slotProps.selectedRows)"
                 >批量确认
               </a-menu-item>
-              <a-menu-item key="print" @click="handleBatchAction('print', slotProps.selectedRows)"
-                >批量打印面单
-              </a-menu-item>
               <a-menu-item key="sync" @click="handleBatchAction('sync', slotProps.selectedRows)"
                 >同步选中
               </a-menu-item>
@@ -45,10 +42,6 @@
     <!-- 操作按钮区域 -->
     <template #toolBarRender>
       <export-confirm-button title="确认导出当前查询条件下的订单?" :on-export="handleExport" />
-      <a-button @click="openHistory">
-        <HistoryOutlined />
-        打印历史
-      </a-button>
       <a-popconfirm
         title="是否确认进行全量订单信息同步?"
         ok-text="是"
@@ -89,14 +82,8 @@
           :currency-code="record.currencyCode"
           :converted-amount="record.convertedAmount"
           :converted-currency-code="record.convertedCurrencyCode"
-          :erp-status="record.erpStatus"
-          :erp-status-mapping="mapErpStatus(record.erpStatus)"
-          :platform-status="record.platformStatus"
-          :platform-status-mapping="mapWbPlatformStatus(record.platformStatus)"
-          :platform-substatus="record.platformSubstatus"
-          :platform-substatus-mapping="mapWbSupplierStatus(record.platformSubstatus)"
-          platform-status-label="平台履约状态"
-          platform-substatus-label="商家处理状态"
+          :erp-status="record.businessStatus"
+          :erp-status-mapping="mapOwnerOrderStatus(record.businessStatus)"
           amount-order="converted-first"
         />
       </template>
@@ -120,16 +107,15 @@
         </div>
       </template>
 
-      <!-- 运营状态（锁定 + 面单） -->
+      <!-- 锁定状态 -->
       <template v-else-if="column.key === 'operationStatus'">
-        <OrderOperationStatusCell :locked="record.locked" :has-label="record.hasLabel" />
+        <OrderOperationStatusCell :locked="record.locked" />
       </template>
 
       <!-- 操作列 -->
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a v-if="record.locked !== 1" @click="onOpenConfirmDialog([record])">确认</a>
-          <a v-if="record.locked !== 1" @click="onOpenPrintDialog([record])">打印面单</a>
           <a-popconfirm title="是否确认进行同步操作?" @confirm="onSync([record])">
             <a>同步</a>
           </a-popconfirm>
@@ -139,15 +125,6 @@
       </template>
     </template>
   </pro-table>
-
-  <WbOrderPrintDialog
-    v-model:open="printDialog.open"
-    :rows="printDialog.rows"
-    @printed="onPrinted"
-  />
-
-  <!-- 打印历史对话框 -->
-  <LabelBatchHistoryDialog v-model:open="historyDialog.open" platform="Wildberries" />
 
   <!-- 确认前弹窗 -->
   <OrderConfirmModal
@@ -169,18 +146,14 @@ import { OperationGroup } from '@/components/Operation'
 import { mergePageParam } from '@/utils/page-utils'
 import {
   pageErpOrder,
-  confirmOrders,
   lockOrder,
   unlockOrder,
   syncOrders,
   syncAllOrders,
   exportOrders
 } from '@/api/order/wb-order'
-import { mapErpStatus, createStatusMapper } from '@/utils/order-status-mapper'
-import { WB_PLATFORM_STATUS_MAP, WB_SUPPLIER_STATUS_MAP } from '@/api/order/wb-order/types'
+import { mapOwnerOrderStatus } from '@/utils/order-status-mapper'
 import type { ErpOrderQO, WbOrderPageVO } from '@/api/order/wb-order/types'
-import WbOrderPrintDialog from './WbOrderPrintDialog.vue'
-import LabelBatchHistoryDialog from '@/views/order/label/LabelBatchHistoryDialog.vue'
 import { ExportConfirmButton } from '@/components/Button'
 import { message } from 'ant-design-vue'
 import {
@@ -190,18 +163,13 @@ import {
   OrderConfirmModal
 } from '@/views/order/components'
 import { remoteFileDownload } from '@/utils/file-utils'
-import { HistoryOutlined, InteractionOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { InteractionOutlined, DownOutlined } from '@ant-design/icons-vue'
 import SkuInfoCell from '@/components/Sku/SkuInfoCell.vue'
 import { useOrderConfirm } from '@/views/order/hooks/useOrderConfirm.ts'
 import { useOrderLock } from '@/views/order/hooks/useOrderLock.ts'
 import { useOrderSync } from '@/views/order/hooks/useOrderSync.ts'
-import { useOrderPrint } from '@/views/order/hooks/useOrderPrint.ts'
 
 defineOptions({ name: 'WbOrderPage' })
-
-// 状态映射
-const mapWbPlatformStatus = createStatusMapper(WB_PLATFORM_STATUS_MAP)
-const mapWbSupplierStatus = createStatusMapper(WB_SUPPLIER_STATUS_MAP)
 
 // 表格组件引用
 const tableRef = ref<ProTableInstanceExpose>()
@@ -268,7 +236,6 @@ const {
     if (status !== 'PENDING' && status !== 'READY_TO_SHIP') return `状态不支持：${status || '-'}`
     return '未知原因'
   },
-  confirmApi: confirmOrders,
   reloadTable: () => reloadTable()
 })
 
@@ -285,25 +252,12 @@ const { onSync, handleSyncAllOrders } = useOrderSync({
   reloadTable: () => reloadTable()
 })
 
-const {
-  printDialog,
-  historyDialog,
-  openPrintDialog: onOpenPrintDialog,
-  openHistory
-} = useOrderPrint<WbOrderPageVO>()
-
-const onPrinted = () => {
-  reloadTable()
-}
-
 // 批量操作处理
-const handleBatchAction = (action: 'confirm' | 'print' | 'sync', rows: WbOrderPageVO[]) => {
+const handleBatchAction = (action: 'confirm' | 'sync', rows: WbOrderPageVO[]) => {
   const list = Array.isArray(rows) ? rows : []
   if (!list.length) return
   if (action === 'confirm') {
     onOpenConfirmDialog(list)
-  } else if (action === 'print') {
-    onOpenPrintDialog(list)
   } else if (action === 'sync') {
     onSync(list)
   }

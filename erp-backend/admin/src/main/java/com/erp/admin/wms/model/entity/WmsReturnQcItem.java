@@ -30,6 +30,10 @@ public class WmsReturnQcItem {
     @Schema(title = "SKU编码")
     private String skuCode;
 
+    private String platformOrderId;
+
+    private String returnReason;
+
     @Schema(title = "是否电子类")
     private Integer electronic;
 
@@ -44,6 +48,22 @@ public class WmsReturnQcItem {
 
     @Schema(title = "残次品数量")
     private Integer damagedQty;
+
+    private Integer restockQty;
+
+    private Integer reworkQty;
+
+    private Integer scrapQty;
+
+    private Integer reworkPassQty;
+
+    private Integer reworkScrapQty;
+
+    private String dispositionRemark;
+
+    private String processedLocationCode;
+
+    private Long processedLocationId;
 
     @Schema(title = "良品回库分区")
     private String qualifiedZone;

@@ -21,6 +21,44 @@ export interface PickingTaskPrintData {
   orders: PickingTaskPrintOrder[]
 }
 
+export interface PickingTaskPrintLabels {
+  title: string
+  taskNo: string
+  warehouse: string
+  orderCount: string
+  totalPieces: string
+  printedAt: string
+  order: (index: number) => string
+  orderNo: string
+  owner: string
+  platform: string
+  pieces: string
+  sequence: string
+  location: string
+  internalSku: string
+  productSku: string
+  quantity: string
+}
+
+const DEFAULT_LABELS: PickingTaskPrintLabels = {
+  title: '拣货单',
+  taskNo: '拣货任务号',
+  warehouse: '仓库',
+  orderCount: '订单数',
+  totalPieces: '总件数',
+  printedAt: '打印时间',
+  order: index => `订单 ${index}`,
+  orderNo: '订单号',
+  owner: '货主',
+  platform: '平台',
+  pieces: '件数',
+  sequence: '序号',
+  location: '取货库位',
+  internalSku: '内部 SKU',
+  productSku: '商品 SKU',
+  quantity: '应取数量'
+}
+
 const escapeHtml = (value: unknown) =>
   String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -29,7 +67,10 @@ const escapeHtml = (value: unknown) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
 
-export function buildPickingTaskPrintHtml(data: PickingTaskPrintData) {
+export function buildPickingTaskPrintHtml(
+  data: PickingTaskPrintData,
+  labels: PickingTaskPrintLabels = DEFAULT_LABELS
+) {
   const orderSections = data.orders
     .map((order, orderIndex) => {
       const rows = order.lines
@@ -48,15 +89,15 @@ export function buildPickingTaskPrintHtml(data: PickingTaskPrintData) {
         0
       )
       return `<section class="order-block">
-        <div class="order-title">订单 ${orderIndex + 1}</div>
+        <div class="order-title">${escapeHtml(labels.order(orderIndex + 1))}</div>
         <div class="order-meta">
-          <span>订单号：${escapeHtml(order.orderNo)}</span>
-          <span>货主：${escapeHtml(order.ownerName)}</span>
-          <span>平台：${escapeHtml(order.sourceType)}</span>
-          <span>件数：${orderQuantity}</span>
+          <span>${escapeHtml(labels.orderNo)}：${escapeHtml(order.orderNo)}</span>
+          <span>${escapeHtml(labels.owner)}：${escapeHtml(order.ownerName)}</span>
+          <span>${escapeHtml(labels.platform)}：${escapeHtml(order.sourceType)}</span>
+          <span>${escapeHtml(labels.pieces)}：${orderQuantity}</span>
         </div>
         <table>
-          <thead><tr><th>序号</th><th>取货库位</th><th>内部 SKU</th><th>商品 SKU</th><th>应取数量</th></tr></thead>
+          <thead><tr><th>${escapeHtml(labels.sequence)}</th><th>${escapeHtml(labels.location)}</th><th>${escapeHtml(labels.internalSku)}</th><th>${escapeHtml(labels.productSku)}</th><th>${escapeHtml(labels.quantity)}</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </section>`
@@ -72,13 +113,13 @@ export function buildPickingTaskPrintHtml(data: PickingTaskPrintData) {
       table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #333;padding:7px 6px;text-align:left;overflow-wrap:anywhere}th{background:#f2f2f2}.number{text-align:right}
       th:nth-child(1),td:nth-child(1){width:8%}th:nth-child(2),td:nth-child(2){width:18%}th:nth-child(5),td:nth-child(5){width:14%}
     </style></head><body>
-    <h1>拣货单</h1>
+    <h1>${escapeHtml(labels.title)}</h1>
     <div class="summary">
-      <span>拣货任务号：${escapeHtml(data.taskNo)}</span>
-      <span>仓库：${escapeHtml(data.warehouseName)}</span>
-      <span>订单数：${escapeHtml(data.orderCount)}</span>
-      <span>总件数：${escapeHtml(data.totalQuantity)}</span>
-      <span>打印时间：${escapeHtml(data.printedAt)}</span>
+      <span>${escapeHtml(labels.taskNo)}：${escapeHtml(data.taskNo)}</span>
+      <span>${escapeHtml(labels.warehouse)}：${escapeHtml(data.warehouseName)}</span>
+      <span>${escapeHtml(labels.orderCount)}：${escapeHtml(data.orderCount)}</span>
+      <span>${escapeHtml(labels.totalPieces)}：${escapeHtml(data.totalQuantity)}</span>
+      <span>${escapeHtml(labels.printedAt)}：${escapeHtml(data.printedAt)}</span>
     </div>
     ${orderSections}
     <script>window.onload=()=>window.print()</script></body></html>`

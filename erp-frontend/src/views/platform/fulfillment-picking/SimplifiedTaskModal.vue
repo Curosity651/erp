@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="open"
-    :title="`整单作业${task ? ` · ${task.taskNo}` : ''}`"
+    :title="`${t('platform.picking.simple.title')}${task ? ` · ${task.taskNo}` : ''}`"
     :width="1120"
     :mask-closable="false"
     :footer="null"
@@ -11,7 +11,7 @@
       <a-alert
         type="info"
         show-icon
-        message="先打印拣货单和全部平台面单，按拣货单顺序取货并随手贴单；全部完成后上传现场凭证并确认。"
+        :message="t('platform.picking.simple.instructions')"
         class="workflow-alert"
       />
 
@@ -32,13 +32,13 @@
             {{ ownerName(record.fulfillmentOrder.erpTenantId) }}
           </template>
           <template v-else-if="column.key === 'goods'">
-            {{ record.skuCount }} 种 · {{ record.totalQuantity }} 件
+            {{ t('platform.return.skuKindsAndPieces', { kinds: record.skuCount, pieces: record.totalQuantity }) }}
           </template>
           <template v-else-if="column.key === 'label'">
-            <a-tag v-if="record.taskOrder.orderStatus === 'CANCELLED'">已取消</a-tag>
-            <a-tag v-else-if="labelReady(record)" color="green">已生成</a-tag>
-            <a-tag v-else-if="labelFailures[record.fulfillmentOrder.id]" color="red">生成失败</a-tag>
-            <a-tag v-else>待生成</a-tag>
+            <a-tag v-if="record.taskOrder.orderStatus === 'CANCELLED'">{{ t('platform.picking.status.cancelled') }}</a-tag>
+            <a-tag v-else-if="labelReady(record)" color="green">{{ t('platform.picking.simple.generated') }}</a-tag>
+            <a-tag v-else-if="labelFailures[record.fulfillmentOrder.id]" color="red">{{ t('platform.picking.simple.generateFailed') }}</a-tag>
+            <a-tag v-else>{{ t('platform.picking.simple.pendingGeneration') }}</a-tag>
             <div v-if="labelFailures[record.fulfillmentOrder.id]" class="failure-text">
               {{ labelFailures[record.fulfillmentOrder.id] }}
             </div>
@@ -49,7 +49,7 @@
               :href="labelUrl(record)"
               target="_blank"
               rel="noopener noreferrer"
-            >打开面单</a>
+            >{{ t('platform.picking.simple.openLabel') }}</a>
             <span v-else>-</span>
           </template>
         </template>
@@ -57,13 +57,13 @@
 
       <div class="evidence-section">
         <div>
-          <div class="section-title">作业凭证</div>
-          <div class="secondary">全部货物完成取货、贴面单和打包后，上传至少一张现场照片。</div>
+          <div class="section-title">{{ t('platform.picking.simple.evidence') }}</div>
+          <div class="secondary">{{ t('platform.picking.simple.evidenceHint') }}</div>
         </div>
         <div class="evidence-list">
           <div v-for="file in evidenceFiles" :key="file.fileId" class="evidence-item">
             <a-image :src="file.url" :width="72" :height="72" />
-            <a-button type="text" danger size="small" @click="removeEvidence(file.fileId)">移除</a-button>
+            <a-button type="text" danger size="small" @click="removeEvidence(file.fileId)">{{ t('platform.picking.simple.remove') }}</a-button>
           </div>
           <a-upload
             :custom-request="uploadEvidence"
@@ -71,20 +71,39 @@
             accept="image/jpeg,image/png"
             :disabled="evidenceFiles.length >= 6"
           >
-            <a-button :loading="uploading">上传照片</a-button>
+            <a-button :loading="uploading">{{ t('platform.picking.simple.uploadPhoto') }}</a-button>
           </a-upload>
         </div>
       </div>
 
+      <div v-if="generatedPackage" class="package-result">
+        <div>
+          <div class="section-title">拣货文件包已生成</div>
+          <div class="secondary">
+            {{ generatedPackage.orderCount }} 单 / {{ generatedPackage.totalQuantity }} 件 · 批次 {{ generatedPackage.batchNo }}
+          </div>
+        </div>
+        <div class="package-links">
+          <a-button type="link" :href="generatedPackage.warehouseDownloadUrl" target="_blank">
+            下载俄文仓库包
+          </a-button>
+          <a-button type="link" :href="generatedPackage.archiveDownloadUrl" target="_blank">
+            下载中文留底包
+          </a-button>
+        </div>
+      </div>
+
       <div class="modal-actions">
-        <a-button @click="printPickingList">打印拣货单</a-button>
-        <a-button :loading="printingLabels" @click="printAllLabels">打印所有面单</a-button>
+        <a-button :loading="generatingPackage" @click="printPickingList">
+          {{ t('platform.picking.simple.printPickList') }}
+        </a-button>
+        <a-button :loading="printingLabels" @click="printAllLabels">{{ t('platform.picking.simple.printAllLabels') }}</a-button>
         <a-button
           type="primary"
           :loading="submitting"
           :disabled="!canComplete"
           @click="completeTask"
-        >确认完成</a-button>
+        >{{ t('platform.picking.simple.complete') }}</a-button>
       </div>
     </a-spin>
   </a-modal>
@@ -92,15 +111,18 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import {
   completeSimplifiedFulfillmentTask,
+  generateFulfillmentPickPackage,
   getFulfillmentPickTask,
   printFulfillmentLabel
 } from '@/api/wms/fulfillment'
 import type {
   FulfillmentPickTask,
+  FulfillmentPickPackage,
   FulfillmentPickTaskDetail,
   FulfillmentPickTaskOrderDetail
 } from '@/api/wms/fulfillment/types'
@@ -108,7 +130,6 @@ import { listAllErpTenants } from '@/api/tenant'
 import type { TenantBrief } from '@/api/tenant/types'
 import { getFileDownloadUrl } from '@/api/system/file'
 import { useFileUpload } from '@/hooks/use-file-upload'
-import { buildPickingTaskPrintHtml } from './picking-task-print'
 import { canCompleteSimplifiedTask } from './simplified-task-flow'
 
 interface EvidenceFile { fileId: number; url: string }
@@ -122,28 +143,32 @@ const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'success'): void
 }>()
+const { t, locale } = useI18n()
 
 const loading = ref(false)
 const printingLabels = ref(false)
+const generatingPackage = ref(false)
 const submitting = ref(false)
 const detail = ref<FulfillmentPickTaskDetail>()
+const generatedPackage = ref<FulfillmentPickPackage>()
 const owners = ref<TenantBrief[]>([])
 const evidenceFiles = ref<EvidenceFile[]>([])
 const generatedLabelUrls = reactive<Record<number, string>>({})
 const labelFailures = reactive<Record<number, string>>({})
 const { uploading, uploadFile } = useFileUpload()
 
-const columns = [
-  { title: '平台订单', key: 'orderNo', width: 230, fixed: 'left' as const },
-  { title: '货主', key: 'owner', width: 140 },
-  { title: '物流产品', dataIndex: ['fulfillmentOrder', 'logisticsProductName'], width: 180 },
-  { title: '首个库位', dataIndex: 'firstLocationCode', width: 130 },
-  { title: '商品', key: 'goods', width: 110 },
-  { title: '面单', key: 'label', width: 180 },
-  { title: '操作', key: 'operate', width: 90, fixed: 'right' as const }
-]
+const columns = computed(() => [
+  { title: t('platform.picking.simple.platformOrder'), key: 'orderNo', width: 230, fixed: 'left' as const },
+  { title: t('platform.common.owner'), key: 'owner', width: 140 },
+  { title: t('platform.picking.simple.logisticsProduct'), dataIndex: ['fulfillmentOrder', 'logisticsProductName'], width: 180 },
+  { title: t('platform.picking.simple.firstLocation'), dataIndex: 'firstLocationCode', width: 130 },
+  { title: t('platform.picking.simple.goods'), key: 'goods', width: 110 },
+  { title: t('platform.picking.simple.label'), key: 'label', width: 180 },
+  { title: t('platform.common.operation'), key: 'operate', width: 90, fixed: 'right' as const }
+])
 
-const ownerName = (id: number) => owners.value.find(item => item.id === id)?.tenantName || `货主 #${id}`
+const ownerName = (id: number) =>
+  owners.value.find(item => item.id === id)?.tenantName || t('platform.picking.simple.ownerFallback', { id })
 const labelUrl = (record: FulfillmentPickTaskOrderDetail) =>
   generatedLabelUrls[record.fulfillmentOrder.id] || record.fulfillmentOrder.labelFileUrl
 const labelReady = (record: FulfillmentPickTaskOrderDetail) => Boolean(
@@ -164,6 +189,7 @@ watch(() => [props.open, props.task?.id] as const, ([open, id]) => {
 async function load(taskId: number) {
   loading.value = true
   evidenceFiles.value = []
+  generatedPackage.value = undefined
   Object.keys(generatedLabelUrls).forEach(key => delete generatedLabelUrls[Number(key)])
   Object.keys(labelFailures).forEach(key => delete labelFailures[Number(key)])
   try {
@@ -178,46 +204,44 @@ async function load(taskId: number) {
   }
 }
 
-function pickingPrintData() {
-  const orders = (detail.value?.orderQueue || []).map(item => ({
-    orderNo: item.fulfillmentOrder.sourceOrderNo,
-    ownerName: ownerName(item.fulfillmentOrder.erpTenantId),
-    sourceType: item.fulfillmentOrder.sourceType,
-    lines: item.routeLines.map(line => ({
-      locationCode: line.locationCode,
-      warehouseSkuCode: line.warehouseSkuCode,
-      skuCode: line.skuCode,
-      plannedQuantity: line.plannedQuantity
-    }))
-  }))
-  return {
-    taskNo: props.task?.taskNo || '-',
-    warehouseName: props.warehouseName,
-    printedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
-    orderCount: orders.length,
-    totalQuantity: orders.reduce(
-      (sum, order) => sum + order.lines.reduce((subtotal, line) => subtotal + line.plannedQuantity, 0),
-      0
-    ),
-    orders
+async function printPickingList() {
+  if (!props.task) return
+  generatingPackage.value = true
+  try {
+    const result = await generateFulfillmentPickPackage(props.task.id)
+    if (!isSuccess(result)) return
+    generatedPackage.value = result.data
+    downloadPackage(result.data.warehouseDownloadUrl, result.data.warehouseFileName)
+    window.setTimeout(() => {
+      downloadPackage(result.data.archiveDownloadUrl, result.data.archiveFileName)
+    }, 350)
+    message.success('俄文仓库包和中文留底包已生成')
+    await load(props.task.id)
+    generatedPackage.value = result.data
+  } finally {
+    generatingPackage.value = false
   }
 }
 
-function printPickingList() {
-  const page = window.open('', '_blank', 'width=980,height=760')
-  if (!page) return message.error('浏览器阻止了打印窗口')
-  page.document.write(buildPickingTaskPrintHtml(pickingPrintData()))
-  page.document.close()
+function downloadPackage(url: string, fileName: string) {
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.target = '_blank'
+  anchor.rel = 'noopener noreferrer'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
 }
 
 async function printAllLabels() {
   const activeOrders = (detail.value?.orderQueue || []).filter(
     item => item.taskOrder.orderStatus !== 'CANCELLED'
   )
-  if (!activeOrders.length) return message.warning('任务没有可打印面单的订单')
+  if (!activeOrders.length) return message.warning(t('platform.picking.simple.noLabels'))
   const center = window.open('', '_blank', 'width=1100,height=780')
-  if (!center) return message.error('浏览器阻止了面单打印窗口')
-  center.document.write('<!doctype html><meta charset="UTF-8"><title>面单打印中心</title><p>正在生成全部面单，请稍候...</p>')
+  if (!center) return message.error(t('platform.picking.simple.labelPopupBlocked'))
+  center.document.write(`<!doctype html><meta charset="UTF-8"><title>${t('platform.picking.simple.labelCenter')}</title><p>${t('platform.picking.simple.generating')}</p>`)
   printingLabels.value = true
   let successCount = 0
   try {
@@ -227,7 +251,7 @@ async function printAllLabels() {
       try {
         const result = await printFulfillmentLabel(id)
         if (!isSuccess(result) || !result.data.labelUrl) {
-          labelFailures[id] = result.message || '平台未返回面单文件'
+          labelFailures[id] = result.message || t('platform.picking.simple.platformNoFile')
           continue
         }
         generatedLabelUrls[id] = result.data.labelUrl
@@ -235,25 +259,25 @@ async function printAllLabels() {
         item.fulfillmentOrder.labelBarcode = result.data.labelBarcode
         successCount++
       } catch (error: any) {
-        labelFailures[id] = error?.message || '面单生成失败'
+        labelFailures[id] = error?.message || t('platform.picking.simple.generateFailed')
       }
     }
     const rows = activeOrders.map(item => {
       const id = item.fulfillmentOrder.id
       const url = labelUrl(item)
       const text = url
-        ? `<a href="${url}" target="_blank">打开并打印面单</a>`
-        : `<span style="color:#cf1322">${labelFailures[id] || '生成失败'}</span>`
+        ? `<a href="${url}" target="_blank">${t('platform.picking.simple.openAndPrint')}</a>`
+        : `<span style="color:#cf1322">${labelFailures[id] || t('platform.picking.simple.generateFailed')}</span>`
       return `<tr><td>${item.fulfillmentOrder.sourceOrderNo}</td><td>${item.fulfillmentOrder.sourceType}</td><td>${text}</td></tr>`
     }).join('')
     center.document.open()
-    center.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>面单打印中心</title>
+    center.document.write(`<!doctype html><html lang="${locale.value}"><head><meta charset="UTF-8"><title>${t('platform.picking.simple.labelCenter')}</title>
       <style>body{font-family:Arial,Microsoft YaHei;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:10px;text-align:left}</style>
-      </head><body><h2>面单打印中心</h2><p>成功 ${successCount} / ${activeOrders.length}，请按订单顺序打开并打印。</p>
-      <table><thead><tr><th>平台订单</th><th>平台</th><th>面单文件</th></tr></thead><tbody>${rows}</tbody></table></body></html>`)
+      </head><body><h2>${t('platform.picking.simple.labelCenter')}</h2><p>${t('platform.picking.simple.generatedSummary', { success: successCount, total: activeOrders.length })}</p>
+      <table><thead><tr><th>${t('platform.picking.simple.platformOrder')}</th><th>${t('dashboard.platform')}</th><th>${t('platform.picking.simple.labelFile')}</th></tr></thead><tbody>${rows}</tbody></table></body></html>`)
     center.document.close()
-    if (successCount === activeOrders.length) message.success('全部面单已生成')
-    else message.warning(`有 ${activeOrders.length - successCount} 张面单生成失败，请处理后重试`)
+    if (successCount === activeOrders.length) message.success(t('platform.picking.simple.allGenerated'))
+    else message.warning(t('platform.picking.simple.failedCount', { count: activeOrders.length - successCount }))
   } finally {
     printingLabels.value = false
   }
@@ -266,7 +290,7 @@ async function uploadEvidence(options: any) {
     allowedTypes: ['image/jpeg', 'image/png'],
     maxSize: 10 * 1024 * 1024
   })
-  if (!result) return options.onError?.(new Error('上传失败'))
+  if (!result) return options.onError?.(new Error(t('platform.picking.simple.uploadFailed')))
   const urlResult = await getFileDownloadUrl(result.fileId)
   evidenceFiles.value.push({
     fileId: result.fileId,
@@ -280,7 +304,7 @@ function removeEvidence(fileId: number) {
 }
 
 async function completeTask() {
-  if (!props.task || !canComplete.value) return message.warning('请先生成全部面单并上传作业凭证')
+  if (!props.task || !canComplete.value) return message.warning(t('platform.picking.simple.completePrerequisites'))
   submitting.value = true
   try {
     const result = await completeSimplifiedFulfillmentTask(
@@ -288,7 +312,7 @@ async function completeTask() {
       evidenceFiles.value.map(file => file.fileId)
     )
     if (!isSuccess(result)) return
-    message.success('整单作业已完成，订单已进入待签出')
+    message.success(t('platform.picking.simple.completed'))
     emit('update:open', false)
     emit('success')
   } finally {
@@ -309,5 +333,7 @@ function close() {
 .section-title { margin-bottom: 4px; font-weight: 600; }
 .evidence-list { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .evidence-item { display: grid; justify-items: center; gap: 4px; }
+.package-result { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 18px; padding: 12px 16px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px; }
+.package-links { display: flex; flex-wrap: wrap; justify-content: flex-end; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 </style>

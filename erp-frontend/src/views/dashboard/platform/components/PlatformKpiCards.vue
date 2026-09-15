@@ -5,13 +5,15 @@
       <div class="kpi-tile tile-blue">
         <div class="kpi-head">
           <DatabaseOutlined class="kpi-icon" />
-          <span class="kpi-title">在库总量</span>
+          <span class="kpi-title">{{ t('platform.dashboard.kpi.onHand') }}</span>
         </div>
-        <div class="kpi-main">{{ formatQty(data?.onHandQty) }}<span class="kpi-unit">件</span></div>
+        <div class="kpi-main">
+          {{ formatQty(data?.onHandQty) }}<span class="kpi-unit">{{ t('platform.dashboard.unit.pieces') }}</span>
+        </div>
         <div class="kpi-sub">
-          <span>SKU {{ formatQty(data?.skuCount) }}</span>
+          <span>{{ t('platform.dashboard.kpi.skuCount', { count: formatQty(data?.skuCount) }) }}</span>
           <span class="dot">·</span>
-          <span>货主 {{ data?.ownerCount ?? 0 }}</span>
+          <span>{{ t('platform.dashboard.kpi.ownerCount', { count: formatQty(data?.ownerCount) }) }}</span>
         </div>
       </div>
     </a-col>
@@ -21,13 +23,13 @@
       <div class="kpi-tile tile-green">
         <div class="kpi-head">
           <DownloadOutlined class="kpi-icon" />
-          <span class="kpi-title">今日入库</span>
+          <span class="kpi-title">{{ t('platform.dashboard.kpi.todayInbound') }}</span>
         </div>
         <div class="kpi-main">
-          {{ formatQty(data?.todayInboundQty) }}<span class="kpi-unit">件</span>
+          {{ formatQty(data?.todayInboundQty) }}<span class="kpi-unit">{{ t('platform.dashboard.unit.pieces') }}</span>
         </div>
         <div class="kpi-sub">
-          <span>{{ data?.todayInboundOrders ?? 0 }} 单</span>
+          <span>{{ t('platform.dashboard.kpi.orderCount', { count: formatQty(data?.todayInboundOrders) }) }}</span>
         </div>
       </div>
     </a-col>
@@ -37,13 +39,13 @@
       <div class="kpi-tile tile-cyan">
         <div class="kpi-head">
           <UploadOutlined class="kpi-icon" />
-          <span class="kpi-title">今日出库</span>
+          <span class="kpi-title">{{ t('platform.dashboard.kpi.todayOutbound') }}</span>
         </div>
         <div class="kpi-main">
-          {{ formatQty(data?.todayOutboundQty) }}<span class="kpi-unit">件</span>
+          {{ formatQty(data?.todayOutboundQty) }}<span class="kpi-unit">{{ t('platform.dashboard.unit.pieces') }}</span>
         </div>
         <div class="kpi-sub">
-          <span>{{ data?.todayOutboundOrders ?? 0 }} 单</span>
+          <span>{{ t('platform.dashboard.kpi.orderCount', { count: formatQty(data?.todayOutboundOrders) }) }}</span>
         </div>
       </div>
     </a-col>
@@ -53,24 +55,24 @@
       <div class="kpi-tile tile-orange">
         <div class="kpi-head">
           <FieldTimeOutlined class="kpi-icon" />
-          <span class="kpi-title">待处理作业</span>
+          <span class="kpi-title">{{ t('platform.dashboard.kpi.pending') }}</span>
         </div>
         <div class="pending-grid">
           <div class="pending-item">
             <span class="pending-num">{{ data?.pending?.receiving ?? 0 }}</span>
-            <span class="pending-label">待收货</span>
+            <span class="pending-label">{{ t('platform.dashboard.kpi.pendingReceiving') }}</span>
           </div>
           <div class="pending-item">
             <span class="pending-num">{{ data?.pending?.putaway ?? 0 }}</span>
-            <span class="pending-label">待上架</span>
+            <span class="pending-label">{{ t('platform.dashboard.kpi.pendingPutaway') }}</span>
           </div>
           <div class="pending-item">
             <span class="pending-num">{{ data?.pending?.pickPack ?? 0 }}</span>
-            <span class="pending-label">待拣打</span>
+            <span class="pending-label">{{ t('platform.dashboard.kpi.pendingPickPack') }}</span>
           </div>
           <div class="pending-item">
             <span class="pending-num">{{ data?.pending?.outbound ?? 0 }}</span>
-            <span class="pending-label">待出库</span>
+            <span class="pending-label">{{ t('platform.dashboard.kpi.pendingOutbound') }}</span>
           </div>
         </div>
       </div>
@@ -85,14 +87,18 @@ import {
   UploadOutlined,
   FieldTimeOutlined
 } from '@ant-design/icons-vue'
+import { useI18n } from 'vue-i18n'
 import type { OpsOverviewVO } from '@/api/platform-dashboard/types'
 
 defineProps<{ data?: OpsOverviewVO }>()
+const { t, locale } = useI18n()
 
 function formatQty(v?: number): string {
   if (v == null) return '0'
-  if (v >= 10000) return (v / 10000).toFixed(1) + '万'
-  return v.toLocaleString('zh-CN')
+  return new Intl.NumberFormat(locale.value, {
+    notation: v >= 10000 ? 'compact' : 'standard',
+    maximumFractionDigits: 1
+  }).format(v)
 }
 </script>
 

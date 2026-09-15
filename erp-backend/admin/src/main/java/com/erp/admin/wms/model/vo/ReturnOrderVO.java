@@ -18,6 +18,8 @@ public class ReturnOrderVO {
 
     private String returnNo;
 
+    private String returnBatchNo;
+
     private Long erpTenantId;
 
     private String ownerName;
@@ -36,7 +38,7 @@ public class ReturnOrderVO {
 
     private Integer totalQty;
 
-    @Schema(title = "状态 RETURN_PENDING/QC_PENDING/COMPLETED/CLOSED")
+    @Schema(title = "状态 PENDING_OWNER/PENDING_OPERATION/COMPLETED/CLOSED")
     private String status;
 
     private String createTime;
@@ -58,6 +60,18 @@ public class ReturnOrderVO {
     private String closedByName;
 
     private String closedTime;
+
+    private Long dispositionBy;
+
+    private String dispositionByName;
+
+    private String dispositionTime;
+
+    private Long processedBy;
+
+    private String processedByName;
+
+    private String processedTime;
 
     @Schema(title = "明细(详情才带)")
     private List<ReturnOrderItemVO> items;

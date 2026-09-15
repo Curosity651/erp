@@ -3,7 +3,6 @@ package com.erp.admin.wms.controller;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import com.erp.admin.wms.model.dto.FulfillmentPickScanDTO;
 import com.erp.admin.wms.model.dto.FulfillmentPickTaskCreateDTO;
 import com.erp.admin.wms.model.dto.FulfillmentPickTaskQueryDTO;
 import com.erp.admin.wms.model.dto.FulfillmentPickExceptionDTO;
@@ -12,7 +11,9 @@ import com.erp.admin.wms.model.entity.WmsFulfillmentOrder;
 import com.erp.admin.wms.model.entity.WmsFulfillmentPickTask;
 import com.erp.admin.wms.model.vo.FulfillmentDispatchResultVO;
 import com.erp.admin.wms.model.vo.FulfillmentPickTaskDetailVO;
+import com.erp.admin.wms.model.vo.FulfillmentPickPackageVO;
 import com.erp.admin.wms.service.FulfillmentDispatchService;
+import com.erp.admin.wms.service.FulfillmentPickPackageService;
 import com.erp.admin.wms.service.FulfillmentPickingService;
 import com.erp.admin.wms.service.FulfillmentShippingService;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class FulfillmentPickingController {
 	private final FulfillmentPickingService service;
 	private final FulfillmentShippingService shippingService;
 	private final FulfillmentDispatchService dispatchService;
+	private final FulfillmentPickPackageService pickPackageService;
 	private final PrincipalAttributeAccessor principalAttributeAccessor;
 
 	@GetMapping("/shelf-orders")
@@ -94,14 +96,6 @@ public class FulfillmentPickingController {
 		return ApiResult.ok();
 	}
 
-	@PostMapping("/tasks/{id}/transfer")
-	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
-	public ApiResult<Void> transfer(@PathVariable("id") Long id,
-			@RequestBody java.util.Map<String, Long> body) {
-		service.transferTask(id, body.get("operatorId"));
-		return ApiResult.ok();
-	}
-
 	@GetMapping("/tasks/{id}")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<FulfillmentPickTaskDetailVO> detail(@PathVariable("id") Long id,
@@ -110,11 +104,11 @@ public class FulfillmentPickingController {
 		return ApiResult.ok(service.detail(id, fulfillmentOrderId));
 	}
 
-	@PostMapping("/tasks/scan")
+	@PostMapping("/tasks/{id}/print-package")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
-	public ApiResult<Void> scan(@Validated @RequestBody FulfillmentPickScanDTO dto) {
-		service.scan(dto, principalAttributeAccessor.getUserId());
-		return ApiResult.ok();
+	public ApiResult<FulfillmentPickPackageVO> printPackage(@PathVariable("id") Long id) {
+		return ApiResult.ok(pickPackageService.generate(id,
+				principalAttributeAccessor.getUserId()));
 	}
 
 	@PostMapping("/tasks/{id}/simplified-start")

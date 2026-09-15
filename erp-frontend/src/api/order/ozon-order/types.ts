@@ -3,7 +3,7 @@ import type { SkuBriefVO } from '@/api/common/sku-types'
 import type { BaseOrderVO } from '@/api/order/types'
 
 // 从共用类型文件导出 ERP 统一状态映射
-export { ERP_STATUS_MAP } from '@/api/order/types'
+export { ERP_STATUS_MAP, OWNER_ORDER_STATUS_MAP } from '@/api/order/types'
 export type { ErpStatusKey } from '@/api/order/types'
 
 /**
@@ -22,6 +22,7 @@ export interface OzonOrderQO {
   fulfillmentType?: string
   // ERP 状态
   erpStatus?: string
+  businessStatus?: string
   // 平台主状态
   platformStatus?: string
   // 平台子状态
@@ -30,8 +31,6 @@ export interface OzonOrderQO {
   warehouseId?: string
   // 锁定
   locked?: number
-  // 有面单
-  hasLabel?: boolean
   // 仓型：BIG=大仓(大件) / SMALL=小仓
   warehouseType?: 'BIG' | 'SMALL'
   // 关键字
@@ -82,78 +81,6 @@ export interface OzonOrderPageVO extends BaseOrderVO {
   deliveringDate?: string
   /** @deprecated 迭代 7 删除，改用 items */
   skuBrief?: SkuBriefVO
-}
-
-// 导入共享的面单批次类型
-export type {
-  LabelBatchVO,
-  LabelBatchPageVO,
-  LabelBatchFileVO,
-  LabelBatchItemVO
-} from '@/api/order/label-batch'
-
-/** 订单不可执行某操作时的原因说明 */
-export interface OzonOrderRejectVO {
-  id: number
-  platformOrderId?: string
-  reason: string
-}
-
-/** 运单(act)状态：CREATING=创建中 PENDING=Ozon生成中 READY=可下载 FAILED=失败 */
-export type OzonActStatus = 'CREATING' | 'PENDING' | 'READY' | 'FAILED'
-
-/** 单份运单 */
-export interface OzonActVO {
-  actId: number
-  shopId: number
-  shopName?: string
-  deliveryMethodId: number
-  deliveryMethodName?: string
-  warehouseName?: string
-  departureDate: string
-  status: OzonActStatus
-  orderCount: number
-  fileName?: string
-  objectKey?: string
-  downloadUrl?: string
-  errorMsg?: string
-}
-
-/** 一次【准备发运】产生的运单批次（可能跨店铺/物流方式，含多份） */
-export interface OzonActBatchVO {
-  batchNo: string
-  acts: OzonActVO[]
-  failed: OzonOrderRejectVO[]
-}
-
-export interface OzonDeliveryMethodRule {
-  id?: number
-  shopId: number
-  shopName?: string
-  deliveryMethodId: number
-  deliveryMethodName?: string
-  actRequired: number
-  containersCount: number
-  enabled: number
-}
-
-/** 单份拣货单（每个店铺一份） */
-export interface OzonPickListFileVO {
-  shopId: number
-  shopName?: string
-  orderCount: number
-  skuCount: number
-  fileName?: string
-  objectKey?: string
-  downloadUrl?: string
-  errorMsg?: string
-}
-
-/** 一次【打印拣货单】产生的批次 */
-export interface OzonPickListBatchVO {
-  batchNo: string
-  files: OzonPickListFileVO[]
-  failed: OzonOrderRejectVO[]
 }
 
 /**

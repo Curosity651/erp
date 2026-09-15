@@ -7,8 +7,11 @@ import com.erp.admin.tenant.model.entity.SysTenant;
 import com.erp.admin.tenant.model.vo.TenantIdentityVO;
 import com.erp.admin.tenant.service.TenantIdentityService;
 import com.erp.admin.wms.mapper.ReturnInboundMapper;
+import com.erp.admin.wms.mapper.WmsReturnQcItemMapper;
+import com.erp.admin.wms.mapper.WmsSkuLookupMapper;
 import com.erp.admin.wms.model.dto.ReturnInboundDTO;
 import com.erp.admin.wms.model.entity.ReturnInboundOrder;
+import com.erp.admin.wms.model.entity.WmsReturnQcItem;
 import com.erp.admin.wms.model.enums.ReturnReason;
 import com.erp.admin.wms.model.qo.ReturnInboundQO;
 import com.erp.admin.wms.model.qo.ReturnableOrderQO;
@@ -16,6 +19,9 @@ import com.erp.admin.wms.model.vo.ReturnInboundDetailVO;
 import com.erp.admin.wms.model.vo.ReturnInboundExportVO;
 import com.erp.admin.wms.model.vo.ReturnInboundPageVO;
 import com.erp.admin.wms.model.vo.ReturnOrderSourceVO;
+import com.erp.admin.wms.model.vo.ReturnOrderItemVO;
+import com.erp.admin.wms.model.vo.SkuLookupVO;
+import com.erp.admin.product.service.WarehouseSkuCodeService;
 import com.erp.admin.wms.model.vo.ReturnableOrderVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +60,9 @@ public class ReturnInboundService extends ExtendServiceImpl<ReturnInboundMapper,
     private final WarehouseService warehouseService;
     private final WmsRackAssignmentService wmsRackAssignmentService;
     private final StringRedisTemplate stringRedisTemplate;
+    private final WmsReturnQcItemMapper returnQcItemMapper;
+    private final WmsSkuLookupMapper skuLookupMapper;
+    private final WarehouseSkuCodeService warehouseSkuCodeService;
 
     /**
      * 分页查询
@@ -86,7 +95,47 @@ public class ReturnInboundService extends ExtendServiceImpl<ReturnInboundMapper,
         if (detail.getSkuCode() != null) {
             skuBriefService.enrichForQuery(Collections.singletonList(detail), ReturnInboundDetailVO::getSkuCode, ReturnInboundDetailVO::setSkuBrief);
         }
+        ReturnInboundOrder order = baseMapper.selectById(id);
+        Assert.notNull(order, "退货处理单不存在");
+        List<ReturnOrderItemVO> items = new java.util.ArrayList<>();
+        for (WmsReturnQcItem item : returnQcItemMapper.selectByReturnOrderId(id)) {
+            ReturnOrderItemVO vo = new ReturnOrderItemVO();
+            vo.setId(item.getId());
+            vo.setSkuCode(item.getSkuCode());
+            vo.setWarehouseSkuCode(warehouseSkuCodeService.build(order.getErpTenantId(), item.getSkuCode()));
+            SkuLookupVO sku = skuLookupMapper.findByTenantAndSku(order.getErpTenantId(), item.getSkuCode());
+            vo.setSkuName(sku == null ? null : sku.getChineseName());
+            vo.setPlatformOrderId(item.getPlatformOrderId());
+            vo.setReturnReason(item.getReturnReason());
+            vo.setExpectedQty(item.getExpectedQty());
+            vo.setReceivedQty(item.getReceivedQty());
+            vo.setRestockQty(item.getRestockQty());
+            vo.setReworkQty(item.getReworkQty());
+            vo.setScrapQty(item.getScrapQty());
+            vo.setReworkPassQty(item.getReworkPassQty());
+            vo.setReworkScrapQty(item.getReworkScrapQty());
+            vo.setDispositionRemark(item.getDispositionRemark());
+            vo.setProcessedLocationCode(item.getProcessedLocationCode());
+            vo.setQcPhotoFileIds(parsePhotoIds(item.getQcPhotos()));
+            items.add(vo);
+        }
+        detail.setItems(items);
         return detail;
+    }
+
+    private List<Long> parsePhotoIds(String csv) {
+        if (csv == null || csv.trim().isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        List<Long> ids = new java.util.ArrayList<>();
+        for (String value : csv.split(",")) {
+            try {
+                ids.add(Long.valueOf(value.trim()));
+            } catch (NumberFormatException ignored) {
+                log.warn("忽略非法退货凭证文件ID: {}", value);
+            }
+        }
+        return ids;
     }
 
     /**

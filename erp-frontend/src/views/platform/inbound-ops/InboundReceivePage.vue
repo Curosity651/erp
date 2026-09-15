@@ -1,24 +1,24 @@
 <template>
   <a-card :bordered="false" class="search-card">
     <a-form :model="searchModel" layout="inline" class="inbound-search">
-      <a-form-item label="入库单号">
+      <a-form-item :label="t('platform.inbound.number')">
         <a-input
           v-model:value="searchModel.inboundNo"
-          placeholder="请输入"
+          :placeholder="t('platform.common.enter')"
           allow-clear
           style="width: 150px"
         />
       </a-form-item>
-      <a-form-item label="状态">
+      <a-form-item :label="t('platform.common.status')">
         <a-select
           v-model:value="searchModel.orderStatus"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           allow-clear
           :options="statusOptions"
           style="width: 110px"
         />
       </a-form-item>
-      <a-form-item label="日期范围">
+      <a-form-item :label="t('platform.inbound.dateRange')">
         <a-range-picker
           v-model:value="dateRange"
           value-format="YYYY-MM-DD"
@@ -26,26 +26,26 @@
           allow-clear
         />
       </a-form-item>
-      <a-form-item label="服务商">
+      <a-form-item :label="t('platform.common.provider')">
         <wms-operator-select
           v-model:value="searchModel.wmsTenantId"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           width="140px"
           @change="onOperatorChange"
         />
       </a-form-item>
-      <a-form-item label="货主">
+      <a-form-item :label="t('platform.common.owner')">
         <platform-owner-select
           v-model:value="searchModel.erpTenantId"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           width="140px"
           :operator-id="searchModel.wmsTenantId"
         />
       </a-form-item>
-      <a-form-item label="操作员">
+      <a-form-item :label="t('platform.common.staff')">
         <user-select
           v-model:value="searchModel.receiveBy"
-          placeholder="全部"
+          :placeholder="t('platform.common.all')"
           :options="userOptions"
           :loading="usersLoading"
           style="width: 140px"
@@ -59,7 +59,7 @@
 
   <pro-table
     ref="tableRef"
-    header-title="入库收货"
+    :header-title="t('platform.inbound.receiveTitle')"
     row-key="id"
     :request="tableRequest"
     :columns="columns"
@@ -73,11 +73,11 @@
       <template v-else-if="column.key === 'operate'">
         <operation-group>
           <a v-if="record.orderStatus === InboundStatus.SUBMITTED" @click="openReceive(record)">
-            收货
+            {{ t('platform.inbound.receive') }}
           </a>
           <template v-if="canPrintReceivedGoods(record)">
-            <a @click="printSkuLabels(record)">商品标签</a>
-            <a @click="printGoodsReference(record)">货物对照表</a>
+            <a @click="printSkuLabels(record)">{{ t('platform.inbound.productLabels') }}</a>
+            <a @click="printGoodsReference(record)">{{ t('platform.inbound.goodsReference') }}</a>
           </template>
         </operation-group>
       </template>
@@ -89,7 +89,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { isSuccess } from '@/api'
@@ -104,7 +105,7 @@ import type {
   PurchaseInboundPageVO,
   PurchaseInboundQO
 } from '@/api/wms/purchase-inbound/types'
-import { InboundStatus, InboundStatusMap } from '@/api/wms/purchase-inbound/types'
+import { InboundStatus } from '@/api/wms/purchase-inbound/types'
 import InboundStatusBadge from '@/views/wms/purchase-inbound/components/InboundStatusBadge.vue'
 import WmsOperatorSelect from '@/components/Lov/WmsOperatorSelect.vue'
 import PlatformOwnerSelect from '@/components/Lov/PlatformOwnerSelect.vue'
@@ -118,12 +119,21 @@ import {
 import { useTableActivateReload } from '@/hooks/useTableActivateReload'
 
 const router = useRouter()
+const { t, locale } = useI18n()
 const tableRef = ref<ProTableInstanceExpose>()
 const { allUsers: userOptions, loading: usersLoading, loadAllUsers } = useUserData()
 
 // 收货页覆盖「已提交/已收货/已完成」三个阶段：收货后单据保留在本页（状态变已收货），只是收货动作不再可点
 const RECEIVE_SCOPE = [InboundStatus.SUBMITTED, InboundStatus.RECEIVED, InboundStatus.COMPLETED]
-const statusOptions = RECEIVE_SCOPE.map(s => ({ value: s, label: InboundStatusMap[s] }))
+const statusKey = (status: InboundStatus) =>
+  ({
+    [InboundStatus.DRAFT]: 'platform.inbound.status.draft',
+    [InboundStatus.SUBMITTED]: 'platform.inbound.status.submitted',
+    [InboundStatus.RECEIVED]: 'platform.inbound.status.received',
+    [InboundStatus.COMPLETED]: 'platform.inbound.status.completed',
+    [InboundStatus.CANCELLED]: 'platform.inbound.status.cancelled'
+  })[status]
+const statusOptions = computed(() => RECEIVE_SCOPE.map(status => ({ value: status, label: t(statusKey(status)) })))
 
 const searchModel = reactive<PurchaseInboundQO>({
   inboundNo: undefined,
@@ -179,22 +189,22 @@ const resetSearch = () => {
   searchTable()
 }
 
-const columns: ProColumns[] = [
-  { title: '入库单号', dataIndex: 'inboundNo', key: 'inboundNo', width: 220, fixed: 'left' },
-  { title: '货主', dataIndex: 'ownerName', key: 'ownerName', width: 140, ellipsis: true },
-  { title: '服务商', dataIndex: 'operatorName', key: 'operatorName', width: 140, ellipsis: true },
-  { title: '仓库', dataIndex: 'warehouseName', key: 'warehouseName', width: 180 },
+const columns = computed<ProColumns[]>(() => [
+  { title: t('platform.inbound.number'), dataIndex: 'inboundNo', key: 'inboundNo', width: 220, fixed: 'left' },
+  { title: t('platform.common.owner'), dataIndex: 'ownerName', key: 'ownerName', width: 140, ellipsis: true },
+  { title: t('platform.common.provider'), dataIndex: 'operatorName', key: 'operatorName', width: 140, ellipsis: true },
+  { title: t('platform.common.warehouse'), dataIndex: 'warehouseName', key: 'warehouseName', width: 180 },
   {
-    title: '操作员',
+    title: t('platform.common.staff'),
     dataIndex: 'receiveByName',
     key: 'receiveByName',
     width: 90,
     ellipsis: true
   },
-  { title: '状态', key: 'status', width: 110, align: 'center' },
-  { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
-  { title: '操作', key: 'operate', width: 230, align: 'center', fixed: 'right' }
-]
+  { title: t('platform.common.status'), key: 'status', width: 110, align: 'center' },
+  { title: t('platform.common.createdAt'), dataIndex: 'createTime', key: 'createTime', width: 180 },
+  { title: t('platform.common.operation'), key: 'operate', width: 230, align: 'center', fixed: 'right' }
+])
 
 const receiveDrawerRef = ref<InstanceType<typeof ReceiveScanDrawer>>()
 const openReceive = (record: PurchaseInboundPageVO) => receiveDrawerRef.value?.open(record)
@@ -213,29 +223,29 @@ const printReceivedGoods = async (
 ) => {
   const printPage = window.open('', '_blank', 'width=920,height=760')
   if (!printPage) {
-    message.error('浏览器阻止了打印窗口，请允许弹出窗口后重试')
+    message.error(t('platform.inbound.printBlocked'))
     return
   }
   printPage.document.write(
-    `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>${title}</title></head>` +
-      '<body style="font-family:Arial,Microsoft YaHei;padding:24px">正在加载入库单...</body></html>'
+    `<!doctype html><html lang="${locale.value}"><head><meta charset="UTF-8"><title>${title}</title></head>` +
+      `<body style="font-family:Arial,Microsoft YaHei;padding:24px">${t('platform.inbound.loading')}</body></html>`
   )
   printPage.document.close()
   try {
     const response = await getInboundOpsDetail(record.id)
-    if (!isSuccess(response) || !response.data) throw new Error('加载入库单详情失败')
+    if (!isSuccess(response) || !response.data) throw new Error(t('platform.inbound.detailLoadFailed'))
     await printer(response.data, printPage)
   } catch (error) {
     printPage.close()
-    message.error(error instanceof Error ? error.message : `${title}生成失败`)
+    message.error(error instanceof Error ? error.message : t('platform.inbound.generateFailed', { title }))
   }
 }
 
 const printSkuLabels = (record: PurchaseInboundPageVO) =>
-  printReceivedGoods(record, '商品标签', printReceivedSkuLabels)
+  printReceivedGoods(record, t('platform.inbound.productLabels'), printReceivedSkuLabels)
 
 const printGoodsReference = (record: PurchaseInboundPageVO) =>
-  printReceivedGoods(record, '货物对照表', printReceivedGoodsReference)
+  printReceivedGoods(record, t('platform.inbound.goodsReference'), printReceivedGoodsReference)
 
 onMounted(loadAllUsers)
 
@@ -243,10 +253,10 @@ onMounted(loadAllUsers)
 const onReceived = () => {
   reloadTable()
   Modal.confirm({
-    title: '收货完成',
-    content: '该入库单已流转到「入库上架」，是否前往上架？（本单仍保留在收货列表，状态为已收货）',
-    okText: '去上架',
-    cancelText: '留在本页',
+    title: t('platform.inbound.receivedTitle'),
+    content: t('platform.inbound.receivedPrompt'),
+    okText: t('platform.inbound.goPutaway'),
+    cancelText: t('platform.inbound.stay'),
     onOk: () => router.push('/ops/putaway')
   })
 }

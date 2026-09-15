@@ -1,9 +1,10 @@
 <template>
   <a-modal
     :open="open"
-    title="平台订单签出"
+    :title="t('platform.ship.title')"
     :width="560"
-    ok-text="确认签出"
+    :ok-text="t('platform.ship.confirm')"
+    :cancel-text="t('platform.common.cancel')"
     :confirm-loading="submitting"
     @ok="handleConfirm"
     @cancel="handleClose"
@@ -11,46 +12,46 @@
     <a-alert
       type="warning"
       show-icon
-      message="签出后将扣减当前平台订单包裹对应的库存，操作不可重复。"
+      :message="t('platform.ship.warning')"
       style="margin-bottom: 16px"
     />
 
     <a-descriptions v-if="record" :column="2" size="small" bordered>
-      <a-descriptions-item label="平台订单" :span="2">
+      <a-descriptions-item :label="t('platform.picking.simple.platformOrder')" :span="2">
         {{ record.platformOrderId }}
       </a-descriptions-item>
-      <a-descriptions-item label="平台">
+      <a-descriptions-item :label="t('dashboard.platform')">
         {{ platformText(record.platform) }}
       </a-descriptions-item>
-      <a-descriptions-item label="店铺">
+      <a-descriptions-item :label="t('platform.ship.shop')">
         {{ record.shopName || '-' }}
       </a-descriptions-item>
-      <a-descriptions-item label="货主">
+      <a-descriptions-item :label="t('platform.common.owner')">
         {{ record.ownerName }}
       </a-descriptions-item>
-      <a-descriptions-item label="商品">
-        {{ record.skuKinds }} 种 · {{ record.totalQty }} 件
+      <a-descriptions-item :label="t('platform.picking.simple.goods')">
+        {{ t('platform.return.skuKindsAndPieces', { kinds: record.skuKinds, pieces: record.totalQty }) }}
       </a-descriptions-item>
     </a-descriptions>
 
     <a-form layout="vertical" style="margin-top: 16px">
-      <a-form-item label="签出方式" required>
+      <a-form-item :label="t('platform.ship.method')" required>
         <a-select
           v-model:value="channel"
           :options="channelOptions"
           :loading="channelLoading"
-          placeholder="请选择签出方式"
+          :placeholder="t('platform.ship.selectMethod')"
         />
-        <div class="field-hint">系统已自动带出默认值，特殊情况可以人工修改。</div>
+        <div class="field-hint">{{ t('platform.ship.methodHint') }}</div>
       </a-form-item>
-      <a-form-item label="跟踪号">
+      <a-form-item :label="t('platform.ship.trackingNo')">
         <a-input
           v-model:value="trackingNo"
-          placeholder="选填，可扫描或录入面单跟踪号"
+          :placeholder="t('platform.ship.trackingPlaceholder')"
           allow-clear
         />
       </a-form-item>
-      <a-form-item label="重量（kg）" required>
+      <a-form-item :label="t('platform.ship.weight')" required>
         <a-input-number
           v-model:value="weight"
           :min="0.01"
@@ -65,12 +66,14 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import { confirmShipPackage, listChannels } from '@/api/wms/outbound-shipping'
 import type { PackShipPackagePageVO } from '@/api/wms/outbound-shipping/types'
 
 const props = defineProps<{ open: boolean; record?: PackShipPackagePageVO }>()
+const { t } = useI18n()
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'success'): void
@@ -128,11 +131,11 @@ function handleClose() {
 async function handleConfirm() {
   if (!props.record) return
   if (!channel.value) {
-    message.warning('请选择签出方式')
+    message.warning(t('platform.ship.selectMethod'))
     return
   }
   if (!weight.value || weight.value <= 0) {
-    message.warning('请填写包裹重量')
+    message.warning(t('platform.ship.enterWeight'))
     return
   }
   submitting.value = true
@@ -145,14 +148,14 @@ async function handleConfirm() {
       weight: weight.value
     })
     if (isSuccess(res)) {
-      message.success('平台订单包裹已签出')
+      message.success(t('platform.ship.success'))
       emit('success')
       emit('update:open', false)
     } else {
-      message.error(res.message || '签出失败')
+      message.error(res.message || t('platform.ship.failed'))
     }
   } catch (error: any) {
-    message.error(error?.message || '签出失败')
+    message.error(error?.message || t('platform.ship.failed'))
   } finally {
     submitting.value = false
   }

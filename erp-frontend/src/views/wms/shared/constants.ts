@@ -120,9 +120,8 @@ export const SourceTypeLabels: Record<string, string> = {
 export const SourceTypeRouteMap: Record<string, string> = {
   SALES_OUTBOUND: '/wms/sales-outbound',
   RETURN_INBOUND: '/wms/return-inbound',
-  // 盘点/调拨/库存调整 已迁至「海外仓作业」(/ops) 下
+  // 盘点/调拨已迁至「海外仓作业」(/ops) 下
   TRANSFER: '/ops/transfer-order',
-  ADJUSTMENT: '/ops/adjustment',
   STOCKTAKE: '/ops/stocktake'
 }
 

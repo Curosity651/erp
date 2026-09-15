@@ -2,7 +2,7 @@ import type { PageParam } from '@/api/types'
 import type { BaseOrderVO } from '@/api/order/types'
 
 // 从共用类型文件导出 ERP 统一状态映射
-export { ERP_STATUS_MAP } from '@/api/order/types'
+export { ERP_STATUS_MAP, OWNER_ORDER_STATUS_MAP } from '@/api/order/types'
 export type { ErpStatusKey } from '@/api/order/types'
 
 /**
@@ -14,6 +14,7 @@ export interface YdOrderQO {
   platform?: string
   platformOrderId?: string
   erpStatus?: string
+  businessStatus?: string
   platformStatus?: string
   platformSubstatus?: string
   skuCode?: string
@@ -52,9 +53,6 @@ export const YD_STATUS_MAP: Record<string, { label: string; tip: string; cls: st
 /**
  * Yandex 子状态映射
  */
-// 面单批次 VO（复用公共类型）
-export type { LabelBatchVO } from '@/api/order/label-batch'
-
 export const YD_SUBSTATUS_MAP: Record<string, { label: string; tip: string; cls: string }> = {
   // ======== PROCESSING 阶段 ========
   STARTED: { label: '新订单', tip: 'Started - 新订单待处理', cls: 'processing' },

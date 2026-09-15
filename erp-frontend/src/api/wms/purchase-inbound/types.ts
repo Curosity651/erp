@@ -116,6 +116,10 @@ export interface PurchaseInboundItemVO {
   /** SKU简要信息 */
   skuBrief?: SkuBriefVO
   expectedQuantity: number
+  /** 外箱尺寸（毫米），来源于 SKU 资料 */
+  outerLengthMm?: number
+  outerWidthMm?: number
+  outerHeightMm?: number
   actualQuantity: number
   shortQuantity: number
   remark?: string

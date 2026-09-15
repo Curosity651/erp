@@ -3,15 +3,11 @@ package com.erp.admin.order.controller;
 import java.util.List;
 
 import com.erp.admin.order.model.qo.ErpOrderQO;
-import com.erp.admin.order.model.vo.LabelBatchVO;
 import com.erp.admin.order.model.vo.SyncSummaryVO;
 import com.erp.admin.order.model.vo.YdOrderPageVO;
 import com.erp.admin.order.service.ErpOrderService;
-import com.erp.admin.order.service.label.LabelPrintOrchestrator;
-import com.erp.admin.order.service.yandex.YdOrderConfirmService;
 import com.erp.admin.order.service.yandex.YdOrderQueryService;
 import com.erp.admin.order.service.yandex.YdOrderSyncService;
-import com.erp.admin.order.service.common.model.ConfirmResult;
 import com.erp.admin.platform.PlatformEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,14 +16,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.ballcat.common.model.domain.PageParam;
 import org.ballcat.common.model.domain.PageResult;
 import org.ballcat.common.model.result.ApiResult;
-import org.ballcat.security.core.PrincipalAttributeAccessor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -42,10 +36,7 @@ public class YdOrderController {
 
 	private final YdOrderQueryService ydOrderQueryService;
 	private final YdOrderSyncService ydOrderSyncService;
-	private final YdOrderConfirmService ydOrderConfirmService;
 	private final ErpOrderService erpOrderService;
-	private final LabelPrintOrchestrator labelPrintOrchestrator;
-	private final PrincipalAttributeAccessor principalAttributeAccessor;
 
 	/**
 	 * 分页查询 Yandex 订单
@@ -57,32 +48,6 @@ public class YdOrderController {
 			PageParam pageParam, ErpOrderQO qo) {
 		qo.setPlatform(PlatformEnum.Yandex.code());
 		return ApiResult.ok(ydOrderQueryService.queryPage(pageParam, qo));
-	}
-
-	/**
-	 * 批量确认发货
-	 */
-	@PostMapping("/confirm")
-	@Operation(summary = "批量确认发货")
-	@PreAuthorize("@per.hasPermission('order:erp-order:edit')")
-	public ApiResult<ConfirmResult> confirm(@RequestBody List<Long> orderIds) {
-		log.info("[YANDEX][CONTROLLER] 批量确认发货: orderIds={}", orderIds);
-		ConfirmResult result = ydOrderConfirmService.confirmOrders(orderIds);
-		return ApiResult.ok(result);
-	}
-
-	/**
-	 * 批量打印面单
-	 */
-	@PostMapping("/print-labels")
-	@Operation(summary = "批量打印面单")
-	@PreAuthorize("@per.hasPermission('order:erp-order:edit')")
-	public ApiResult<LabelBatchVO> printLabels(@RequestBody List<Long> orderIds) {
-		log.info("[YANDEX][CONTROLLER] 批量打印面单: orderIds={}", orderIds);
-		Long currentUserId = principalAttributeAccessor.getUserId();
-		LabelBatchVO result = labelPrintOrchestrator.printLabels(
-				PlatformEnum.Yandex.code(), orderIds, currentUserId, "批量打印");
-		return ApiResult.ok(result);
 	}
 
 	/**

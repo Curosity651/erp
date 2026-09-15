@@ -38,6 +38,9 @@ public class ErpOrderQO  {
 	@Parameter(description="ERP 状态")
 	private String erpStatus;
 
+	@Parameter(description="货主业务状态")
+	private String businessStatus;
+
 	@Parameter(description="平台主状态")
 	private String platformStatus;
 
@@ -62,9 +65,6 @@ public class ErpOrderQO  {
 
 	@Parameter(description="是否锁定 1/0")
 	private Integer locked;
-
-	@Parameter(description="是否有面单")
-	private Boolean hasLabel;
 
 	@Parameter(description="关键字(平台单号/ERP单号/SKU)")
 	private String keyword;

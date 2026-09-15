@@ -25,6 +25,7 @@ export interface ReturnInboundQO {
   warehouseId?: number
   returnDateStart?: string
   returnDateEnd?: string
+  returnStatus?: string
 }
 
 /**
@@ -38,6 +39,8 @@ export type ReturnInboundPageParam = ReturnInboundQO & PageParam
 export interface ReturnInboundPageVO {
   id: number
   returnNo: string
+  returnBatchNo?: string
+  skuKinds?: number
   erpOrderId: number
   platformOrderId: string
   platform: string
@@ -51,7 +54,7 @@ export interface ReturnInboundPageVO {
   unqualifiedQuantity: number
   toDamagedQuantity: number
   scrapQuantity: number
-  returnStatus: 'RETURN_PENDING' | 'QC_PENDING' | 'COMPLETED' | 'CLOSED'
+  returnStatus: 'PENDING_OWNER' | 'PENDING_OPERATION' | 'COMPLETED' | 'CLOSED'
   skuBrief: SkuBriefVO
   remark?: string
   createBy?: number
@@ -64,6 +67,37 @@ export interface ReturnInboundPageVO {
  */
 export interface ReturnInboundDetailVO extends ReturnInboundPageVO {
   returnableQuantity: number // 可退数量快照
+  items: ReturnDispositionItemVO[]
+}
+
+export interface ReturnDispositionItemVO {
+  id: number
+  skuCode: string
+  warehouseSkuCode?: string
+  skuName?: string
+  platformOrderId?: string
+  returnReason?: string
+  receivedQty: number
+  restockQty?: number
+  reworkQty?: number
+  scrapQty?: number
+  reworkPassQty?: number
+  reworkScrapQty?: number
+  dispositionRemark?: string
+  processedLocationCode?: string
+  qcPhotoFileIds?: number[]
+  qcPhotoFileIds?: number[]
+}
+
+export interface ReturnDispositionDTO {
+  returnOrderId: number
+  items: {
+    itemId: number
+    restockQty: number
+    reworkQty: number
+    scrapQty: number
+    remark?: string
+  }[]
 }
 
 /**

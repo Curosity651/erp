@@ -27,18 +27,6 @@ export const HOME_ROUTE: RouteRecordRaw = {
     keepAlive: false
   },
   children: [
-    {
-      path: 'ops/fulfillment-picking/work/:taskId',
-      name: 'FulfillmentPickingWork',
-      component: () =>
-        import('@/views/platform/fulfillment-picking/FulfillmentPickingWorkPage.vue'),
-      meta: {
-        name: '拣货任务作业',
-        hideInMenu: true,
-        hideInTab: false,
-        keepAlive: false
-      }
-    },
     // SKU表单路由 - 作为根路由的子路由
     {
       path: 'product/sku/form/:mode/:id?',
@@ -63,13 +51,13 @@ export const HOME_ROUTE: RouteRecordRaw = {
         keepAlive: true
       }
     },
-    // 自定义入库单表单路由
+    // 商品入库表单路由
     {
       path: 'wms/manual-inbound/form/:mode/:id?',
       name: 'ManualInboundForm',
       component: () => import('@/views/wms/manual-inbound/ManualInboundFormPage.vue'),
       meta: {
-        name: '自定义入库单表单',
+        name: '商品入库表单',
         hideInMenu: true,
         hideInTab: false,
         keepAlive: true

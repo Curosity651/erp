@@ -17,8 +17,13 @@
           </a-form-item>
         </a-col>
         <a-col :xl="6" :lg="8" :md="12" :sm="24">
-          <a-form-item label="平台">
-            <PlatformSelect v-model:value="formModel.platform" allow-clear />
+          <a-form-item label="状态">
+            <a-select
+              v-model:value="formModel.returnStatus"
+              :options="statusOptions"
+              allow-clear
+              placeholder="全部状态"
+            />
           </a-form-item>
         </a-col>
         <a-col :xl="6" :lg="8" :md="12" :sm="24">
@@ -59,7 +64,6 @@ import { ref, reactive, toRaw } from 'vue'
 import { Form } from 'ant-design-vue'
 import type { ReturnInboundQO } from '@/api/wms/return-inbound/types'
 import WarehouseSelect from '@/components/Lov/WarehouseSelect.vue'
-import { PlatformSelect } from '@/components/Platform'
 import SkuSelectInput from '@/components/Sku/SkuSelectInput.vue'
 
 const useForm = Form.useForm
@@ -85,8 +89,16 @@ const formModel = reactive<ReturnInboundQO>({
   skuCode: undefined,
   warehouseId: undefined,
   returnDateStart: undefined,
-  returnDateEnd: undefined
+  returnDateEnd: undefined,
+  returnStatus: undefined
 })
+
+const statusOptions = [
+  { label: '待货主处置', value: 'PENDING_OWNER' },
+  { label: '待仓库处理', value: 'PENDING_OPERATION' },
+  { label: '已完成', value: 'COMPLETED' },
+  { label: '已关闭', value: 'CLOSED' }
+]
 
 // 日期范围
 const dateRange = ref<[string, string] | null>(null)
