@@ -16,6 +16,12 @@ import lombok.Data;
 @Schema(title = "作业用SKU速查")
 public class SkuLookupVO {
 
+	@Schema(title = "全局仓库SKU")
+	private String warehouseSkuCode;
+
+	@Schema(title = "货主名称")
+	private String ownerName;
+
 	@Schema(title = "SKU编码")
 	private String skuCode;
 

@@ -2,8 +2,10 @@ package com.erp.admin.wms.controller;
 
 import com.erp.admin.wms.model.dto.ReturnReceiptDTO;
 import com.erp.admin.wms.model.dto.ReturnProcessDTO;
+import com.erp.admin.wms.model.dto.WarehouseSkuResolveDTO;
 import com.erp.admin.wms.model.qo.ReturnQO;
 import com.erp.admin.wms.model.vo.ReturnOrderVO;
+import com.erp.admin.wms.model.vo.WarehouseSkuResolveVO;
 import com.erp.admin.wms.service.ReturnQcService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,6 +57,14 @@ public class ReturnQcController {
     @PreAuthorize("hasAuthority('wms:return-qc:oper')")
     public ApiResult<List<Long>> registerReceipt(@Validated @RequestBody ReturnReceiptDTO dto) {
         return ApiResult.ok(returnQcService.registerReceipt(dto));
+    }
+
+    @Operation(summary = "批量解析退货全局SKU")
+    @PostMapping("/sku-resolve")
+    @PreAuthorize("hasAuthority('wms:return-qc:oper')")
+    public ApiResult<List<WarehouseSkuResolveVO>> resolveSkus(
+            @Validated @RequestBody WarehouseSkuResolveDTO dto) {
+        return ApiResult.ok(returnQcService.resolveWarehouseSkus(dto.getWarehouseSkuCodes()));
     }
 
     @Operation(summary = "海外仓执行货主处置决定")

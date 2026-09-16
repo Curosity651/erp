@@ -9,19 +9,16 @@ describe('simplified task flow', () => {
     expect(canOpenSimplifiedTask('PICKING', undefined, 88, 99)).toBe(false)
   })
 
-  it('requires evidence and every active order label before completion', () => {
+  it('requires evidence and actionable orders but does not expose standalone label printing', () => {
     expect(canCompleteSimplifiedTask(1, [
-      { orderStatus: 'PENDING', labelReady: true },
-      { orderStatus: 'CANCELLED', labelReady: false }
+      { orderStatus: 'PENDING' },
+      { orderStatus: 'CANCELLED' }
     ])).toBe(true)
     expect(canCompleteSimplifiedTask(0, [
-      { orderStatus: 'PENDING', labelReady: true }
+      { orderStatus: 'PENDING' }
     ])).toBe(false)
     expect(canCompleteSimplifiedTask(1, [
-      { orderStatus: 'PENDING', labelReady: false }
-    ])).toBe(false)
-    expect(canCompleteSimplifiedTask(1, [
-      { orderStatus: 'EXCEPTION', labelReady: true }
+      { orderStatus: 'EXCEPTION' }
     ])).toBe(false)
   })
 })

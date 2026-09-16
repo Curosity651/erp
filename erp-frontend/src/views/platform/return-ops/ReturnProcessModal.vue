@@ -1,10 +1,13 @@
 <template>
   <a-modal
     :open="open"
-    :title="readonly ? t('platform.return.process.resultTitle') : t('platform.return.process.title')"
+    :title="
+      readonly ? t('platform.return.process.resultTitle') : t('platform.return.process.title')
+    "
     :width="1120"
     :footer="readonly ? null : undefined"
     :confirm-loading="submitting"
+    :ok-button-props="{ disabled: hasMissingGlobalSku }"
     :ok-text="t('platform.return.process.confirm')"
     :cancel-text="t('platform.common.cancel')"
     @ok="submit"
@@ -19,10 +22,18 @@
         style="margin-bottom: 16px"
       />
       <a-descriptions v-if="order" size="small" :column="4" bordered style="margin-bottom: 16px">
-        <a-descriptions-item :label="t('platform.return.process.order')">{{ order.returnNo }}</a-descriptions-item>
-        <a-descriptions-item :label="t('platform.return.process.batch')">{{ order.returnBatchNo || '-' }}</a-descriptions-item>
-        <a-descriptions-item :label="t('platform.common.owner')">{{ order.ownerName }}</a-descriptions-item>
-        <a-descriptions-item :label="t('platform.common.warehouse')">{{ order.warehouseName }}</a-descriptions-item>
+        <a-descriptions-item :label="t('platform.return.process.order')">{{
+          order.returnNo
+        }}</a-descriptions-item>
+        <a-descriptions-item :label="t('platform.return.process.batch')">{{
+          order.returnBatchNo || '-'
+        }}</a-descriptions-item>
+        <a-descriptions-item :label="t('platform.common.owner')">{{
+          order.ownerName
+        }}</a-descriptions-item>
+        <a-descriptions-item :label="t('platform.common.warehouse')">{{
+          order.warehouseName
+        }}</a-descriptions-item>
       </a-descriptions>
       <a-table
         :data-source="lines"
@@ -31,15 +42,22 @@
         size="small"
         :scroll="{ x: 1040 }"
       >
-        <a-table-column :title="t('platform.common.sku')" :width="180"
+        <a-table-column :title="t('platform.return.receipt.globalSku')" :width="220"
           ><template #default="{ record }"
-            ><strong>{{ record.warehouseSkuCode || record.skuCode }}</strong>
+            ><strong v-if="record.warehouseSkuCode">{{ record.warehouseSkuCode }}</strong>
+            <a-tag v-else color="error">{{ t('platform.return.process.globalSkuMissing') }}</a-tag>
             <div class="muted">{{ record.skuName }}</div></template
           ></a-table-column
         >
         <a-table-column :title="t('platform.return.process.ownerDecision')" :width="210"
           ><template #default="{ record }"
-            >{{ t('platform.return.process.decisionSummary', { restock: record.restockQty, rework: record.reworkQty, scrap: record.scrapQty }) }}
+            >{{
+              t('platform.return.process.decisionSummary', {
+                restock: record.restockQty,
+                rework: record.reworkQty,
+                scrap: record.scrapQty
+              })
+            }}
             <div class="muted">{{ record.dispositionRemark || '-' }}</div></template
           ></a-table-column
         >
@@ -109,6 +127,7 @@ const submitting = ref(false)
 const order = ref<ReturnOrderVO | null>(null)
 const lines = ref<any[]>([])
 const locations = reactive<Record<string, string[]>>({ RETURN: [], STANDARD: [] })
+const hasMissingGlobalSku = computed(() => lines.value.some(line => !line.warehouseSkuCode))
 const zoneOptions = computed(() => [
   { label: t('platform.return.process.returnZone'), value: 'RETURN' },
   { label: t('platform.return.process.standardZone'), value: 'STANDARD' }
@@ -165,14 +184,19 @@ watch(
 
 async function submit() {
   if (!order.value) return
+  if (hasMissingGlobalSku.value) return message.error(t('platform.return.process.globalSkuMissing'))
   for (const line of lines.value) {
     if (
       Number(line.reworkPassQty || 0) + Number(line.reworkScrapQty || 0) !==
       Number(line.reworkQty || 0)
     )
-      return message.warning(t('platform.return.process.incompleteRework', { sku: line.skuCode }))
+      return message.warning(
+        t('platform.return.process.incompleteRework', { sku: line.warehouseSkuCode })
+      )
     if (stockQty(line) > 0 && (!line.targetZone || !line.targetLocationCode))
-      return message.warning(t('platform.return.process.selectLocation', { sku: line.skuCode }))
+      return message.warning(
+        t('platform.return.process.selectLocation', { sku: line.warehouseSkuCode })
+      )
   }
   submitting.value = true
   try {

@@ -104,9 +104,9 @@ public class FulfillmentPickingController {
 		return ApiResult.ok(service.detail(id, fulfillmentOrderId));
 	}
 
-	@PostMapping("/tasks/{id}/print-package")
+	@PostMapping("/tasks/{id}/export-package")
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
-	public ApiResult<FulfillmentPickPackageVO> printPackage(@PathVariable("id") Long id) {
+	public ApiResult<FulfillmentPickPackageVO> exportPackage(@PathVariable("id") Long id) {
 		return ApiResult.ok(pickPackageService.generate(id,
 				principalAttributeAccessor.getUserId()));
 	}
@@ -122,8 +122,10 @@ public class FulfillmentPickingController {
 	@PreAuthorize("hasAuthority('wms:outbound-exec:oper')")
 	public ApiResult<Void> completeSimplified(@PathVariable("id") Long id,
 			@Validated @RequestBody FulfillmentSimplifiedCompleteDTO dto) {
+		Long userId = principalAttributeAccessor.getUserId();
+		pickPackageService.requireSuccessfulPackage(id, userId);
 		shippingService.completeSimplifiedTask(id, dto.getEvidenceFileIds(),
-				principalAttributeAccessor.getUserId());
+				userId);
 		return ApiResult.ok();
 	}
 

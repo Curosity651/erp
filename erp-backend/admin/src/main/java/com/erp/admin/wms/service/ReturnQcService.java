@@ -35,6 +35,7 @@ import com.erp.admin.wms.model.vo.PalletSlotVO;
 import com.erp.admin.wms.model.vo.PalletSummaryVO;
 import com.erp.admin.wms.model.vo.SkuLookupVO;
 import com.erp.admin.wms.model.vo.WarehouseOptionVO;
+import com.erp.admin.wms.model.vo.WarehouseSkuResolveVO;
 import com.erp.admin.wms.model.vo.LocationCapacityVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +64,7 @@ import java.time.LocalDate;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 
 /**
  * 海外仓平台出库作业·退货质检（业务需求 1.4）。退货=带质检的重新入库。
@@ -167,6 +169,55 @@ public class ReturnQcService {
         return Collections.emptyList();
     }
 
+    /** 按完整全局仓库 SKU 批量解析真实货主和租户内 SKU。 */
+    public List<WarehouseSkuResolveVO> resolveWarehouseSkus(List<String> warehouseSkuCodes) {
+        assertPlatform();
+        Assert.notEmpty(warehouseSkuCodes, "全局SKU不能为空");
+        Assert.isTrue(warehouseSkuCodes.size() <= 500, "单次最多解析500个全局SKU");
+
+        List<String> requested = new ArrayList<>(warehouseSkuCodes.size());
+        List<String> normalized = new ArrayList<>(warehouseSkuCodes.size());
+        Set<String> unique = new HashSet<>();
+        for (String code : warehouseSkuCodes) {
+            Assert.isTrue(code != null && !code.trim().isEmpty(), "全局SKU不能为空");
+            String trimmed = code.trim();
+            String key = trimmed.toUpperCase(Locale.ROOT);
+            Assert.isTrue(unique.add(key), "全局SKU不能重复: " + trimmed);
+            requested.add(trimmed);
+            normalized.add(key);
+        }
+
+        Map<String, List<SkuLookupVO>> matches = skuLookupMapper.findByWarehouseSkuCodes(normalized).stream()
+                .filter(value -> value.getWarehouseSkuCode() != null)
+                .collect(Collectors.groupingBy(
+                        value -> value.getWarehouseSkuCode().trim().toUpperCase(Locale.ROOT),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        List<WarehouseSkuResolveVO> results = new ArrayList<>(requested.size());
+        for (int i = 0; i < requested.size(); i++) {
+            WarehouseSkuResolveVO result = new WarehouseSkuResolveVO();
+            result.setRequestedCode(requested.get(i));
+            List<SkuLookupVO> values = matches.getOrDefault(normalized.get(i), Collections.emptyList());
+            if (values.size() == 1) {
+                SkuLookupVO sku = values.get(0);
+                result.setMatched(true);
+                result.setWarehouseSkuCode(sku.getWarehouseSkuCode());
+                result.setErpTenantId(sku.getErpTenantId());
+                result.setOwnerName(sku.getOwnerName());
+                result.setSkuCode(sku.getSkuCode());
+                result.setSkuName(sku.getChineseName() == null || sku.getChineseName().trim().isEmpty()
+                        ? sku.getRussianName() : sku.getChineseName());
+            } else {
+                result.setMatched(false);
+                result.setWarehouseSkuCode(requested.get(i));
+                result.setError(values.isEmpty() ? "全局 SKU 不存在" : "全局 SKU 匹配到多个商品");
+            }
+            results.add(result);
+        }
+        return results;
+    }
+
     // ==================== 新版退货处置 ====================
 
     /** 海外仓收到实物后登记；系统按货主拆成独立处理单。 */
@@ -176,29 +227,30 @@ public class ReturnQcService {
         Assert.notNull(dto.getWarehouseId(), "请选择收货仓库");
         warehouseService.validateOperableOwnWarehouse(dto.getWarehouseId());
         Assert.notEmpty(dto.getItems(), "退货商品不能为空");
+        Assert.isTrue(dto.getItems().size() <= 500, "单次最多登记500个退货商品");
 
-        String batchNo = generateNo("RB", "batch");
-        Map<Long, List<ReturnReceiptDTO.Line>> byOwner = dto.getItems().stream()
-                .collect(Collectors.groupingBy(ReturnReceiptDTO.Line::getErpTenantId,
+        List<ResolvedReceiptLine> resolvedLines = resolveReceiptLines(dto.getItems());
+        Map<Long, List<ResolvedReceiptLine>> byOwner = resolvedLines.stream()
+                .collect(Collectors.groupingBy(value -> value.sku.getErpTenantId(),
                         LinkedHashMap::new, Collectors.toList()));
-        List<Long> ids = new ArrayList<>();
-        for (Map.Entry<Long, List<ReturnReceiptDTO.Line>> entry : byOwner.entrySet()) {
-            Long ownerId = entry.getKey();
-            Assert.notNull(ownerId, "退货商品必须指定货主");
+
+        for (Long ownerId : byOwner.keySet()) {
             com.erp.admin.tenant.model.entity.SysTenant owner = sysTenantMapper.selectById(ownerId);
             Assert.notNull(owner, "货主不存在: " + ownerId);
             Assert.notNull(owner.getParentWmsTenantId(), "货主未绑定WMS服务商: " + ownerId);
             Assert.isTrue(!wmsRackAssignmentService.activeRackNos(dto.getWarehouseId(), owner.getParentWmsTenantId()).isEmpty(),
                     "货主无权使用所选仓库: " + owner.getTenantName());
+        }
 
-            Set<String> skuCodes = new HashSet<>();
+        String batchNo = generateNo("RB", "batch");
+        List<Long> ids = new ArrayList<>();
+        for (Map.Entry<Long, List<ResolvedReceiptLine>> entry : byOwner.entrySet()) {
+            Long ownerId = entry.getKey();
             int total = 0;
-            for (ReturnReceiptDTO.Line line : entry.getValue()) {
-                Assert.hasText(line.getSkuCode(), "SKU不能为空");
-                Assert.isTrue(skuCodes.add(line.getSkuCode()), "同一货主的SKU不能重复: " + line.getSkuCode());
-                Assert.notNull(skuLookupMapper.findByTenantAndSku(ownerId, line.getSkuCode()),
-                        "SKU不存在或不属于所选货主: " + line.getSkuCode());
-                Assert.isTrue(nz(line.getReceivedQty()) > 0, "实收数量必须大于0: " + line.getSkuCode());
+            for (ResolvedReceiptLine resolved : entry.getValue()) {
+                ReturnReceiptDTO.Line line = resolved.line;
+                Assert.isTrue(nz(line.getReceivedQty()) > 0,
+                        "实收数量必须大于0: " + resolved.sku.getWarehouseSkuCode());
                 validatePhotoIds(line.getPhotoFileIds());
                 total += line.getReceivedQty();
             }
@@ -209,13 +261,13 @@ public class ReturnQcService {
             order.setReturnBatchNo(batchNo);
             order.setErpOrderId(0L);
             order.setPlatformOrderId(entry.getValue().size() == 1
-                    ? entry.getValue().get(0).getPlatformOrderId() : null);
+                    ? entry.getValue().get(0).line.getPlatformOrderId() : null);
             order.setPlatform("WAREHOUSE_RETURN");
-            order.setSkuCode(entry.getValue().size() == 1 ? entry.getValue().get(0).getSkuCode() : null);
+            order.setSkuCode(entry.getValue().size() == 1 ? entry.getValue().get(0).sku.getSkuCode() : null);
             order.setWarehouseId(dto.getWarehouseId());
             order.setReturnDate(dto.getReturnDate() == null ? LocalDate.now() : dto.getReturnDate());
             order.setReturnReason(entry.getValue().size() == 1
-                    ? normalizedReason(entry.getValue().get(0).getReturnReason()) : "MIXED");
+                    ? normalizedReason(entry.getValue().get(0).line.getReturnReason()) : "MIXED");
             order.setTotalQuantity(total);
             order.setReturnableQuantity(total);
             order.setQualifiedQuantity(0);
@@ -228,14 +280,14 @@ public class ReturnQcService {
             order.setRemark(dto.getRemark());
             Assert.isTrue(returnInboundMapper.insert(order) == 1, "退货处理单创建失败");
 
-            for (ReturnReceiptDTO.Line line : entry.getValue()) {
+            for (ResolvedReceiptLine resolved : entry.getValue()) {
+                ReturnReceiptDTO.Line line = resolved.line;
                 WmsReturnQcItem item = new WmsReturnQcItem();
                 item.setReturnOrderId(order.getId());
-                item.setSkuCode(line.getSkuCode());
+                item.setSkuCode(resolved.sku.getSkuCode());
                 item.setPlatformOrderId(line.getPlatformOrderId());
                 item.setReturnReason(normalizedReason(line.getReturnReason()));
-                SkuLookupVO sku = skuLookupMapper.findByTenantAndSku(ownerId, line.getSkuCode());
-                item.setElectronic(sku != null && Boolean.TRUE.equals(sku.getNeedsPower()) ? 1 : 0);
+                item.setElectronic(Boolean.TRUE.equals(resolved.sku.getNeedsPower()) ? 1 : 0);
                 item.setExpectedQty(line.getReceivedQty());
                 item.setReceivedQty(line.getReceivedQty());
                 item.setRestockQty(0);
@@ -250,6 +302,47 @@ public class ReturnQcService {
         }
         log.info("海外仓登记退货批次, batchNo={}, ownerOrders={}, items={}", batchNo, ids.size(), dto.getItems().size());
         return ids;
+    }
+
+    private List<ResolvedReceiptLine> resolveReceiptLines(List<ReturnReceiptDTO.Line> lines) {
+        List<String> normalized = new ArrayList<>(lines.size());
+        Set<String> unique = new HashSet<>();
+        for (ReturnReceiptDTO.Line line : lines) {
+            String code = line == null ? null : line.getWarehouseSkuCode();
+            Assert.isTrue(code != null && !code.trim().isEmpty(), "全局SKU不能为空");
+            String key = code.trim().toUpperCase(Locale.ROOT);
+            Assert.isTrue(unique.add(key), "全局SKU不能重复: " + code.trim());
+            normalized.add(key);
+        }
+
+        Map<String, List<SkuLookupVO>> matches = skuLookupMapper.findByWarehouseSkuCodes(normalized).stream()
+                .filter(value -> value.getWarehouseSkuCode() != null)
+                .collect(Collectors.groupingBy(
+                        value -> value.getWarehouseSkuCode().trim().toUpperCase(Locale.ROOT),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+        List<ResolvedReceiptLine> result = new ArrayList<>(lines.size());
+        for (int i = 0; i < lines.size(); i++) {
+            List<SkuLookupVO> values = matches.getOrDefault(normalized.get(i), Collections.emptyList());
+            Assert.isTrue(!values.isEmpty(), "全局 SKU 不存在: " + lines.get(i).getWarehouseSkuCode().trim());
+            Assert.isTrue(values.size() == 1,
+                    "全局 SKU 匹配到多个商品: " + lines.get(i).getWarehouseSkuCode().trim());
+            SkuLookupVO sku = values.get(0);
+            Assert.notNull(sku.getErpTenantId(), "全局 SKU 未关联货主: " + sku.getWarehouseSkuCode());
+            Assert.hasText(sku.getSkuCode(), "全局 SKU 未关联商品: " + sku.getWarehouseSkuCode());
+            result.add(new ResolvedReceiptLine(lines.get(i), sku));
+        }
+        return result;
+    }
+
+    private static final class ResolvedReceiptLine {
+        private final ReturnReceiptDTO.Line line;
+        private final SkuLookupVO sku;
+
+        private ResolvedReceiptLine(ReturnReceiptDTO.Line line, SkuLookupVO sku) {
+            this.line = line;
+            this.sku = sku;
+        }
     }
 
     /** ERP货主决定每个SKU的直接上架、返工或销毁数量。 */

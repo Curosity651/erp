@@ -43,4 +43,14 @@ public interface WmsSkuLookupMapper {
 			+ "AND sku_code = #{skuCode} LIMIT 1")
 	SkuLookupVO findByTenantAndSku(@Param("erpTenantId") Long erpTenantId, @Param("skuCode") String skuCode);
 
+	@Select("<script>SELECT CONCAT(t.warehouse_sku_prefix, '-', s.sku_code) AS warehouse_sku_code, "
+			+ "t.tenant_name AS owner_name, s.sku_code, s.tenant_id AS erp_tenant_id, "
+			+ "s.chinese_name, s.russian_name, s.weight, s.weight_unit, s.package_length, "
+			+ "s.package_width, s.package_height, s.package_unit, s.quantity_per_pallet, s.needs_power "
+			+ "FROM sku s INNER JOIN sys_tenant t ON t.id = s.tenant_id "
+			+ "WHERE UPPER(CONCAT(t.warehouse_sku_prefix, '-', s.sku_code)) IN "
+			+ "<foreach collection='warehouseSkuCodes' item='code' open='(' separator=',' close=')'>#{code}</foreach>"
+			+ "</script>")
+	List<SkuLookupVO> findByWarehouseSkuCodes(@Param("warehouseSkuCodes") Collection<String> warehouseSkuCodes);
+
 }

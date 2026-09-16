@@ -151,13 +151,23 @@ export interface ReturnReceiptDTO {
   returnDate?: string
   remark?: string
   items: {
-    erpTenantId: number
-    skuCode: string
+    warehouseSkuCode: string
     receivedQty: number
     platformOrderId?: string
     returnReason?: string
     photoFileIds?: number[]
   }[]
+}
+
+export interface WarehouseSkuResolveResult {
+  requestedCode: string
+  warehouseSkuCode: string
+  erpTenantId?: number
+  ownerName?: string
+  skuCode?: string
+  skuName?: string
+  matched: boolean
+  error?: string
 }
 
 export interface ReturnProcessDTO {

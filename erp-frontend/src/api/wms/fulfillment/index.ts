@@ -133,9 +133,9 @@ export function getOutboundPickReviewSummary(params: {
   })
 }
 
-export function generateFulfillmentPickPackage(id: number) {
+export function exportFulfillmentPickPackage(id: number) {
   return httpClient.post<ApiResult<FulfillmentPickPackage>>(
-    `${pickingBaseUrl}/tasks/${id}/print-package`
+    `${pickingBaseUrl}/tasks/${id}/export-package`
   )
 }
 

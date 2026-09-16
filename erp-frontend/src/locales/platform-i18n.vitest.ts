@@ -20,9 +20,19 @@ describe('overseas warehouse platform internationalization', () => {
       'platform.operator.title',
       'platform.return.title',
       'platform.return.process.title',
+      'platform.return.receipt.globalSku',
+      'platform.return.receipt.downloadTemplate',
+      'platform.return.receipt.importExcel',
+      'platform.return.receipt.resolving',
+      'platform.return.receipt.unmatched',
+      'platform.return.receipt.importSuccess',
+      'platform.return.receipt.importFailed',
+      'platform.return.receipt.importEmpty',
+      'platform.return.receipt.maxRows',
+      'platform.return.process.globalSkuMissing',
       'platform.picking.title',
       'platform.picking.simple.instructions',
-      'platform.picking.print.title',
+      'platform.picking.package.export',
       'platform.dashboard.filter.timeRange',
       'platform.dashboard.kpi.onHand',
       'platform.dashboard.zone.inventoryUnits',
@@ -38,7 +48,8 @@ describe('overseas warehouse platform internationalization', () => {
   })
 
   it('keeps interpolation variables consistent across locales', () => {
-    const variables = (value: string) => [...value.matchAll(/\{([^}]+)\}/g)].map(match => match[1]).sort()
+    const variables = (value: string) =>
+      [...value.matchAll(/\{([^}]+)\}/g)].map(match => match[1]).sort()
     for (const key of Object.keys(zhPlatform)) {
       const expected = variables(zhPlatform[key as keyof typeof zhPlatform])
       for (const locale of resources.slice(1)) {

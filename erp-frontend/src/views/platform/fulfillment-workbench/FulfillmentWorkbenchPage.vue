@@ -52,60 +52,53 @@
       </a-form>
     </a-card>
 
-    <a-card :bordered="false" title="当日出库复核">
+    <a-card :bordered="false" title="出库作业" class="list-card">
       <template #extra>
         <a-space>
+          <a-tag v-if="demoMode">演示数据</a-tag>
           <a-tag :color="reviewTag.color">{{ reviewTag.text }}</a-tag>
           <a-button
             type="primary"
-            :disabled="!summary?.allProcessed || summary?.reviewCurrent"
+            :disabled="demoMode || !summary?.allProcessed || summary?.reviewCurrent"
             @click="confirmOpen = true"
           >
             {{ summary?.reviewCurrent ? '已完成复核' : '完成复核' }}
           </a-button>
+          <a-button @click="load">刷新</a-button>
         </a-space>
       </template>
 
-      <a-row :gutter="16" class="summary-row">
-        <a-col :xs="12" :sm="8" :lg="4">
-          <a-statistic title="任务总数" :value="summary?.totalTaskCount || 0" />
-        </a-col>
-        <a-col :xs="12" :sm="8" :lg="4">
-          <a-statistic title="已完成" :value="summary?.completedTaskCount || 0" />
-        </a-col>
-        <a-col :xs="12" :sm="8" :lg="4">
-          <a-statistic title="已取消" :value="summary?.cancelledTaskCount || 0" />
-        </a-col>
-        <a-col :xs="12" :sm="8" :lg="4">
-          <a-statistic
-            title="未处理完成"
-            :value="summary?.unprocessedTaskCount || 0"
-            :value-style="summary?.unprocessedTaskCount ? { color: '#cf1322' } : undefined"
-          />
-        </a-col>
-        <a-col :xs="12" :sm="8" :lg="4">
-          <a-statistic
-            title="异常任务"
-            :value="summary?.exceptionTaskCount || 0"
-            :value-style="summary?.exceptionTaskCount ? { color: '#cf1322' } : undefined"
-          />
-        </a-col>
-        <a-col :xs="12" :sm="8" :lg="4">
-          <a-statistic title="已复核" :value="summary?.reviewCurrent ? 1 : 0" />
-        </a-col>
-      </a-row>
+      <div class="workbench-summary">
+        <div class="summary-item">
+          <span>任务总数</span>
+          <strong>{{ summary?.totalTaskCount || 0 }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>已完成</span>
+          <strong>{{ summary?.completedTaskCount || 0 }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>已取消</span>
+          <strong>{{ summary?.cancelledTaskCount || 0 }}</strong>
+        </div>
+        <div class="summary-item" :class="{ danger: summary?.unprocessedTaskCount }">
+          <span>未处理完成</span>
+          <strong>{{ summary?.unprocessedTaskCount || 0 }}</strong>
+        </div>
+        <div class="summary-item" :class="{ danger: summary?.exceptionTaskCount }">
+          <span>异常任务</span>
+          <strong>{{ summary?.exceptionTaskCount || 0 }}</strong>
+        </div>
+      </div>
 
-      <a-descriptions v-if="summary?.reviewNo" size="small" :column="3" class="review-record">
-        <a-descriptions-item label="复核单号">{{ summary.reviewNo }}</a-descriptions-item>
-        <a-descriptions-item label="复核人员">
-          {{ summary.reviewedBy ? getUserName(summary.reviewedBy) : '-' }}
-        </a-descriptions-item>
-        <a-descriptions-item label="复核时间">{{ summary.reviewedTime || '-' }}</a-descriptions-item>
-      </a-descriptions>
-    </a-card>
+      <div v-if="summary?.reviewNo" class="review-record">
+        <span><em>复核单号</em>{{ summary.reviewNo }}</span>
+        <span>
+          <em>复核人员</em>{{ summary.reviewedBy ? getUserName(summary.reviewedBy) : '-' }}
+        </span>
+        <span><em>复核时间</em>{{ summary.reviewedTime || '-' }}</span>
+      </div>
 
-    <a-card :bordered="false" title="当日拣货任务">
-      <template #extra><a-button @click="load">刷新</a-button></template>
       <a-table
         row-key="id"
         :loading="loading"
@@ -128,7 +121,7 @@
             </a-tag>
           </template>
           <template v-else-if="column.key === 'operator'">
-            {{ record.operatorId ? getUserName(record.operatorId) : '-' }}
+            {{ record.operatorId ? operatorName(record.operatorId) : '-' }}
           </template>
           <template v-else-if="column.key === 'exception'">
             <span :class="{ danger: record.exceptionOrderCount }">
@@ -136,7 +129,9 @@
             </span>
           </template>
           <template v-else-if="column.key === 'operate'">
-            <a @click="openDetail(record)">查看</a>
+            <operation-group>
+              <a @click="openDetail(record)">查看</a>
+            </operation-group>
           </template>
         </template>
       </a-table>
@@ -176,10 +171,12 @@
             {{ warehouseName(taskDetail.task.warehouseId) }}
           </a-descriptions-item>
           <a-descriptions-item label="拣货人员">
-            {{ taskDetail.task.operatorId ? getUserName(taskDetail.task.operatorId) : '-' }}
+            {{ taskDetail.task.operatorId ? operatorName(taskDetail.task.operatorId) : '-' }}
           </a-descriptions-item>
           <a-descriptions-item label="订单数">{{ taskDetail.task.orderCount }}</a-descriptions-item>
-          <a-descriptions-item label="货物件数">{{ taskDetail.task.totalQuantity }}</a-descriptions-item>
+          <a-descriptions-item label="货物件数">{{
+            taskDetail.task.totalQuantity
+          }}</a-descriptions-item>
         </a-descriptions>
 
         <a-table
@@ -236,7 +233,9 @@ import { getWarehouseOptions } from '@/api/wms/warehouse'
 import { SearchActions } from '@/components/Search'
 import UserSelect from '@/components/Lov/UserSelect.vue'
 import { useUserData } from '@/hooks/use-user-data'
+import { OperationGroup } from '@/components/Operation'
 import { createReactivationRefresh } from '../fulfillment-picking/reactivation-refresh'
+import { demoOperatorName, demoWarehouseName, resolveOutboundWorkbenchData } from './workbench-flow'
 
 defineOptions({ name: 'FulfillmentWorkbenchPage' })
 
@@ -250,6 +249,8 @@ const reviewRemark = ref('')
 const tasks = ref<FulfillmentPickTask[]>([])
 const summary = ref<OutboundPickReviewSummary>()
 const taskDetail = ref<FulfillmentPickTaskDetail>()
+const demoMode = ref(false)
+const demoDetails = ref<Record<number, FulfillmentPickTaskDetail>>({})
 const warehouses = ref<{ id: number; warehouseName: string }[]>([])
 const query = reactive<FulfillmentPickTaskQuery>({})
 const { allUsers: userOptions, loading: usersLoading, loadAllUsers, getUserName } = useUserData()
@@ -312,7 +313,11 @@ const orderStatusText = (status: string) =>
   })[status] || status
 
 const warehouseName = (id: number) =>
-  warehouses.value.find(item => item.id === id)?.warehouseName || `仓库 ${id}`
+  warehouses.value.find(item => item.id === id)?.warehouseName ||
+  demoWarehouseName(id) ||
+  `仓库 ${id}`
+
+const operatorName = (id: number) => demoOperatorName(id) || getUserName(id)
 
 const load = async () => {
   loading.value = true
@@ -326,11 +331,26 @@ const load = async () => {
         warehouseId: query.warehouseId
       })
     ])
-    if (isSuccess(taskResult)) tasks.value = taskResult.data || []
-    if (isSuccess(summaryResult)) {
-      summary.value = summaryResult.data
-      reviewRemark.value = summaryResult.data?.remark || ''
+    demoMode.value = false
+    demoDetails.value = {}
+    if (isSuccess(taskResult) && isSuccess(summaryResult) && summaryResult.data) {
+      const resolved = resolveOutboundWorkbenchData({
+        devMode: import.meta.env.DEV,
+        workDate: workDate.value,
+        warehouseId: query.warehouseId,
+        taskFilter: query,
+        tasks: taskResult.data || [],
+        summary: summaryResult.data
+      })
+      tasks.value = resolved.tasks
+      summary.value = resolved.summary
+      demoMode.value = resolved.demoMode
+      demoDetails.value = resolved.details
+      reviewRemark.value = resolved.summary.remark || ''
+      return
     }
+    if (isSuccess(taskResult)) tasks.value = taskResult.data || []
+    if (isSuccess(summaryResult)) summary.value = summaryResult.data
   } finally {
     loading.value = false
   }
@@ -348,6 +368,7 @@ const reset = () => {
 }
 
 const confirmReview = async () => {
+  if (demoMode.value) return
   confirming.value = true
   try {
     const result = await confirmOutboundPickReview({
@@ -367,6 +388,12 @@ const confirmReview = async () => {
 
 const openDetail = async (task: FulfillmentPickTask) => {
   detailOpen.value = true
+  const demoDetail = demoDetails.value[task.id]
+  if (demoMode.value && demoDetail) {
+    taskDetail.value = demoDetail
+    detailLoading.value = false
+    return
+  }
   detailLoading.value = true
   taskDetail.value = undefined
   try {
@@ -388,14 +415,93 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.review-page { display: grid; gap: 16px; min-width: 0; }
-.review-search { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; }
-.review-search :deep(.ant-form-item) { margin: 0; flex: 0 0 auto; }
-.review-search :deep(.ant-form-item-row) { flex-wrap: nowrap; }
-.search-actions-item { margin-left: auto !important; }
-.summary-row { padding: 8px 0 16px; }
-.review-record { padding-top: 12px; border-top: 1px solid #f0f0f0; }
-.confirm-remark { margin-top: 20px; margin-bottom: 0; }
-.detail-table { margin-top: 16px; }
-.danger { color: #cf1322; font-weight: 600; }
+.review-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.review-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+}
+.review-search :deep(.ant-form-item) {
+  margin: 0;
+  flex: 0 0 auto;
+}
+.review-search :deep(.ant-form-item-row) {
+  flex-wrap: nowrap;
+}
+.search-actions-item {
+  margin-left: auto !important;
+}
+.list-card,
+.list-card :deep(.ant-card-body) {
+  min-width: 0;
+}
+.list-card :deep(.ant-card-body) {
+  overflow: hidden;
+}
+.workbench-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding: 4px 0 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.summary-item span {
+  color: rgba(0, 0, 0, 0.45);
+}
+.summary-item strong {
+  color: rgba(0, 0, 0, 0.88);
+  font-size: 18px;
+  line-height: 1;
+}
+.summary-item.danger strong {
+  color: #cf1322;
+}
+.review-record {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  padding: 12px 0;
+  color: rgba(0, 0, 0, 0.88);
+  border-bottom: 1px solid #f0f0f0;
+}
+.review-record em {
+  margin-right: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  font-style: normal;
+}
+.workbench-summary + :deep(.ant-table-wrapper),
+.review-record + :deep(.ant-table-wrapper) {
+  margin-top: 16px;
+}
+.confirm-remark {
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+.detail-table {
+  margin-top: 16px;
+}
+.danger {
+  color: #cf1322;
+  font-weight: 600;
+}
+@media (max-width: 767px) {
+  .workbench-summary {
+    gap: 12px 20px;
+  }
+  .review-record {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
 </style>

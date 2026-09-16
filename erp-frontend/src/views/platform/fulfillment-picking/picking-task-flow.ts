@@ -29,6 +29,14 @@ export function canReleaseTask(
   )
 }
 
+export function canExportTaskPackage(
+  status: PickingTaskStatus,
+  operatorId?: number,
+  currentUserId?: number
+) {
+  return (status === 'PICKING' || status === 'COMPLETED') && operatorId === currentUserId
+}
+
 export function canSelectTaskOrder(status: PickingOrderStatus) {
   return status === 'PENDING' || status === 'PICKING' || status === 'WAITING_LABEL'
 }

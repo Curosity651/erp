@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { canReleaseTask, canSelectTaskOrder, primaryTaskAction } from './picking-task-flow'
+import {
+  canExportTaskPackage,
+  canReleaseTask,
+  canSelectTaskOrder,
+  primaryTaskAction
+} from './picking-task-flow'
 
 describe('standalone fulfillment picking flow', () => {
   it('shows claim for pending tasks and work only to the claimant', () => {
@@ -15,5 +20,13 @@ describe('standalone fulfillment picking flow', () => {
     expect(canSelectTaskOrder('WAITING_LABEL')).toBe(true)
     expect(canSelectTaskOrder('COMPLETED')).toBe(false)
     expect(canSelectTaskOrder('CANCELLED')).toBe(false)
+  })
+
+  it('offers the task package only to the assigned picker after claiming', () => {
+    expect(canExportTaskPackage('PENDING', undefined, 9)).toBe(false)
+    expect(canExportTaskPackage('PICKING', 9, 9)).toBe(true)
+    expect(canExportTaskPackage('PICKING', 8, 9)).toBe(false)
+    expect(canExportTaskPackage('PARTIAL_EXCEPTION', 9, 9)).toBe(false)
+    expect(canExportTaskPackage('COMPLETED', 9, 9)).toBe(true)
   })
 })

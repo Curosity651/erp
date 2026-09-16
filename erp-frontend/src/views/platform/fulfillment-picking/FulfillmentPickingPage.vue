@@ -73,6 +73,11 @@
           </template>
           <template v-else-if="column.key === 'operate'">
             <operation-group>
+              <a v-if="canExportPackage(record)" @click="handleExportPackage(record)">
+                {{ exportingPackageTaskId === record.id
+                  ? t('platform.picking.package.exporting')
+                  : t('platform.picking.package.export') }}
+              </a>
               <a @click="handlePrimary(record)">{{ primaryText(record) }}</a>
               <a v-if="canRelease(record)" @click="handleRelease(record)">{{ t('platform.picking.release') }}</a>
             </operation-group>
@@ -97,6 +102,7 @@ import { message } from 'ant-design-vue'
 import { isSuccess } from '@/api'
 import {
   claimFulfillmentPickTask,
+  exportFulfillmentPickPackage,
   listFulfillmentPickTasks,
   releaseFulfillmentPickTask,
   startSimplifiedFulfillmentTask
@@ -112,11 +118,12 @@ import UserSelect from '@/components/Lov/UserSelect.vue'
 import { SearchActions } from '@/components/Search'
 import { OperationGroup } from '@/components/Operation'
 import {
+  canExportTaskPackage,
   canReleaseTask,
-  primaryTaskAction,
-  type PickingTaskStatus
+  primaryTaskAction
 } from './picking-task-flow'
 import SimplifiedTaskModal from './SimplifiedTaskModal.vue'
+import { downloadPickPackageArchives } from './pick-package-download'
 import { createReactivationRefresh } from './reactivation-refresh'
 
 defineOptions({ name: 'FulfillmentPickingPage' })
@@ -131,6 +138,7 @@ const dateRange = ref<[string, string]>()
 const query = reactive<FulfillmentPickTaskQuery>({})
 const simplifiedOpen = ref(false)
 const simplifiedTask = ref<FulfillmentPickTask>()
+const exportingPackageTaskId = ref<number>()
 
 const statusKeys: Record<string, string> = {
   PENDING: 'platform.picking.status.pending',
@@ -211,6 +219,8 @@ const primaryText = (record: FulfillmentPickTask) =>
   })[action(record)]
 const canRelease = (record: FulfillmentPickTask) =>
   canReleaseTask(record.taskStatus, record.operatorId, currentUserId.value)
+const canExportPackage = (record: FulfillmentPickTask) =>
+  canExportTaskPackage(record.taskStatus, record.operatorId, currentUserId.value)
 const openSimplified = async (record: FulfillmentPickTask, start = true) => {
   if (start) {
     const result = await startSimplifiedFulfillmentTask(record.id)
@@ -229,7 +239,6 @@ const handlePrimary = async (record: FulfillmentPickTask) => {
     record.operatorId = currentUserId.value
     record.taskStatus = 'PICKING'
     record.operationMode = 'SIMPLE'
-    await openSimplified(record)
     return
   }
   if (action(record) === 'work') {
@@ -237,6 +246,27 @@ const handlePrimary = async (record: FulfillmentPickTask) => {
     return
   }
   await openSimplified(record, false)
+}
+
+const handleExportPackage = async (record: FulfillmentPickTask) => {
+  if (exportingPackageTaskId.value) return
+  if (!record.operatorId) {
+    message.warning(t('platform.picking.package.claimFirst'))
+    return
+  }
+  if (record.operatorId !== currentUserId.value) {
+    message.warning(t('platform.picking.package.ownerOnly'))
+    return
+  }
+  exportingPackageTaskId.value = record.id
+  try {
+    const result = await exportFulfillmentPickPackage(record.id)
+    if (!isSuccess(result)) return
+    downloadPickPackageArchives(result.data)
+    message.success(t('platform.picking.package.exported'))
+  } finally {
+    exportingPackageTaskId.value = undefined
+  }
 }
 const handleRelease = async (record: FulfillmentPickTask) => {
   const result = await releaseFulfillmentPickTask(record.id)

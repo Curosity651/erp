@@ -9,10 +9,9 @@ export function canOpenSimplifiedTask(
 
 export function canCompleteSimplifiedTask(
   evidenceCount: number,
-  orders: Array<{ orderStatus: string; labelReady: boolean }>
+  orders: Array<{ orderStatus: string }>
 ) {
   const activeOrders = orders.filter(order => order.orderStatus !== 'CANCELLED')
-  return evidenceCount > 0 && activeOrders.length > 0 && activeOrders.every(
-    order => order.orderStatus === 'PENDING' && order.labelReady
-  )
+  return evidenceCount > 0 && activeOrders.length > 0
+    && activeOrders.every(order => order.orderStatus === 'PENDING')
 }

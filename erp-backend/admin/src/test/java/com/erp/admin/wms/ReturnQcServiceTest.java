@@ -21,6 +21,7 @@ import com.erp.admin.wms.model.dto.ReturnQcDTO;
 import com.erp.admin.wms.model.dto.ReturnReceiveDTO;
 import com.erp.admin.wms.model.dto.ReturnDispositionDTO;
 import com.erp.admin.wms.model.dto.ReturnProcessDTO;
+import com.erp.admin.wms.model.dto.ReturnReceiptDTO;
 import com.erp.admin.wms.model.entity.ReturnInboundOrder;
 import com.erp.admin.wms.model.entity.WmsLocation;
 import com.erp.admin.wms.model.entity.WmsReturnQcItem;
@@ -28,6 +29,8 @@ import com.erp.admin.wms.model.entity.WmsZone;
 import com.erp.admin.wms.model.entity.Warehouse;
 import com.erp.admin.wms.model.enums.ReturnQcStatus;
 import com.erp.admin.wms.model.vo.PalletSummaryVO;
+import com.erp.admin.wms.model.vo.SkuLookupVO;
+import com.erp.admin.wms.model.vo.WarehouseSkuResolveVO;
 import com.erp.admin.wms.service.ReturnQcService;
 import com.erp.admin.wms.service.WarehouseService;
 import com.erp.admin.wms.service.WmsLocationService;
@@ -52,6 +55,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 
 /**
  * 退货质检状态机 + 良品/残次品拆分批次测试（Mockito）。
@@ -423,6 +427,157 @@ class ReturnQcServiceTest {
         List<PalletSummaryVO> pallets = service.listQcPallets(1L);
 
         assertThat(pallets).isEmpty();
+    }
+
+    @Test
+    void exposes_global_warehouse_sku_resolver_for_return_receipts() {
+        assertThat(Arrays.stream(ReturnQcService.class.getMethods())
+                .map(java.lang.reflect.Method::getName))
+                .contains("resolveWarehouseSkus");
+    }
+
+    @Test
+    void resolves_global_warehouse_sku_to_canonical_product_and_owner() {
+        SkuLookupVO sku = warehouseSku("JHIN-SKU-1", 6L, "SKU-1", "测试商品");
+        sku.setOwnerName("JHIN货主");
+        when(skuLookupMapper.findByWarehouseSkuCodes(any())).thenReturn(Collections.singletonList(sku));
+
+        List<WarehouseSkuResolveVO> results = service.resolveWarehouseSkus(
+                Collections.singletonList(" jhin-sku-1 "));
+
+        assertThat(results).singleElement().satisfies(result -> {
+            assertThat(result.isMatched()).isTrue();
+            assertThat(result.getRequestedCode()).isEqualTo("jhin-sku-1");
+            assertThat(result.getWarehouseSkuCode()).isEqualTo("JHIN-SKU-1");
+            assertThat(result.getErpTenantId()).isEqualTo(6L);
+            assertThat(result.getOwnerName()).isEqualTo("JHIN货主");
+            assertThat(result.getSkuCode()).isEqualTo("SKU-1");
+            assertThat(result.getSkuName()).isEqualTo("测试商品");
+        });
+    }
+
+    @Test
+    void resolver_marks_unknown_global_sku_without_inventing_identity() {
+        when(skuLookupMapper.findByWarehouseSkuCodes(any())).thenReturn(Collections.emptyList());
+
+        assertThat(service.resolveWarehouseSkus(Collections.singletonList("UNKNOWN-SKU")))
+                .singleElement().satisfies(result -> {
+                    assertThat(result.isMatched()).isFalse();
+                    assertThat(result.getError()).contains("不存在");
+                    assertThat(result.getErpTenantId()).isNull();
+                    assertThat(result.getSkuCode()).isNull();
+                });
+    }
+
+    @Test
+    void resolver_rejects_duplicate_normalized_global_skus() {
+        assertThatThrownBy(() -> service.resolveWarehouseSkus(
+                Arrays.asList("JHIN-SKU-1", " jhin-sku-1 ")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("重复");
+    }
+
+    @Test
+    void resolver_rejects_more_than_500_global_skus() {
+        List<String> codes = new ArrayList<>();
+        for (int i = 0; i < 501; i++) {
+            codes.add("JHIN-SKU-" + i);
+        }
+        assertThatThrownBy(() -> service.resolveWarehouseSkus(codes))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("500");
+    }
+
+    @Test
+    void receipt_derives_owner_and_original_sku_from_global_sku() {
+        prepareReceiptPersistence();
+        when(skuLookupMapper.findByWarehouseSkuCodes(any())).thenReturn(Collections.singletonList(
+                warehouseSku("JHIN-SKU-1", 6L, "SKU-1", "测试商品")));
+        ReturnReceiptDTO dto = receiptDto(line("JHIN-SKU-1", 3));
+
+        service.registerReceipt(dto);
+
+        ArgumentCaptor<ReturnInboundOrder> orderCaptor = ArgumentCaptor.forClass(ReturnInboundOrder.class);
+        ArgumentCaptor<WmsReturnQcItem> itemCaptor = ArgumentCaptor.forClass(WmsReturnQcItem.class);
+        verify(returnInboundMapper).insert(orderCaptor.capture());
+        verify(itemMapper).insert(itemCaptor.capture());
+        assertThat(orderCaptor.getValue().getErpTenantId()).isEqualTo(6L);
+        assertThat(orderCaptor.getValue().getSkuCode()).isEqualTo("SKU-1");
+        assertThat(itemCaptor.getValue().getSkuCode()).isEqualTo("SKU-1");
+    }
+
+    @Test
+    void receipt_splits_resolved_global_skus_into_one_order_per_owner() {
+        prepareReceiptPersistence();
+        when(skuLookupMapper.findByWarehouseSkuCodes(any())).thenReturn(Arrays.asList(
+                warehouseSku("JHIN-SKU-1", 6L, "SKU-1", "商品1"),
+                warehouseSku("ACME-SKU-2", 7L, "SKU-2", "商品2")));
+        SysTenant owner6 = new SysTenant();
+        owner6.setParentWmsTenantId(5L);
+        owner6.setTenantName("JHIN");
+        SysTenant owner7 = new SysTenant();
+        owner7.setParentWmsTenantId(5L);
+        owner7.setTenantName("ACME");
+        when(sysTenantMapper.selectById(6L)).thenReturn(owner6);
+        when(sysTenantMapper.selectById(7L)).thenReturn(owner7);
+
+        List<Long> ids = service.registerReceipt(receiptDto(
+                line("JHIN-SKU-1", 2), line("ACME-SKU-2", 4)));
+
+        assertThat(ids).hasSize(2);
+        ArgumentCaptor<ReturnInboundOrder> orders = ArgumentCaptor.forClass(ReturnInboundOrder.class);
+        verify(returnInboundMapper, times(2)).insert(orders.capture());
+        assertThat(orders.getAllValues()).extracting(ReturnInboundOrder::getErpTenantId)
+                .containsExactly(6L, 7L);
+    }
+
+    @Test
+    void receipt_rejects_unknown_global_sku_before_any_insert() {
+        when(skuLookupMapper.findByWarehouseSkuCodes(any())).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> service.registerReceipt(receiptDto(line("UNKNOWN-SKU", 1))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("不存在");
+        verify(returnInboundMapper, never()).insert(any());
+        verify(itemMapper, never()).insert(any());
+    }
+
+    private SkuLookupVO warehouseSku(String warehouseSkuCode, Long ownerId, String skuCode, String name) {
+        SkuLookupVO sku = new SkuLookupVO();
+        sku.setWarehouseSkuCode(warehouseSkuCode);
+        sku.setErpTenantId(ownerId);
+        sku.setSkuCode(skuCode);
+        sku.setChineseName(name);
+        return sku;
+    }
+
+    private ReturnReceiptDTO.Line line(String warehouseSkuCode, int quantity) {
+        ReturnReceiptDTO.Line line = new ReturnReceiptDTO.Line();
+        line.setWarehouseSkuCode(warehouseSkuCode);
+        line.setReceivedQty(quantity);
+        return line;
+    }
+
+    private ReturnReceiptDTO receiptDto(ReturnReceiptDTO.Line... lines) {
+        ReturnReceiptDTO dto = new ReturnReceiptDTO();
+        dto.setWarehouseId(1L);
+        dto.setItems(Arrays.asList(lines));
+        return dto;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prepareReceiptPersistence() {
+        org.springframework.data.redis.core.ValueOperations<String, String> values =
+                mock(org.springframework.data.redis.core.ValueOperations.class);
+        when(stringRedisTemplate.opsForValue()).thenReturn(values);
+        when(values.increment(any())).thenReturn(1L, 1L, 2L, 2L, 3L, 3L);
+        final long[] nextId = {100L};
+        when(returnInboundMapper.insert(any(ReturnInboundOrder.class))).thenAnswer(invocation -> {
+            ReturnInboundOrder order = invocation.getArgument(0);
+            order.setId(nextId[0]++);
+            return 1;
+        });
+        when(itemMapper.insert(any(WmsReturnQcItem.class))).thenReturn(1);
     }
 
 }

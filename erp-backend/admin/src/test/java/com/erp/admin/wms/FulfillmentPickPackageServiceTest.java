@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -28,6 +29,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class FulfillmentPickPackageServiceTest {
+
+	@Test
+	void completionIsRejectedWhenCurrentTaskSnapshotHasNoSuccessfulPackage() {
+		FulfillmentPickingService picking = mock(FulfillmentPickingService.class);
+		WmsFulfillmentPickPackageMapper mapper = mock(WmsFulfillmentPickPackageMapper.class);
+		when(picking.detail(1L)).thenReturn(detail());
+		when(mapper.selectOne(any(Wrapper.class))).thenReturn(null);
+		FulfillmentPickPackageService service = new FulfillmentPickPackageService(picking,
+				mock(FulfillmentShippingService.class), mapper,
+				new PickTaskPackageRenderer(new ObjectMapper()), mock(OssService.class));
+
+		assertThatThrownBy(() -> service.requireSuccessfulPackage(1L, 7L))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("请先导出拣货文件包");
+	}
 
 	@Test
 	void manualTaskBuildsBothPrivateFilesWithoutShippingOrBillingActions() {

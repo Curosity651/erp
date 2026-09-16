@@ -102,6 +102,14 @@ public class FulfillmentPickPackageService {
 		}
 	}
 
+	public void requireSuccessfulPackage(Long taskId, Long userId) {
+		PickTaskPackageSnapshot snapshot = PickTaskPackageSnapshot.from(pickingService.detail(taskId));
+		Assert.notNull(userId, "当前操作人不能为空");
+		Assert.isTrue(userId.equals(snapshot.getOperatorId()), "只有当前拣货员可以完成任务");
+		Assert.notNull(findSuccess(taskId, snapshot.getSnapshotHash()),
+				"请先导出拣货文件包，确认俄文仓库包和中文留底包均生成成功");
+	}
+
 	private WmsFulfillmentPickPackage findSuccess(Long taskId, String hash) {
 		return packageMapper.selectOne(Wrappers.<WmsFulfillmentPickPackage>lambdaQuery()
 				.eq(WmsFulfillmentPickPackage::getTaskId, taskId)

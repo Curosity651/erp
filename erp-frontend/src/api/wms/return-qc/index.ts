@@ -1,6 +1,12 @@
 import httpClient from '@/utils/axios'
 import type { ApiResult, PageParam, PageResult } from '@/api/types'
-import type { ReturnOrderVO, ReturnQO, ReturnReceiptDTO, ReturnProcessDTO } from './types'
+import type {
+  ReturnOrderVO,
+  ReturnQO,
+  ReturnReceiptDTO,
+  ReturnProcessDTO,
+  WarehouseSkuResolveResult
+} from './types'
 
 const BASE = '/wms/return-qc'
 
@@ -16,6 +22,12 @@ export function getReturnDetail(id: number) {
 
 export function registerReturnReceipt(dto: ReturnReceiptDTO) {
   return httpClient.post<ApiResult<number[]>>(`${BASE}/receipts`, dto)
+}
+
+export function resolveReturnWarehouseSkus(warehouseSkuCodes: string[]) {
+  return httpClient.post<ApiResult<WarehouseSkuResolveResult[]>>(`${BASE}/sku-resolve`, {
+    warehouseSkuCodes
+  })
 }
 
 export function processReturnDisposition(dto: ReturnProcessDTO) {
